@@ -129,7 +129,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 		return err
 		//return s.Decode(h)
 	}
-	//Aura decoded fine, now convert to header
+	//AuthorityRound decoded fine, now convert to header
 	h.ParentHash = aura.ParentHash
 	h.UncleHash = aura.UncleHash
 	h.Coinbase = aura.Coinbase
