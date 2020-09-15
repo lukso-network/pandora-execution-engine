@@ -14,7 +14,7 @@
     }
   },
   "params": {
-    "networkID" : "0x2323",
+    "networkID" : "0x2323"
   },
   "genesis": {
     "seal": {
