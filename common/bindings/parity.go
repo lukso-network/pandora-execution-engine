@@ -32,8 +32,14 @@ type ParityChainSpec struct {
 				EIP649Transition       *big.Int     `json:"eip649Transition, omitempty"`
 			} `json:"params"`
 		} `json:"Ethash,omitempty"`
-		Aura struct {
-		} `json:"Aura,omitempty"`
+		AuthorityRound struct {
+			Params struct {
+				StepDuration uint64 `json:"stepDuration, omitempty"`
+				Validators   struct {
+					List []common.Address `json:"list, omitempty"`
+				} `json:"validators, omitempty"`
+			} `json:"params, omitempty"`
+		} `json:"authorityRound,omitempty"`
 	} `json:"engine"`
 
 	Params struct {
@@ -134,6 +140,12 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Engine.Ethash.Params.EIP649Reward = (*hexutil.Big)(ethash.ByzantiumBlockReward)
 		spec.Engine.Ethash.Params.EIP100bTransition = genesis.Config.ByzantiumBlock
 		spec.Engine.Ethash.Params.EIP649Transition = genesis.Config.ByzantiumBlock
+	}
+
+	if nil != genesis.Config.Aura {
+		authorityRoundEngine := spec.Engine.AuthorityRound
+		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities
+		authorityRoundEngine.Params.StepDuration = genesis.Config.Aura.Period
 	}
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)

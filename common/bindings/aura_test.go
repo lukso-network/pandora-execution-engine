@@ -2,7 +2,9 @@ package bindings
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"testing"
@@ -33,13 +35,16 @@ func TestNewParityChainSpec(t *testing.T) {
 		assert.Nil(t, err)
 		err = json.Unmarshal(gethGenesisFixture, &genesisGeth)
 		assert.Nil(t, err)
-		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
+		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, params.GoerliBootnodes)
 		assert.Nil(t, err)
-		assert.NotEqual(t, "", spec.Genesis)
-		assert.NotEqual(t, "", spec.Name)
-		assert.NotEqual(t, "", spec.Accounts)
-		assert.NotEqual(t, "", spec.Engine)
-		assert.NotEqual(t, "", spec.Nodes)
-		assert.NotEqual(t, "", spec.Params)
+		assert.NotNil(t, spec.Genesis)
+		assert.NotNil(t, spec.Name)
+		assert.NotNil(t, spec.Accounts)
+		assert.NotNil(t, spec.Engine)
+		assert.NotNil(t, spec.Nodes)
+		assert.NotNil(t, spec.Params)
+		assert.NotNil(t, spec.Engine.AuthorityRound)
+		chainSpec, err := json.Marshal(spec.Engine.AuthorityRound)
+		assert.Equal(t, "", fmt.Sprintf("%s", chainSpec))
 	})
 }

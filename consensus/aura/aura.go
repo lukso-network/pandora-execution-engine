@@ -173,7 +173,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // Ethereum testnet following the Ropsten attacks.
 type Aura struct {
 	config *params.AuraConfig // Consensus engine configuration parameters
-	db     ethdb.Database       // Database to store and retrieve snapshot checkpoints
+	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -188,7 +188,7 @@ type Aura struct {
 	fakeDiff bool // Skip difficulty verifications
 }
 
-// New creates a Aura proof-of-authority consensus engine with the initial
+// New creates a AuthorityRound proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	// Set any missing consensus parameters to their defaults
@@ -273,7 +273,7 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return errInvalidUncleHash
 	}
 
-	log. Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
+	log.Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
 
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
@@ -336,7 +336,7 @@ func (a *Aura) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 		// at a checkpoint block without a parent (light client CHT), or we have piled
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
-		if number == 0 || (number % a.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) {
+		if number == 0 || (number%a.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				hash := checkpoint.Hash()
@@ -383,7 +383,7 @@ func (a *Aura) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 	a.recents.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
-	if snap.Number % checkpointInterval == 0 && len(headers) > 0 {
+	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
 		if err = snap.store(a.db); err != nil {
 			return nil, err
 		}
@@ -453,7 +453,7 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 
 	number := header.Number.Uint64()
 
-	if number % a.config.Epoch == 0 {
+	if number%a.config.Epoch == 0 {
 		//for _, signer := range snap.signers() {
 		//	header.Extra = append(header.Extra, signer[:]...)
 		//}
