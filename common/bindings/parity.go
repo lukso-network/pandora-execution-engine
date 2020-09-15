@@ -112,7 +112,7 @@ type parityChainSpecAltBnPairingPricing struct {
 // chain specification format.
 func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []string) (*ParityChainSpec, error) {
 	// Only ethash is currently supported between go-ethereum and Parity
-	if genesis.Config.Ethash == nil {
+	if genesis.Config.Ethash == nil && nil == genesis.Config.Aura {
 		return nil, errors.New("unsupported consensus engine")
 	}
 	// Reconstruct the chain spec in Parity's format

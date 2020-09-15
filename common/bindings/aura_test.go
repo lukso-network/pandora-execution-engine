@@ -33,5 +33,8 @@ func TestNewParityChainSpec(t *testing.T) {
 		assert.Nil(t, err)
 		err = json.Unmarshal(gethGenesisFixture, &genesisGeth)
 		assert.Nil(t, err)
+		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
+		assert.Nil(t, err)
+		assert.Equal(t, "", spec)
 	})
 }
