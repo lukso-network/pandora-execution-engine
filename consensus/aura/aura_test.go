@@ -2,6 +2,8 @@ package aura
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/bindings"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"testing"
@@ -20,7 +22,17 @@ func TestNew(t *testing.T) {
 	err = json.Unmarshal(parityFixture, &blockStruct)
 	assert.Nil(t, err)
 
-	t.Run("Genesis file should produce same block 0 that in parity", func(t *testing.T) {
+	parityGenesis, err := ioutil.ReadFile("./fixtures/parity-aura.json")
+	assert.Nil(t, err)
+	var parityChainSpec bindings.ParityChainSpec
+	err = json.Unmarshal(parityGenesis, &parityChainSpec)
+	assert.NotNil(t, err)
 
+	t.Run("Genesis file should produce same block 0 that in parity", func(t *testing.T) {
+		var genesisGeth core.Genesis
+		gethGenesisFixture, err := ioutil.ReadFile("./fixtures/geth-aura.json")
+		assert.Nil(t, err)
+		err = json.Unmarshal(gethGenesisFixture, &genesisGeth)
+		assert.Nil(t, err)
 	})
 }
