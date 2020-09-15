@@ -35,6 +35,11 @@ func TestNewParityChainSpec(t *testing.T) {
 		assert.Nil(t, err)
 		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
 		assert.Nil(t, err)
-		assert.Equal(t, "", spec)
+		assert.NotEqual(t, "", spec.Genesis)
+		assert.NotEqual(t, "", spec.Name)
+		assert.NotEqual(t, "", spec.Accounts)
+		assert.NotEqual(t, "", spec.Engine)
+		assert.NotEqual(t, "", spec.Nodes)
+		assert.NotEqual(t, "", spec.Params)
 	})
 }

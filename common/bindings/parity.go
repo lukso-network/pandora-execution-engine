@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/params"
 	"math"
+	"math/big"
 )
 
 // ParityChainSpec is the chain specification format used by Parity.
@@ -21,14 +22,14 @@ type ParityChainSpec struct {
 				DifficultyBoundDivisor *hexutil.Big `json:"difficultyBoundDivisor"`
 				DurationLimit          *hexutil.Big `json:"durationLimit"`
 				BlockReward            *hexutil.Big `json:"blockReward"`
-				HomesteadTransition    uint64       `json:"homesteadTransition"`
-				EIP150Transition       uint64       `json:"eip150Transition"`
-				EIP160Transition       uint64       `json:"eip160Transition"`
-				EIP161abcTransition    uint64       `json:"eip161abcTransition"`
-				EIP161dTransition      uint64       `json:"eip161dTransition"`
-				EIP649Reward           *hexutil.Big `json:"eip649Reward"`
-				EIP100bTransition      uint64       `json:"eip100bTransition"`
-				EIP649Transition       uint64       `json:"eip649Transition"`
+				HomesteadTransition    *big.Int     `json:"homesteadTransition, omitempty"`
+				EIP150Transition       *big.Int     `json:"eip150Transition, omitempty"`
+				EIP160Transition       *big.Int     `json:"eip160Transition, omitempty"`
+				EIP161abcTransition    *big.Int     `json:"eip161abcTransition, omitempty"`
+				EIP161dTransition      *big.Int     `json:"eip161dTransition, omitempty"`
+				EIP649Reward           *hexutil.Big `json:"eip649Reward, omitempty"`
+				EIP100bTransition      *big.Int     `json:"eip100bTransition, omitempty"`
+				EIP649Transition       *big.Int     `json:"eip649Transition, omitempty"`
 			} `json:"params"`
 		} `json:"Ethash,omitempty"`
 		Aura struct {
@@ -40,14 +41,14 @@ type ParityChainSpec struct {
 		MinGasLimit          hexutil.Uint64 `json:"minGasLimit"`
 		GasLimitBoundDivisor hexutil.Uint64 `json:"gasLimitBoundDivisor"`
 		NetworkID            hexutil.Uint64 `json:"networkID"`
-		MaxCodeSize          uint64         `json:"maxCodeSize"`
-		EIP155Transition     uint64         `json:"eip155Transition"`
-		EIP98Transition      uint64         `json:"eip98Transition"`
-		EIP86Transition      uint64         `json:"eip86Transition"`
-		EIP140Transition     uint64         `json:"eip140Transition"`
-		EIP211Transition     uint64         `json:"eip211Transition"`
-		EIP214Transition     uint64         `json:"eip214Transition"`
-		EIP658Transition     uint64         `json:"eip658Transition"`
+		MaxCodeSize          *big.Int       `json:"maxCodeSize"`
+		EIP155Transition     *big.Int       `json:"eip155Transition, omitempty"`
+		EIP98Transition      *big.Float     `json:"eip98Transition, omitempty"`
+		EIP86Transition      *big.Float     `json:"eip86Transition, omitempty"`
+		EIP140Transition     *big.Int       `json:"eip140Transition, omitempty"`
+		EIP211Transition     *big.Int       `json:"eip211Transition, omitempty"`
+		EIP214Transition     *big.Int       `json:"eip214Transition, omitempty"`
+		EIP658Transition     *big.Int       `json:"eip658Transition, omitempty"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -119,31 +120,34 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		Name:  network,
 		Nodes: bootnodes,
 	}
-	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
-	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
-	spec.Engine.Ethash.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
-	spec.Engine.Ethash.Params.HomesteadTransition = genesis.Config.HomesteadBlock.Uint64()
-	spec.Engine.Ethash.Params.EIP150Transition = genesis.Config.EIP150Block.Uint64()
-	spec.Engine.Ethash.Params.EIP160Transition = genesis.Config.EIP155Block.Uint64()
-	spec.Engine.Ethash.Params.EIP161abcTransition = genesis.Config.EIP158Block.Uint64()
-	spec.Engine.Ethash.Params.EIP161dTransition = genesis.Config.EIP158Block.Uint64()
-	spec.Engine.Ethash.Params.EIP649Reward = (*hexutil.Big)(ethash.ByzantiumBlockReward)
-	spec.Engine.Ethash.Params.EIP100bTransition = genesis.Config.ByzantiumBlock.Uint64()
-	spec.Engine.Ethash.Params.EIP649Transition = genesis.Config.ByzantiumBlock.Uint64()
+
+	if nil != genesis.Config.Ethash {
+		spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
+		spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
+		spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
+		spec.Engine.Ethash.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
+		spec.Engine.Ethash.Params.HomesteadTransition = genesis.Config.HomesteadBlock
+		spec.Engine.Ethash.Params.EIP150Transition = genesis.Config.EIP150Block
+		spec.Engine.Ethash.Params.EIP160Transition = genesis.Config.EIP155Block
+		spec.Engine.Ethash.Params.EIP161abcTransition = genesis.Config.EIP158Block
+		spec.Engine.Ethash.Params.EIP161dTransition = genesis.Config.EIP158Block
+		spec.Engine.Ethash.Params.EIP649Reward = (*hexutil.Big)(ethash.ByzantiumBlockReward)
+		spec.Engine.Ethash.Params.EIP100bTransition = genesis.Config.ByzantiumBlock
+		spec.Engine.Ethash.Params.EIP649Transition = genesis.Config.ByzantiumBlock
+	}
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
-	spec.Params.MaxCodeSize = params.MaxCodeSize
-	spec.Params.EIP155Transition = genesis.Config.EIP155Block.Uint64()
-	spec.Params.EIP98Transition = math.MaxUint64
-	spec.Params.EIP86Transition = math.MaxUint64
-	spec.Params.EIP140Transition = genesis.Config.ByzantiumBlock.Uint64()
-	spec.Params.EIP211Transition = genesis.Config.ByzantiumBlock.Uint64()
-	spec.Params.EIP214Transition = genesis.Config.ByzantiumBlock.Uint64()
-	spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock.Uint64()
+	spec.Params.MaxCodeSize = big.NewInt(params.MaxCodeSize)
+	spec.Params.EIP155Transition = genesis.Config.EIP155Block
+	spec.Params.EIP98Transition = big.NewFloat(math.MaxUint64)
+	spec.Params.EIP86Transition = big.NewFloat(math.MaxUint64)
+	spec.Params.EIP140Transition = genesis.Config.ByzantiumBlock
+	spec.Params.EIP211Transition = genesis.Config.ByzantiumBlock
+	spec.Params.EIP214Transition = genesis.Config.ByzantiumBlock
+	spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock
 
 	spec.Genesis.Seal.Ethereum.Nonce = (hexutil.Bytes)(make([]byte, 8))
 	binary.LittleEndian.PutUint64(spec.Genesis.Seal.Ethereum.Nonce[:], genesis.Nonce)
