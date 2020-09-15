@@ -1,14 +1,17 @@
 module github.com/ethereum/go-ethereum
 
+go 1.14
+
 require (
 	bazil.org/fuse v0.0.0-20160811212531-371fbbdaa898
 	github.com/Azure/azure-pipeline-go v0.0.0-20180607212504-7571e8eb0876
 	github.com/Azure/azure-storage-blob-go v0.0.0-20180712005634-eaae161d9d5e
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6
 	github.com/aristanetworks/goarista v0.0.0-20170210015632-ea17b1a17847
+	github.com/btcsuite/btcd v0.21.0-beta
 	github.com/cespare/cp v0.1.0
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/davecgh/go-spew v1.1.0
+	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v0.0.0-20180831180637-cbaa98ba5575
 	github.com/dgrijalva/jwt-go v0.0.0-20170201225849-2268707a8f08
 	github.com/docker/docker v0.0.0-20180625184442-8e610b2b55bf
@@ -47,10 +50,10 @@ require (
 	github.com/syndtr/goleveldb v0.0.0-20180815032940-ae2bd5eed72d
 	github.com/uber/jaeger-lib v0.0.0-20180615202729-a51202d6f4a7
 	github.com/urfave/cli v1.20.0
-	golang.org/x/crypto v0.0.0-20171108091819-6a293f2d4b14
-	golang.org/x/net v0.0.0-20170308210134-a6577fac2d73
-	golang.org/x/sync v0.0.0-20170517211232-f52d1811a629
-	golang.org/x/sys v0.0.0-20180808154034-904bdc257025
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
+	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3
+	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
+	golang.org/x/sys v0.0.0-20190412213103-97732733099d
 	golang.org/x/text v0.3.0 // indirect
 	golang.org/x/tools v0.0.0-20170215214335-be0fcc31ae23
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
