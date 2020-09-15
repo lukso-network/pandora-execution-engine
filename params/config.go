@@ -353,8 +353,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	Aura *AuraConfig 	 `json:"aura,omitempty"`
-
+	Aura   *AuraConfig   `json:"aura,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -378,10 +377,10 @@ func (c *CliqueConfig) String() string {
 
 // AuraConfig is the consensus engine configs for proof-of-authority based sealing.
 type AuraConfig struct {
-	Period uint64 					`json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 					`json:"epoch"`  // Epoch length to reset votes and checkpoint
-	Difficulty *big.Int 			`json:"difficulty"` // Constant block difficulty
-	Authorities []common.Address 	`json:"authorities"` // list of addresses of authorities
+	Period      uint64           `json:"period"`      // Number of seconds between blocks to enforce
+	Epoch       uint64           `json:"epoch"`       // Epoch length to reset votes and checkpoint
+	Difficulty  *big.Int         `json:"difficulty"`  // Constant block difficulty
+	Authorities []common.Address `json:"authorities"` // list of addresses of authorities
 }
 
 // String implements the stringer interface, returning the consensus engine details.
