@@ -6,14 +6,17 @@
         "stepDuration": "5",
         "validators" : {
           "list": [
-            "0x76814b3644f20903b8472434e8c8efb2aa79e546",
-            "0xcdf269895f63617ea00e1494956f419cf14a2828"
+            "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf",
+            "0xafe443af9d1504de4c2d486356c421c160fdd7b1"
           ]
         }
       }
     }
   },
   "params": {
+    "gasLimitBoundDivisor": "0x400",
+    "maximumExtraDataSize": "0x20",
+    "minGasLimit": "0x1388",
     "networkID" : "0x2323"
   },
   "genesis": {
