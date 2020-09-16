@@ -16,30 +16,8 @@ import (
 type ParityChainSpec struct {
 	Name   string `json:"name"`
 	Engine struct {
-		Ethash struct {
-			Params struct {
-				MinimumDifficulty      *hexutil.Big `json:"minimumDifficulty"`
-				DifficultyBoundDivisor *hexutil.Big `json:"difficultyBoundDivisor"`
-				DurationLimit          *hexutil.Big `json:"durationLimit"`
-				BlockReward            *hexutil.Big `json:"blockReward"`
-				HomesteadTransition    *big.Int     `json:"homesteadTransition, omitempty"`
-				EIP150Transition       *big.Int     `json:"eip150Transition, omitempty"`
-				EIP160Transition       *big.Int     `json:"eip160Transition, omitempty"`
-				EIP161abcTransition    *big.Int     `json:"eip161abcTransition, omitempty"`
-				EIP161dTransition      *big.Int     `json:"eip161dTransition, omitempty"`
-				EIP649Reward           *hexutil.Big `json:"eip649Reward, omitempty"`
-				EIP100bTransition      *big.Int     `json:"eip100bTransition, omitempty"`
-				EIP649Transition       *big.Int     `json:"eip649Transition, omitempty"`
-			} `json:"params"`
-		} `json:"Ethash,omitempty"`
-		AuthorityRound struct {
-			Params struct {
-				StepDuration uint64 `json:"stepDuration, omitempty"`
-				Validators   struct {
-					List []common.Address `json:"list, omitempty"`
-				} `json:"validators, omitempty"`
-			} `json:"params, omitempty"`
-		} `json:"authorityRound,omitempty"`
+		Ethash *Ethash `json:"ethash,omitempty"`
+		AuthorityRound *AuthorityRound `json:"authorityRound,omitempty"`
 	} `json:"engine"`
 
 	Params struct {
@@ -50,7 +28,6 @@ type ParityChainSpec struct {
 		MaxCodeSize          *big.Int       `json:"maxCodeSize"`
 		EIP155Transition     *big.Int       `json:"eip155Transition, omitempty"`
 		EIP98Transition      *big.Float     `json:"eip98Transition, omitempty"`
-		EIP86Transition      *big.Float     `json:"eip86Transition, omitempty"`
 		EIP140Transition     *big.Int       `json:"eip140Transition, omitempty"`
 		EIP211Transition     *big.Int       `json:"eip211Transition, omitempty"`
 		EIP214Transition     *big.Int       `json:"eip214Transition, omitempty"`
@@ -75,6 +52,32 @@ type ParityChainSpec struct {
 
 	Nodes    []string                                   `json:"nodes"`
 	Accounts map[common.Address]*parityChainSpecAccount `json:"accounts"`
+}
+
+type Ethash struct {
+	Params struct {
+		MinimumDifficulty      *hexutil.Big `json:"minimumDifficulty"`
+		DifficultyBoundDivisor *hexutil.Big `json:"difficultyBoundDivisor"`
+		DurationLimit          *hexutil.Big `json:"durationLimit"`
+		BlockReward            *hexutil.Big `json:"blockReward"`
+		HomesteadTransition    *big.Int     `json:"homesteadTransition, omitempty"`
+		EIP150Transition       *big.Int     `json:"eip150Transition, omitempty"`
+		EIP160Transition       *big.Int     `json:"eip160Transition, omitempty"`
+		EIP161abcTransition    *big.Int     `json:"eip161abcTransition, omitempty"`
+		EIP161dTransition      *big.Int     `json:"eip161dTransition, omitempty"`
+		EIP649Reward           *hexutil.Big `json:"eip649Reward, omitempty"`
+		EIP100bTransition      *big.Int     `json:"eip100bTransition, omitempty"`
+		EIP649Transition       *big.Int     `json:"eip649Transition, omitempty"`
+	} `json:"params"`
+}
+
+type AuthorityRound struct {
+	Params struct {
+		StepDuration uint64 `json:"stepDuration, omitempty"`
+		Validators   struct {
+			List []common.Address `json:"list, omitempty"`
+		} `json:"validators, omitempty"`
+	} `json:"params, omitempty"`
 }
 
 // parityChainSpecAccount is the prefunded genesis account and/or precompiled
@@ -128,6 +131,7 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	}
 
 	if nil != genesis.Config.Ethash {
+		spec.Engine.Ethash = &Ethash{}
 		spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 		spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
 		spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
@@ -143,6 +147,7 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	}
 
 	if nil != genesis.Config.Aura {
+		spec.Engine.AuthorityRound = &AuthorityRound{}
 		authorityRoundEngine := spec.Engine.AuthorityRound
 		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities
 		authorityRoundEngine.Params.StepDuration = genesis.Config.Aura.Period
@@ -153,13 +158,18 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 	spec.Params.MaxCodeSize = big.NewInt(params.MaxCodeSize)
-	spec.Params.EIP155Transition = genesis.Config.EIP155Block
-	spec.Params.EIP98Transition = big.NewFloat(math.MaxUint64)
-	spec.Params.EIP86Transition = big.NewFloat(math.MaxUint64)
-	spec.Params.EIP140Transition = genesis.Config.ByzantiumBlock
-	spec.Params.EIP211Transition = genesis.Config.ByzantiumBlock
-	spec.Params.EIP214Transition = genesis.Config.ByzantiumBlock
-	spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock
+	if nil != genesis.Config.EIP155Block {
+		spec.Params.EIP155Transition = genesis.Config.EIP155Block
+	}
+	if nil != genesis.Config.Ethash {
+		spec.Params.EIP98Transition = big.NewFloat(math.MaxUint64)
+	}
+	if nil != genesis.Config.ByzantiumBlock {
+		spec.Params.EIP140Transition = genesis.Config.ByzantiumBlock
+		spec.Params.EIP211Transition = genesis.Config.ByzantiumBlock
+		spec.Params.EIP214Transition = genesis.Config.ByzantiumBlock
+		spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock
+	}
 
 	spec.Genesis.Seal.Ethereum.Nonce = (hexutil.Bytes)(make([]byte, 8))
 	binary.LittleEndian.PutUint64(spec.Genesis.Seal.Ethereum.Nonce[:], genesis.Nonce)
@@ -169,7 +179,12 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
 	spec.Genesis.ParentHash = genesis.ParentHash
-	spec.Genesis.ExtraData = (hexutil.Bytes)(genesis.ExtraData)
+	spec.Genesis.ExtraData = hexutil.Bytes{}
+
+	if nil != genesis.ExtraData {
+		spec.Genesis.ExtraData = genesis.ExtraData
+	}
+
 	spec.Genesis.GasLimit = (hexutil.Uint64)(genesis.GasLimit)
 
 	spec.Accounts = make(map[common.Address]*parityChainSpecAccount)
@@ -205,5 +220,6 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name: "alt_bn128_pairing", ActivateAt: genesis.Config.ByzantiumBlock.Uint64(), Pricing: &parityChainSpecPricing{AltBnPairing: &parityChainSpecAltBnPairingPricing{Base: 100000, Pair: 80000}},
 		}
 	}
+
 	return spec, nil
 }
