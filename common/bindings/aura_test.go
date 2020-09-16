@@ -39,7 +39,6 @@ func TestNewParityChainSpec(t *testing.T) {
 		assert.NotNil(t, spec.Name)
 		assert.NotNil(t, spec.Accounts)
 		assert.NotNil(t, spec.Engine)
-		//assert.NotNil(t, spec.Nodes)
 		assert.NotNil(t, spec.Params)
 		assert.NotNil(t, spec.Engine.AuthorityRound)
 		chainSpec, err := json.Marshal(spec)
