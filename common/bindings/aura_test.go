@@ -2,9 +2,7 @@ package bindings
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"testing"
@@ -29,22 +27,26 @@ func TestNewParityChainSpec(t *testing.T) {
 	err = json.Unmarshal(parityGenesis, &parityChainSpec)
 	assert.Nil(t, err)
 
-	t.Run("Genesis file should produce same block 0 that in parity", func(t *testing.T) {
+	t.Run("Genesis file from geth should produce proper spec in openethereum", func(t *testing.T) {
 		var genesisGeth core.Genesis
 		gethGenesisFixture, err := ioutil.ReadFile("./fixtures/geth-aura.json")
 		assert.Nil(t, err)
 		err = json.Unmarshal(gethGenesisFixture, &genesisGeth)
 		assert.Nil(t, err)
-		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, params.GoerliBootnodes)
+		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
 		assert.Nil(t, err)
 		assert.NotNil(t, spec.Genesis)
 		assert.NotNil(t, spec.Name)
 		assert.NotNil(t, spec.Accounts)
 		assert.NotNil(t, spec.Engine)
-		assert.NotNil(t, spec.Nodes)
+		//assert.NotNil(t, spec.Nodes)
 		assert.NotNil(t, spec.Params)
 		assert.NotNil(t, spec.Engine.AuthorityRound)
-		chainSpec, err := json.Marshal(spec.Engine.AuthorityRound)
-		assert.Equal(t, "", fmt.Sprintf("%s", chainSpec))
+		chainSpec, err := json.Marshal(spec)
+		assert.Nil(t, err)
+		// This little guy can be used to print the output:
+		//assert.Equal(t, "", fmt.Sprintf("%s", chainSpec))
+		assert.NotEqual(t, "", chainSpec)
+		assert.Equal(t, parityChainSpec, *spec)
 	})
 }
