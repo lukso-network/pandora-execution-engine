@@ -10,13 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"math/big"
+	"strconv"
 )
 
 // ParityChainSpec is the chain specification format used by Parity.
 type ParityChainSpec struct {
 	Name   string `json:"name"`
 	Engine struct {
-		Ethash *Ethash `json:"ethash,omitempty"`
+		Ethash         *Ethash         `json:"ethash,omitempty"`
 		AuthorityRound *AuthorityRound `json:"authorityRound,omitempty"`
 	} `json:"engine"`
 
@@ -44,7 +45,7 @@ type ParityChainSpec struct {
 
 		Difficulty *hexutil.Big   `json:"difficulty"`
 		Author     common.Address `json:"author"`
-		Timestamp  hexutil.Uint64 `json:"timestamp"`
+		Timestamp  string         `json:"timestamp"`
 		ParentHash common.Hash    `json:"parentHash"`
 		ExtraData  hexutil.Bytes  `json:"extraData"`
 		GasLimit   hexutil.Uint64 `json:"gasLimit"`
@@ -73,7 +74,7 @@ type Ethash struct {
 
 type AuthorityRound struct {
 	Params struct {
-		StepDuration uint64 `json:"stepDuration, omitempty"`
+		StepDuration string `json:"stepDuration, omitempty"`
 		Validators   struct {
 			List []common.Address `json:"list, omitempty"`
 		} `json:"validators, omitempty"`
@@ -83,7 +84,7 @@ type AuthorityRound struct {
 // parityChainSpecAccount is the prefunded genesis account and/or precompiled
 // contract definition.
 type parityChainSpecAccount struct {
-	Balance *hexutil.Big            `json:"balance"`
+	Balance string                  `json:"balance"`
 	Nonce   uint64                  `json:"nonce,omitempty"`
 	Builtin *parityChainSpecBuiltin `json:"builtin,omitempty"`
 }
@@ -150,7 +151,7 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Engine.AuthorityRound = &AuthorityRound{}
 		authorityRoundEngine := spec.Engine.AuthorityRound
 		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities
-		authorityRoundEngine.Params.StepDuration = genesis.Config.Aura.Period
+		authorityRoundEngine.Params.StepDuration = (string)(genesis.Config.Aura.Period)
 	}
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
@@ -171,13 +172,13 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock
 	}
 
-	spec.Genesis.Seal.Ethereum.Nonce = (hexutil.Bytes)(make([]byte, 8))
+	spec.Genesis.Seal.Ethereum.Nonce = make([]byte, 8)
 	binary.LittleEndian.PutUint64(spec.Genesis.Seal.Ethereum.Nonce[:], genesis.Nonce)
 
-	spec.Genesis.Seal.Ethereum.MixHash = (hexutil.Bytes)(genesis.Mixhash[:])
+	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
-	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
+	spec.Genesis.Timestamp = strconv.FormatUint(genesis.Timestamp, 10)
 	spec.Genesis.ParentHash = genesis.ParentHash
 	spec.Genesis.ExtraData = hexutil.Bytes{}
 
@@ -190,7 +191,7 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Accounts = make(map[common.Address]*parityChainSpecAccount)
 	for address, account := range genesis.Alloc {
 		spec.Accounts[address] = &parityChainSpecAccount{
-			Balance: (*hexutil.Big)(account.Balance),
+			Balance: account.Balance.String(),
 			Nonce:   account.Nonce,
 		}
 	}

@@ -3,47 +3,39 @@
   "engine": {
     "authorityRound": {
       "params": {
-        "stepDuration": 5,
+        "stepDuration": "5",
         "validators": {
           "list": [
-            "0x76814b3644f20903b8472434e8c8efb2aa79e546",
-            "0xcdf269895f63617ea00e1494956f419cf14a2828"
+            "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf",
+            "0xafe443af9d1504de4c2d486356c421c160fdd7b1"
           ]
         }
       }
     }
   },
   "params": {
+    "gasLimitBoundDivisor": "0x400",
     "maximumExtraDataSize": "0x20",
     "minGasLimit": "0x1388",
-    "gasLimitBoundDivisor": "0x400",
-    "networkID": "0x2323",
-    "maxCodeSize": 24576,
-    "eip155Transition": null,
-    "eip98Transition": null,
-    "eip140Transition": null,
-    "eip211Transition": null,
-    "eip214Transition": null,
-    "eip658Transition": null
+    "networkID": "0x2323"
   },
   "genesis": {
     "seal": {
-      "ethereum": {
-        "nonce": "0x0000000000000000",
-        "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      "authorityRound": {
+        "step": "0x0",
+        "signature": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
       }
     },
     "difficulty": "0x20000",
     "author": "0x0000000000000000000000000000000000000000",
-    "timestamp": "0x1",
+    "timestamp": "0x00",
     "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "extraData": "0x",
     "gasLimit": "0x222222"
   },
-  "nodes": null,
   "accounts": {
     "0x0000000000000000000000000000000000000001": {
-      "balance": "0x1",
+      "balance": "1",
       "builtin": {
         "name": "ecrecover",
         "pricing": {
@@ -55,7 +47,7 @@
       }
     },
     "0x0000000000000000000000000000000000000002": {
-      "balance": "0x1",
+      "balance": "1",
       "builtin": {
         "name": "sha256",
         "pricing": {
@@ -67,7 +59,7 @@
       }
     },
     "0x0000000000000000000000000000000000000003": {
-      "balance": "0x1",
+      "balance": "1",
       "builtin": {
         "name": "ripemd160",
         "pricing": {
@@ -79,7 +71,7 @@
       }
     },
     "0x0000000000000000000000000000000000000004": {
-      "balance": "0x1",
+      "balance": "1",
       "builtin": {
         "name": "identity",
         "pricing": {
