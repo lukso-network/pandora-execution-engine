@@ -25,7 +25,6 @@ func TestNewParityChainSpec(t *testing.T) {
 	assert.Nil(t, err)
 	var parityChainSpec ParityChainSpec
 	err = json.Unmarshal(parityGenesis, &parityChainSpec)
-	assert.Nil(t, err)
 
 	t.Run("Genesis file from geth should produce proper spec in openethereum", func(t *testing.T) {
 		var genesisGeth core.Genesis

@@ -1,7 +1,6 @@
 package bindings
 
 import (
-	"encoding/binary"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -45,7 +44,7 @@ type ParityChainSpec struct {
 
 		Difficulty *hexutil.Big   `json:"difficulty"`
 		Author     common.Address `json:"author"`
-		Timestamp  string         `json:"timestamp"`
+		Timestamp  uint64         `json:"timestamp"`
 		ParentHash common.Hash    `json:"parentHash"`
 		ExtraData  hexutil.Bytes  `json:"extraData"`
 		GasLimit   hexutil.Uint64 `json:"gasLimit"`
@@ -151,14 +150,13 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Engine.AuthorityRound = &AuthorityRound{}
 		authorityRoundEngine := spec.Engine.AuthorityRound
 		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities
-		authorityRoundEngine.Params.StepDuration = (string)(genesis.Config.Aura.Period)
+		authorityRoundEngine.Params.StepDuration = strconv.FormatUint(genesis.Config.Aura.Period, 10)
 	}
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
-	spec.Params.MaxCodeSize = big.NewInt(params.MaxCodeSize)
 	if nil != genesis.Config.EIP155Block {
 		spec.Params.EIP155Transition = genesis.Config.EIP155Block
 	}
@@ -172,13 +170,9 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Params.EIP658Transition = genesis.Config.ByzantiumBlock
 	}
 
-	spec.Genesis.Seal.Ethereum.Nonce = make([]byte, 8)
-	binary.LittleEndian.PutUint64(spec.Genesis.Seal.Ethereum.Nonce[:], genesis.Nonce)
-
-	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
-	spec.Genesis.Timestamp = strconv.FormatUint(genesis.Timestamp, 10)
+	spec.Genesis.Timestamp = genesis.Timestamp
 	spec.Genesis.ParentHash = genesis.ParentHash
 	spec.Genesis.ExtraData = hexutil.Bytes{}
 
@@ -192,7 +186,6 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	for address, account := range genesis.Alloc {
 		spec.Accounts[address] = &parityChainSpecAccount{
 			Balance: account.Balance.String(),
-			Nonce:   account.Nonce,
 		}
 	}
 	spec.Accounts[common.BytesToAddress([]byte{1})].Builtin = &parityChainSpecBuiltin{
