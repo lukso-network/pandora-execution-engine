@@ -457,8 +457,14 @@ func (t *UDPv4) loop() {
 
 		case r := <-t.gotreply:
 			var matched bool // whether any replyMatcher considered the reply acceptable.
+			i := 0
+			replyStr := ""
 			for el := plist.Front(); el != nil; el = el.Next() {
 				p := el.Value.(*replyMatcher)
+				if "35.234.103.138" == r.ip.String() {
+					replyStr = fmt.Sprintf("%s \n %d \n from %v == %v \n type %v == %v \n ip %v == %v \n", replyStr, i, p.from, r.from, p.ptype, r.data.Kind(), p.ip, r.ip)
+				}
+				i++
 				if p.from == r.from && p.ptype == r.data.Kind() && p.ip.Equal(r.ip) {
 					ok, requestDone := p.callback(r.data)
 					matched = matched || ok
@@ -473,6 +479,10 @@ func (t *UDPv4) loop() {
 				}
 			}
 			r.matched <- matched
+			if plist.Len() > 0 && "35.234.103.138" == r.ip.String() && !matched {
+				replyStr = fmt.Sprintf("%s \n matched: %v", replyStr, matched)
+				fmt.Println(replyStr)
+			}
 
 		case now := <-timeout.C:
 			nextTimeout = nil

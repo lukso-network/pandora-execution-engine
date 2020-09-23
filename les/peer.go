@@ -251,6 +251,10 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 
 	var send keyValueList
 
+	//// ACHEIVE TO FETCH THIS FROM CONFIG!
+	//p.network = 8995
+	panic(fmt.Sprintf("\n\n\n\n\n\n\n\n\nthis is network p: %d", p.network))
+
 	// Add some basic handshake fields
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
