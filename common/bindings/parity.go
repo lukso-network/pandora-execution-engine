@@ -1,6 +1,7 @@
 package bindings
 
 import (
+	"bytes"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -36,10 +37,7 @@ type ParityChainSpec struct {
 
 	Genesis struct {
 		Seal struct {
-			Ethereum struct {
-				Nonce   hexutil.Bytes `json:"nonce"`
-				MixHash hexutil.Bytes `json:"mixHash"`
-			} `json:"ethereum"`
+			AuthorityRound core.Seal `json:"authorityRound"`
 		} `json:"seal"`
 
 		Difficulty *hexutil.Big   `json:"difficulty"`
@@ -214,6 +212,9 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name: "alt_bn128_pairing", ActivateAt: genesis.Config.ByzantiumBlock.Uint64(), Pricing: &parityChainSpecPricing{AltBnPairing: &parityChainSpecAltBnPairingPricing{Base: 100000, Pair: 80000}},
 		}
 	}
-
+	spec.Genesis.Seal.AuthorityRound = genesis.Seal
+	if bytes.Equal(genesis.Seal.Step, []byte{}) {
+		spec.Genesis.Seal.AuthorityRound.Step = []byte{0}
+	}
 	return spec, nil
 }
