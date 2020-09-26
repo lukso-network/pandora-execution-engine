@@ -224,36 +224,32 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 	}
 
 	seal := make([][]uint8, 2)
-	seal[0] = header.Seal
-	seal[1] = header.Field1
+	seal[0] = header.Field1
+	seal[1] = header.Seal
+
+	standardHeader := Header{
+		ParentHash:  header.ParentHash,
+		UncleHash:   header.UncleHash,
+		Coinbase:    header.Coinbase,
+		Root:        header.Root,
+		TxHash:      header.TxHash,
+		ReceiptHash: header.ReceiptHash,
+		Bloom:       header.Bloom,
+		Difficulty:  header.Difficulty,
+		Number:      header.Number,
+		GasLimit:    header.GasLimit,
+		GasUsed:     header.GasUsed,
+		Time:        header.Time,
+		Extra:       header.Extra,
+		MixDigest: common.Hash{},
+		Nonce:     BlockNonce{},
+		Seal: seal,
+	}
 
 	block = &Block{
-		header: &Header{
-			ParentHash:  header.ParentHash,
-			UncleHash:   header.UncleHash,
-			Coinbase:    header.Coinbase,
-			Root:        header.Root,
-			TxHash:      header.TxHash,
-			ReceiptHash: header.ReceiptHash,
-			Bloom:       header.Bloom,
-			Difficulty:  header.Difficulty,
-			Number:      header.Number,
-			GasLimit:    header.GasLimit,
-			GasUsed:     header.GasUsed,
-			Time:        header.Time,
-			Extra:       header.Extra,
-			// This is empty in aura header response
-			MixDigest: common.Hash{},
-			Nonce:     BlockNonce{},
-			// This is empty in aura header response
-			Seal: seal,
-		},
+		header: &standardHeader,
 		uncles:       auraBlock.Uncles,
-		//transactions: auraBlock.transactions,
-		//hash:         auraBlock.Hash,
-		//size:         auraBlock.size,
-		//td:           auraBlock.td,
-		ReceivedAt:   time.Now(),
+		transactions: auraBlock.Transactions,
 		//ReceivedFrom: auraBlock.ReceivedFrom,
 	}
 
@@ -311,10 +307,12 @@ type storageblock struct {
 
 func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 	currentSeal := make([][]uint8, 2)
+	currentSeal[0] = make([]uint8, 4)
+	currentSeal[1] = make([]uint8, 65)
 
 	if len(auraHeader.Seal) > 1 {
-		currentSeal[0][0] = auraHeader.Seal[0]
-		currentSeal[1][0] = auraHeader.Seal[1]
+		currentSeal[0] = auraHeader.Field1
+		currentSeal[1] = auraHeader.Seal
 	}
 
 	header = &Header{

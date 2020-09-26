@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math"
 	"math/big"
@@ -390,7 +391,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	if "6dc147c15773e3f8" == p.id {
-		fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", msg.String(), msg.Code))
+		rawStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		myBytes, _ := rawStream.Raw()
+		//myBytes := []byte(`1234`)
+		fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", hexutil.Encode(myBytes), msg.Code))
 	}
 
 	// Handle aura engine separately
@@ -508,6 +512,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			for _, header := range auraHeaders {
 				headers = append(headers, header.TranslateIntoHeader())
 			}
+			panic(len(auraHeaders))
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that
 		if len(headers) == 0 && p.syncDrop != nil {

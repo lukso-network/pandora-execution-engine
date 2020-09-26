@@ -98,6 +98,14 @@ func TestBlockEncodingAura(t *testing.T) {
 	err, stdBlock := auraBlock.TranslateIntoBlock()
 	assert.Nil(t, err)
 	assert.IsType(t, &Block{}, stdBlock)
+
+	t.Run("Block should be valid", func(t *testing.T) {
+		stdBlockHash := stdBlock.Hash()
+		assert.NotNil(t, auraBlock.Header)
+		stdHeader := auraBlock.Header.TranslateIntoHeader()
+		stdHeaderHash := stdHeader.Hash()
+		assert.Equal(t, stdHeaderHash, stdBlockHash)
+	})
 }
 
 func TestUncleHash(t *testing.T) {
