@@ -14,7 +14,7 @@ import (
 var _ = (*headerMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (auraHeader AuraHeader) MarshalJSON() ([]byte, error) {
+func (a AuraHeader) MarshalJSON() ([]byte, error) {
 	type AuraHeader struct {
 		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 		UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
@@ -29,30 +29,34 @@ func (auraHeader AuraHeader) MarshalJSON() ([]byte, error) {
 		GasUsed     hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time        hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		Seal        [][]byte       `json:"sealFields"       gencodec:"required"       rlp:"tail"`
+		Step        uint64         `json:"step"             gencodec:"required"`
+		SealFields  []interface{}  `json:"sealFields"       gencodec:"required"           rlp:"-"`
+		Signature   []byte         `json:"-"`
 		Hash        common.Hash    `json:"hash"`
 	}
 	var enc AuraHeader
-	enc.ParentHash = auraHeader.ParentHash
-	enc.UncleHash = auraHeader.UncleHash
-	enc.Coinbase = auraHeader.Coinbase
-	enc.Root = auraHeader.Root
-	enc.TxHash = auraHeader.TxHash
-	enc.ReceiptHash = auraHeader.ReceiptHash
-	enc.Bloom = auraHeader.Bloom
-	enc.Difficulty = (*hexutil.Big)(auraHeader.Difficulty)
-	enc.Number = (*hexutil.Big)(auraHeader.Number)
-	enc.GasLimit = hexutil.Uint64(auraHeader.GasLimit)
-	enc.GasUsed = hexutil.Uint64(auraHeader.GasUsed)
-	enc.Time = hexutil.Uint64(auraHeader.Time)
-	enc.Extra = auraHeader.Extra
-	enc.Seal = auraHeader.Seal
-	enc.Hash = auraHeader.Hash()
+	enc.ParentHash = a.ParentHash
+	enc.UncleHash = a.UncleHash
+	enc.Coinbase = a.Coinbase
+	enc.Root = a.Root
+	enc.TxHash = a.TxHash
+	enc.ReceiptHash = a.ReceiptHash
+	enc.Bloom = a.Bloom
+	enc.Difficulty = (*hexutil.Big)(a.Difficulty)
+	enc.Number = (*hexutil.Big)(a.Number)
+	enc.GasLimit = hexutil.Uint64(a.GasLimit)
+	enc.GasUsed = hexutil.Uint64(a.GasUsed)
+	enc.Time = hexutil.Uint64(a.Time)
+	enc.Extra = a.Extra
+	enc.Step = a.Step
+	enc.SealFields = a.SealFields
+	enc.Signature = a.Signature
+	enc.Hash = a.Hash()
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (auraHeader *AuraHeader) UnmarshalJSON(input []byte) error {
+func (a *AuraHeader) UnmarshalJSON(input []byte) error {
 	type AuraHeader struct {
 		ParentHash  *common.Hash    `json:"parentHash"       gencodec:"required"`
 		UncleHash   *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
@@ -67,7 +71,9 @@ func (auraHeader *AuraHeader) UnmarshalJSON(input []byte) error {
 		GasUsed     *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time        *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		Seal        [][]byte        `json:"sealFields"       gencodec:"required"       rlp:"tail"`
+		Step        *uint64         `json:"step"             gencodec:"required"`
+		SealFields  []interface{}   `json:"sealFields"       gencodec:"required"           rlp:"-"`
+		Signature   []byte          `json:"-"`
 	}
 	var dec AuraHeader
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -76,58 +82,65 @@ func (auraHeader *AuraHeader) UnmarshalJSON(input []byte) error {
 	if dec.ParentHash == nil {
 		return errors.New("missing required field 'parentHash' for AuraHeader")
 	}
-	auraHeader.ParentHash = *dec.ParentHash
+	a.ParentHash = *dec.ParentHash
 	if dec.UncleHash == nil {
 		return errors.New("missing required field 'sha3Uncles' for AuraHeader")
 	}
-	auraHeader.UncleHash = *dec.UncleHash
+	a.UncleHash = *dec.UncleHash
 	if dec.Coinbase == nil {
 		return errors.New("missing required field 'miner' for AuraHeader")
 	}
-	auraHeader.Coinbase = *dec.Coinbase
+	a.Coinbase = *dec.Coinbase
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for AuraHeader")
 	}
-	auraHeader.Root = *dec.Root
+	a.Root = *dec.Root
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionsRoot' for AuraHeader")
 	}
-	auraHeader.TxHash = *dec.TxHash
+	a.TxHash = *dec.TxHash
 	if dec.ReceiptHash == nil {
 		return errors.New("missing required field 'receiptsRoot' for AuraHeader")
 	}
-	auraHeader.ReceiptHash = *dec.ReceiptHash
+	a.ReceiptHash = *dec.ReceiptHash
 	if dec.Bloom == nil {
 		return errors.New("missing required field 'logsBloom' for AuraHeader")
 	}
-	auraHeader.Bloom = *dec.Bloom
+	a.Bloom = *dec.Bloom
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for AuraHeader")
 	}
-	auraHeader.Difficulty = (*big.Int)(dec.Difficulty)
+	a.Difficulty = (*big.Int)(dec.Difficulty)
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for AuraHeader")
 	}
-	auraHeader.Number = (*big.Int)(dec.Number)
+	a.Number = (*big.Int)(dec.Number)
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for AuraHeader")
 	}
-	auraHeader.GasLimit = uint64(*dec.GasLimit)
+	a.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for AuraHeader")
 	}
-	auraHeader.GasUsed = uint64(*dec.GasUsed)
+	a.GasUsed = uint64(*dec.GasUsed)
 	if dec.Time == nil {
 		return errors.New("missing required field 'timestamp' for AuraHeader")
 	}
-	auraHeader.Time = uint64(*dec.Time)
+	a.Time = uint64(*dec.Time)
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for AuraHeader")
 	}
-	auraHeader.Extra = *dec.Extra
-	if dec.Seal == nil {
+	a.Extra = *dec.Extra
+	if dec.Step == nil {
+		return errors.New("missing required field 'step' for AuraHeader")
+	}
+	a.Step = *dec.Step
+	if dec.SealFields == nil {
 		return errors.New("missing required field 'sealFields' for AuraHeader")
 	}
-	auraHeader.Seal = dec.Seal
+	a.SealFields = dec.SealFields
+	if dec.Signature != nil {
+		a.Signature = dec.Signature
+	}
 	return nil
 }

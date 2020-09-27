@@ -105,7 +105,9 @@ type AuraHeader struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	Seal        [][]byte       `json:"sealFields"       gencodec:"required"`
+	Step        uint64         `json:"step"             gencodec:"required"`
+	SealFields  []interface{}  `json:"sealFields"       gencodec:"required"           rlp:"-"`
+	Signature   []byte         `json:"-"`
 }
 
 // field type overrides for gencodec
@@ -122,8 +124,14 @@ type headerMarshaling struct {
 func (auraHeader *AuraHeader) Hash() common.Hash {
 	currentSeal := make([][]byte, 2)
 
-	for index, seal := range auraHeader.Seal {
-		currentSeal[index] = seal
+	for index, seal := range auraHeader.SealFields {
+		sealBytes, ok := seal.([]byte)
+
+		if !ok {
+			continue
+		}
+
+		currentSeal[index] = sealBytes
 	}
 
 	return rlpHash([]interface{}{
@@ -248,6 +256,18 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 		return fmt.Errorf("header in aura block is nil"), nil
 	}
 
+	currentSeal := make([][]byte, 2)
+
+	for index, seal := range header.SealFields {
+		sealBytes, ok := seal.([]byte)
+
+		if !ok {
+			continue
+		}
+
+		currentSeal[index] = sealBytes
+	}
+
 	standardHeader := Header{
 		ParentHash:  header.ParentHash,
 		UncleHash:   header.UncleHash,
@@ -264,7 +284,7 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 		Extra:       header.Extra,
 		MixDigest:   common.Hash{},
 		Nonce:       BlockNonce{},
-		Seal:        header.Seal,
+		Seal:        currentSeal,
 	}
 
 	block = &Block{
@@ -327,6 +347,18 @@ type storageblock struct {
 }
 
 func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
+	currentSeal := make([][]byte, 2)
+
+	for index, seal := range auraHeader.SealFields {
+		sealBytes, ok := seal.([]byte)
+
+		if !ok {
+			continue
+		}
+
+		currentSeal[index] = sealBytes
+	}
+
 	header = &Header{
 		ParentHash:  auraHeader.ParentHash,
 		UncleHash:   auraHeader.UncleHash,
@@ -341,7 +373,7 @@ func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 		GasUsed:     auraHeader.GasUsed,
 		Time:        auraHeader.Time,
 		Extra:       auraHeader.Extra,
-		Seal:        auraHeader.Seal,
+		Seal:        currentSeal,
 	}
 
 	return

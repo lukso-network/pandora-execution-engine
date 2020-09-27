@@ -100,7 +100,7 @@ func TestBlockEncodingAura(t *testing.T) {
 			"signature": "4443597ee9435882330f0edfa604a7dfe896a6ab47becb5e8289e995285a170f035a3dae13a510c73be3430ce1ec116138f7fe65e8017e635929dbc32a58853901",
 			"size": 584,
 			"stateRoot": "0x40cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133b",
-			"step": "320241180",
+			"step": 320241180,
 			"timestamp": "0x5F70768C",
 			"totalDifficulty": 1.7753551929366122454274643393537642576131607e+43,
 			"transactions": [],
