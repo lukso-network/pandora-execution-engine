@@ -140,10 +140,6 @@ func TestBlockEncodingAura(t *testing.T) {
 			err = rlp.Decode(&auraHeaderRlpBytes, &decodedAuraHeader)
 			assert.Nil(t, err)
 		})
-
-		t.Run("Rlp encode aura Header", func(t *testing.T) {
-			t.Skip("Maybe not needed")
-		})
 	})
 
 	t.Run("Message 0x7", func(t *testing.T) {
