@@ -505,8 +505,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		if isAura {
-			var myBytes bytes.Buffer
-
 			var auraHeaders []*types.AuraHeader
 			err = msg.Decode(&auraHeaders)
 
