@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"hash"
 	"math/big"
@@ -118,30 +117,31 @@ func TestBlockEncodingAura(t *testing.T) {
 		assert.Nil(t, err)
 		assert.IsType(t, &Header{}, stdHeader)
 
-		headerHex := hexutil.Encode(jsonBytes)
+		var buf bytes.Buffer
+		block := NewBlock(stdHeader, nil, nil, nil, nil)
+		err = block.EncodeRLP(&buf)
+		assert.Nil(t, err)
 
-		t.Run("Rlp decode into std stdHeader", func(t *testing.T) {
-			var stdHeader Header
-			input, err := hex.DecodeString(headerHex[2:])
+		var auraHeaderRlpBytes bytes.Buffer
+		err = rlp.Encode(&auraHeaderRlpBytes, &auraHeader)
+		assert.Nil(t, err)
+
+		t.Run("Rlp decode into standard block", func(t *testing.T) {
+			var stdBlock Block
+			err = rlp.Decode(&buf, &stdBlock)
 			assert.Nil(t, err)
-			err = rlp.Decode(bytes.NewReader(input), &stdHeader)
+			header := stdBlock.Header()
+			assert.NotNil(t, header)
+			assert.NotEmpty(t, header.Seal)
 		})
 
-		t.Run("Rlp decode into aura stdHeader", func(t *testing.T) {
-			var rlpAuraHeader AuraHeader
-			input, err := hex.DecodeString(headerHex[2:])
-			assert.Nil(t, err)
-			err = rlp.Decode(bytes.NewReader(input), &rlpAuraHeader)
-		})
-
-		t.Run("Rlp encode std stdHeader", func(t *testing.T) {
-			var buf bytes.Buffer
-			block := NewBlock(stdHeader, nil, nil, nil, nil)
-			err = block.EncodeRLP(&buf)
+		t.Run("Rlp decode into aura header", func(t *testing.T) {
+			var decodedAuraHeader AuraHeader
+			err = rlp.Decode(&auraHeaderRlpBytes, &decodedAuraHeader)
 			assert.Nil(t, err)
 		})
 
-		t.Run("Rlp encode aura stdHeader", func(t *testing.T) {
+		t.Run("Rlp encode aura Header", func(t *testing.T) {
 			t.Skip("Maybe not needed")
 		})
 	})
@@ -174,9 +174,6 @@ func TestBlockEncodingAura(t *testing.T) {
 			assert.Equal(t, stdHeaderHash, stdBlockHash)
 		})
 	})
-
-
-
 }
 
 func TestUncleHash(t *testing.T) {

@@ -105,7 +105,7 @@ type AuraHeader struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	Seal        [][]byte       `json:"sealFields"       gencodec:"required"       rlp:"tail"`
+	Seal        [][]byte       `json:"sealFields"       gencodec:"required"`
 }
 
 // field type overrides for gencodec
