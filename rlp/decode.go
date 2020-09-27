@@ -368,9 +368,6 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		if uint64(vlen) > size {
-			//if  "<common.Hash Value>" == val.String()|| "<types.BlockNonce Value>" == val.String() {
-			//	return nil
-			//}
 			fmt.Println(fmt.Sprintf("4: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}

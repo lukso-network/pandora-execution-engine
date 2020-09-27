@@ -19,6 +19,8 @@ package types
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"hash"
 	"math/big"
@@ -80,32 +82,101 @@ func TestBlockEncodingAuraHeader(t *testing.T) {
 }
 
 func TestBlockEncodingAura(t *testing.T) {
-	msg7FromNode0 := "f9025bf90245f90240a09041480ab2f8b1217f2278e000fd5198d58e8c31b6180946da6bbcc20b516055a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d493479470ad1a5fba52e27173d23ad87ad97c9bbe249abfa040cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133ba056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090fffffffffffffffffffffffffffffffd828d5b837a120080845f6e06189cdb830300018c4f70656e457468657265756d86312e34332e31826c698413160138b841e9669a4e282d5e6fd2e09ae6f4c7253cead13da53456653eec3212e70c61d2be54f370334c684b102d39efeb87543fb84f58f86bdad5f10d0f6e357ee9d093ad01c0c0928d5affffffffffffffffffffffffeceb716d"
+	t.Run("Should encode block from json", func(t *testing.T) {
+		getLatestBlockResponse := `
+		{
+			"author": "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf",
+			"difficulty":"0x400",
+			"extraData": "0xdb830300018c4f70656e457468657265756d86312e34332e31826c69",
+			"gasLimit": "0x8000000",
+			"gasUsed": "0x0",
+			"hash": "0x3b9384a861bba3bea8f28161f6fabbca4a6215cead9ce7c363536ffd70ffb63f",
+			"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			"miner": "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf",
+			"number": "0xCbCd",
+			"parentHash": "0xe076375bfb9bb5eceacbace9562a5b07e299dfc9455b24f9f5a8e08fa703e944",
+			"receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+			"sealFields": ["0x8413167e1c", "0xb8414443597ee9435882330f0edfa604a7dfe896a6ab47becb5e8289e995285a170f035a3dae13a510c73be3430ce1ec116138f7fe65e8017e635929dbc32a58853901"],
+			"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+			"signature": "4443597ee9435882330f0edfa604a7dfe896a6ab47becb5e8289e995285a170f035a3dae13a510c73be3430ce1ec116138f7fe65e8017e635929dbc32a58853901",
+			"size": 584,
+			"stateRoot": "0x40cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133b",
+			"step": "320241180",
+			"timestamp": "0x5F70768C",
+			"totalDifficulty": 1.7753551929366122454274643393537642576131607e+43,
+			"transactions": [],
+			"transactionsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+			"uncles": []
+		}`
 
-	type mappedAura struct {
-		Block *AuraBlock
-		TD *big.Int
-	}
+		var auraHeader AuraHeader
+		jsonBytes := []byte(getLatestBlockResponse)
+		err := json.Unmarshal(jsonBytes, &auraHeader)
+		assert.Nil(t, err)
 
-	var mappedAuraResp mappedAura
-	input, err := hex.DecodeString(msg7FromNode0)
-	assert.Nil(t, err)
-	err = rlp.Decode(bytes.NewReader(input), &mappedAuraResp)
-	assert.Nil(t, err)
+		stdHeader := auraHeader.TranslateIntoHeader()
+		assert.Nil(t, err)
+		assert.IsType(t, &Header{}, stdHeader)
 
-	auraBlock := mappedAuraResp.Block
-	assert.NotNil(t, auraBlock)
-	err, stdBlock := auraBlock.TranslateIntoBlock()
-	assert.Nil(t, err)
-	assert.IsType(t, &Block{}, stdBlock)
+		headerHex := hexutil.Encode(jsonBytes)
 
-	t.Run("Block should be valid", func(t *testing.T) {
-		stdBlockHash := stdBlock.Hash()
-		assert.NotNil(t, auraBlock.Header)
-		stdHeader := auraBlock.Header.TranslateIntoHeader()
-		stdHeaderHash := stdHeader.Hash()
-		assert.Equal(t, stdHeaderHash, stdBlockHash)
+		t.Run("Rlp decode into std stdHeader", func(t *testing.T) {
+			var stdHeader Header
+			input, err := hex.DecodeString(headerHex[2:])
+			assert.Nil(t, err)
+			err = rlp.Decode(bytes.NewReader(input), &stdHeader)
+		})
+
+		t.Run("Rlp decode into aura stdHeader", func(t *testing.T) {
+			var rlpAuraHeader AuraHeader
+			input, err := hex.DecodeString(headerHex[2:])
+			assert.Nil(t, err)
+			err = rlp.Decode(bytes.NewReader(input), &rlpAuraHeader)
+		})
+
+		t.Run("Rlp encode std stdHeader", func(t *testing.T) {
+			var buf bytes.Buffer
+			block := NewBlock(stdHeader, nil, nil, nil, nil)
+			err = block.EncodeRLP(&buf)
+			assert.Nil(t, err)
+		})
+
+		t.Run("Rlp encode aura stdHeader", func(t *testing.T) {
+			t.Skip("Maybe not needed")
+		})
 	})
+
+	t.Run("Message 0x7", func(t *testing.T) {
+		msg7FromNode0 := "f9025bf90245f90240a09041480ab2f8b1217f2278e000fd5198d58e8c31b6180946da6bbcc20b516055a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d493479470ad1a5fba52e27173d23ad87ad97c9bbe249abfa040cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133ba056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090fffffffffffffffffffffffffffffffd828d5b837a120080845f6e06189cdb830300018c4f70656e457468657265756d86312e34332e31826c698413160138b841e9669a4e282d5e6fd2e09ae6f4c7253cead13da53456653eec3212e70c61d2be54f370334c684b102d39efeb87543fb84f58f86bdad5f10d0f6e357ee9d093ad01c0c0928d5affffffffffffffffffffffffeceb716d"
+
+		type mappedAura struct {
+			Block *AuraBlock
+			TD *big.Int
+		}
+
+		var mappedAuraResp mappedAura
+		input, err := hex.DecodeString(msg7FromNode0)
+		assert.Nil(t, err)
+		err = rlp.Decode(bytes.NewReader(input), &mappedAuraResp)
+		assert.Nil(t, err)
+
+		auraBlock := mappedAuraResp.Block
+		assert.NotNil(t, auraBlock)
+		err, stdBlock := auraBlock.TranslateIntoBlock()
+		assert.Nil(t, err)
+		assert.IsType(t, &Block{}, stdBlock)
+
+		t.Run("Block should be valid", func(t *testing.T) {
+			stdBlockHash := stdBlock.Hash()
+			assert.NotNil(t, auraBlock.Header)
+			stdHeader := auraBlock.Header.TranslateIntoHeader()
+			stdHeaderHash := stdHeader.Hash()
+			assert.Equal(t, stdHeaderHash, stdBlockHash)
+		})
+	})
+
+
+
 }
 
 func TestUncleHash(t *testing.T) {

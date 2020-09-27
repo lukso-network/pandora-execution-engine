@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -391,10 +391,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	if "6dc147c15773e3f8" == p.id {
-		rawStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		myBytes, _ := rawStream.Raw()
+		//rawStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		//myBytes, _ := rawStream.Raw()
 		//myBytes := []byte(`1234`)
-		fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", hexutil.Encode(myBytes), msg.Code))
+		//fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", hexutil.Encode(myBytes), msg.Code))
 	}
 
 	// Handle aura engine separately
@@ -504,8 +504,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		if isAura {
 			var auraHeaders []*types.AuraHeader
-			if err := msg.Decode(&auraHeaders); err != nil {
-				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			err = msg.Decode(&auraHeaders)
+
+			if nil != err && strings.Contains(err.Error(), "expected input list") {
+				var messageBytes []byte
+				err = msg.Decode(&messageBytes)
+
+				return err
+			}
+
+			if nil != err {
+				panic(fmt.Sprintf("this is my err: %s", err.Error()))
 			}
 
 			//TODO: check whats going on here

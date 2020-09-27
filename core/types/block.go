@@ -90,7 +90,7 @@ type Header struct {
 	Seal [][]uint8 `json:"seal"`
 }
 
-// TODO: deduce which are really needed, parse only that are needed for now.
+//go:generate gencodec -type AuraHeader -field-override headerMarshaling -out gen_aura_header_json.go
 type AuraHeader struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
@@ -105,8 +105,7 @@ type AuraHeader struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	Field1      []uint8        `json:"field1"           gencodec:"required"`
-	Seal        []byte         `json:"seal"           gencodec:"required"`
+	Seal        [][]byte       `json:"sealFields"       gencodec:"required"       rlp:"tail"`
 }
 
 // field type overrides for gencodec
@@ -118,6 +117,32 @@ type headerMarshaling struct {
 	Time       hexutil.Uint64
 	Extra      hexutil.Bytes
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+}
+
+func (auraHeader *AuraHeader) Hash() common.Hash {
+	currentSeal := make([][]byte, 2)
+
+	for index, seal := range auraHeader.Seal {
+		currentSeal[index] = seal
+	}
+
+	return rlpHash([]interface{}{
+		auraHeader.ParentHash,
+		auraHeader.UncleHash,
+		auraHeader.Coinbase,
+		auraHeader.Root,
+		auraHeader.TxHash,
+		auraHeader.ReceiptHash,
+		auraHeader.Bloom,
+		auraHeader.Difficulty,
+		auraHeader.Number,
+		auraHeader.GasLimit,
+		auraHeader.GasUsed,
+		auraHeader.Time,
+		auraHeader.Extra,
+		currentSeal[0],
+		currentSeal[1],
+	})
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -210,10 +235,10 @@ type Body struct {
 
 // TODO: I know that it can be done via inheritance but too much work for now.
 type AuraBlock struct {
-	Header *AuraHeader
+	Header       *AuraHeader
 	Uncles       []*Header
 	Transactions Transactions
-	Rest []interface{} `rlp:"tail"`
+	Rest         []interface{} `rlp:"tail"`
 }
 
 func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
@@ -222,10 +247,6 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 	if nil == header {
 		return fmt.Errorf("header in aura block is nil"), nil
 	}
-
-	seal := make([][]uint8, 2)
-	seal[0] = header.Field1
-	seal[1] = header.Seal
 
 	standardHeader := Header{
 		ParentHash:  header.ParentHash,
@@ -241,13 +262,13 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 		GasUsed:     header.GasUsed,
 		Time:        header.Time,
 		Extra:       header.Extra,
-		MixDigest: common.Hash{},
-		Nonce:     BlockNonce{},
-		Seal: seal,
+		MixDigest:   common.Hash{},
+		Nonce:       BlockNonce{},
+		Seal:        header.Seal,
 	}
 
 	block = &Block{
-		header: &standardHeader,
+		header:       &standardHeader,
 		uncles:       auraBlock.Uncles,
 		transactions: auraBlock.Transactions,
 		//ReceivedFrom: auraBlock.ReceivedFrom,
@@ -306,15 +327,6 @@ type storageblock struct {
 }
 
 func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
-	currentSeal := make([][]uint8, 2)
-	currentSeal[0] = make([]uint8, 4)
-	currentSeal[1] = make([]uint8, 65)
-
-	if len(auraHeader.Seal) > 1 {
-		currentSeal[0] = auraHeader.Field1
-		currentSeal[1] = auraHeader.Seal
-	}
-
 	header = &Header{
 		ParentHash:  auraHeader.ParentHash,
 		UncleHash:   auraHeader.UncleHash,
@@ -329,7 +341,7 @@ func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 		GasUsed:     auraHeader.GasUsed,
 		Time:        auraHeader.Time,
 		Extra:       auraHeader.Extra,
-		Seal:        currentSeal,
+		Seal:        auraHeader.Seal,
 	}
 
 	return
