@@ -20,10 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
+	"io/ioutil"
 	"math"
 	"math/big"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -498,30 +499,28 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
-		if err := msg.Decode(&headers); err != nil && !isAura {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+
+		err := basicDecodeIfNotAura(msg, &headers, isAura)
+
+		if nil != err {
+			return err
 		}
 
 		if isAura {
+			//var myBytes bytes.Buffer
+			myBytes, _ :=  ioutil.ReadAll(msg.Payload)
+			panic(hexutil.Encode(myBytes))
+
 			var auraHeaders []*types.AuraHeader
 			err = msg.Decode(&auraHeaders)
-
-			if nil != err && strings.Contains(err.Error(), "expected input list") {
-				var messageBytes []byte
-				err = msg.Decode(&messageBytes)
-
-				return err
-			}
 
 			if nil != err {
 				panic(fmt.Sprintf("this is my err: %s", err.Error()))
 			}
 
-			//TODO: check whats going on here
 			for _, header := range auraHeaders {
 				headers = append(headers, header.TranslateIntoHeader())
 			}
-			panic(len(auraHeaders))
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that
 		if len(headers) == 0 && p.syncDrop != nil {
@@ -762,9 +761,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			request.TD = mappedRequest.TD
 		}
 
-		if err := msg.Decode(&request); err != nil && !isAura {
-			return errResp(ErrDecode, "%v: %v", msg, err)
+		err := basicDecodeIfNotAura(msg, &request, isAura)
+
+		if nil != err {
+			return err
 		}
+
 		if hash := types.CalcUncleHash(request.Block.Uncles()); hash != request.Block.UncleHash() {
 			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", request.Block.UncleHash())
 			break // TODO(karalabe): return error eventually, but wait a few releases
@@ -998,4 +1000,18 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, isAura bool)(err error) {
+	if isAura {
+		return
+	}
+
+	err = msg.Decode(&value)
+
+	if nil != err {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+
+	return
 }
