@@ -20,9 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"sync"
@@ -507,9 +505,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		if isAura {
-			//var myBytes bytes.Buffer
-			myBytes, _ :=  ioutil.ReadAll(msg.Payload)
-			panic(hexutil.Encode(myBytes))
+			var myBytes bytes.Buffer
 
 			var auraHeaders []*types.AuraHeader
 			err = msg.Decode(&auraHeaders)
