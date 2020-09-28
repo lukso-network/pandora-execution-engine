@@ -134,23 +134,7 @@ func (auraHeader *AuraHeader) Hash() common.Hash {
 		currentSeal[index] = sealBytes
 	}
 
-	return rlpHash([]interface{}{
-		auraHeader.ParentHash,
-		auraHeader.UncleHash,
-		auraHeader.Coinbase,
-		auraHeader.Root,
-		auraHeader.TxHash,
-		auraHeader.ReceiptHash,
-		auraHeader.Bloom,
-		auraHeader.Difficulty,
-		auraHeader.Number,
-		auraHeader.GasLimit,
-		auraHeader.GasUsed,
-		auraHeader.Time,
-		auraHeader.Extra,
-		hexutil.EncodeUint64(auraHeader.Step),
-		currentSeal[1],
-	})
+	return rlpHash(auraHeader)
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
