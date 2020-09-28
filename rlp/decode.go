@@ -769,15 +769,6 @@ func (s *Stream) Decode(val interface{}) error {
 
 	err = decoder(s, rval.Elem())
 
-	//// This is quite ugly, but..
-	//if "common.Hash" == rtyp.Elem().String() && io.EOF == err {
-	//	return nil
-	//}
-	//
-	//if nil != err {
-	//	//panic(fmt.Sprintf("c1 %v, %v, %v", rtyp.Elem().String(), rtyp.Elem(), err.Error()))
-	//}
-
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
