@@ -142,23 +142,35 @@ func (auraHeader *AuraHeader) Hash() common.Hash {
 func (h *Header) Hash() common.Hash {
 	// TODO : Keccak256 of RLP encoded Aura header. Needs to check when header sync and sealing work
 	if h.Seal != nil {
-		return rlpHash([]interface{}{
-			h.ParentHash,
-			h.UncleHash,
-			h.Coinbase,
-			h.Root,
-			h.TxHash,
-			h.ReceiptHash,
-			h.Bloom,
-			h.Difficulty,
-			h.Number,
-			h.GasLimit,
-			h.GasUsed,
-			h.Time,
-			h.Extra,
-			h.Seal[0],
-			h.Seal[1],
-		})
+		auraHeader := AuraHeader{
+			ParentHash:  h.ParentHash,
+			UncleHash:   h.UncleHash,
+			Coinbase:    h.Coinbase,
+			Root:        h.Root,
+			TxHash:      h.TxHash,
+			ReceiptHash: h.ReceiptHash,
+			Bloom:       h.Bloom,
+			Difficulty:  h.Difficulty,
+			Number:      h.Number,
+			GasLimit:    h.GasLimit,
+			GasUsed:     h.GasUsed,
+			Time:        h.Time,
+			Extra:       h.Extra,
+		}
+
+		for index, value := range h.Seal {
+			if 0 == index {
+				// step
+				auraHeader.Step = binary.LittleEndian.Uint64(value)
+			}
+
+			if 1 == index {
+				// signature
+				auraHeader.Signature = value
+			}
+		}
+
+		return rlpHash(auraHeader)
 	} else {
 		return rlpHash(h)
 	}
@@ -332,6 +344,7 @@ type storageblock struct {
 func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 	currentSeal := make([][]byte, 2)
 
+	// From Json there is no Header Seal
 	for index, seal := range auraHeader.SealFields {
 		sealBytes, ok := seal.([]byte)
 
@@ -340,6 +353,18 @@ func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 		}
 
 		currentSeal[index] = sealBytes
+	}
+
+	// From RLP there is no SealFields
+	if len(auraHeader.SealFields) < 1 {
+		stepBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(stepBytes, auraHeader.Step)
+
+		currentSeal[0] = stepBytes
+		currentSeal[1] = auraHeader.Signature
+		auraHeader.SealFields = make([]interface{}, 2)
+		auraHeader.SealFields[0] = auraHeader.Step
+		auraHeader.SealFields[1] = auraHeader.Signature
 	}
 
 	header = &Header{

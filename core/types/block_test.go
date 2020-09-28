@@ -193,7 +193,11 @@ func TestBlockEncodingAura(t *testing.T) {
 		assert.NotEmpty(t, auraHeaders)
 
 		for _, header := range auraHeaders {
-			assert.Equal(t, "0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4", header.Hash().String())
+			hashExpected := "0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4"
+			assert.Equal(t, hashExpected, header.Hash().String())
+			stdHeader := header.TranslateIntoHeader()
+			stdHeaderHash := stdHeader.Hash()
+			assert.Equal(t, hashExpected, stdHeaderHash.String())
 		}
 	})
 }
