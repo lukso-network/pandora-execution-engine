@@ -258,37 +258,6 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 
 	standardHeader := header.TranslateIntoHeader()
 
-	//currentSeal := make([][]byte, 2)
-	//
-	//for index, seal := range header.SealFields {
-	//	sealBytes, ok := seal.([]byte)
-	//
-	//	if !ok {
-	//		continue
-	//	}
-	//
-	//	currentSeal[index] = sealBytes
-	//}
-	//
-	//standardHeader := Header{
-	//	ParentHash:  header.ParentHash,
-	//	UncleHash:   header.UncleHash,
-	//	Coinbase:    header.Coinbase,
-	//	Root:        header.Root,
-	//	TxHash:      header.TxHash,
-	//	ReceiptHash: header.ReceiptHash,
-	//	Bloom:       header.Bloom,
-	//	Difficulty:  header.Difficulty,
-	//	Number:      header.Number,
-	//	GasLimit:    header.GasLimit,
-	//	GasUsed:     header.GasUsed,
-	//	Time:        header.Time,
-	//	Extra:       header.Extra,
-	//	MixDigest:   common.Hash{},
-	//	Nonce:       BlockNonce{},
-	//	Seal:        currentSeal,
-	//}
-
 	block = &Block{
 		header:       standardHeader,
 		uncles:       auraBlock.Uncles,
