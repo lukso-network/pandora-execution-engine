@@ -148,7 +148,7 @@ func (auraHeader *AuraHeader) Hash() common.Hash {
 		auraHeader.GasUsed,
 		auraHeader.Time,
 		auraHeader.Extra,
-		currentSeal[0],
+		hexutil.EncodeUint64(auraHeader.Step),
 		currentSeal[1],
 	})
 }
@@ -291,7 +291,6 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 		header:       &standardHeader,
 		uncles:       auraBlock.Uncles,
 		transactions: auraBlock.Transactions,
-		//ReceivedFrom: auraBlock.ReceivedFrom,
 	}
 
 	return
