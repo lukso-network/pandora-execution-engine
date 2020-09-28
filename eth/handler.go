@@ -389,13 +389,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
-	if "6dc147c15773e3f8" == p.id {
-		//rawStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		//myBytes, _ := rawStream.Raw()
-		//myBytes := []byte(`1234`)
-		//fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", hexutil.Encode(myBytes), msg.Code))
-	}
-
 	// Handle aura engine separately
 	engine := pm.blockchain.Engine()
 	_, isAura := engine.(*aura.Aura)
@@ -507,10 +500,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if isAura {
 			var auraHeaders []*types.AuraHeader
 			err = msg.Decode(&auraHeaders)
-
-			if nil != err {
-				panic(fmt.Sprintf("this is my err: %s", err.Error()))
-			}
 
 			for _, header := range auraHeaders {
 				headers = append(headers, header.TranslateIntoHeader())
@@ -738,7 +727,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		if isAura {
 			var mappedRequest auraNewBlockData
-			err =  msg.Decode(&mappedRequest)
+			err = msg.Decode(&mappedRequest)
 
 			if nil != err {
 				return errResp(ErrDecode, "%v: %v", msg, err)
@@ -996,7 +985,7 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 	}
 }
 
-func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, isAura bool)(err error) {
+func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, isAura bool) (err error) {
 	if isAura {
 		return
 	}
