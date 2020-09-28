@@ -119,7 +119,7 @@ var customAuraGenesisTests = []struct {
 		  }
 		}`,
 		query:  "eth.getBlock(0).hash",
-		result: "0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4",
+		result: "0x2778716827366f0a5479d7a907800d183c57382fa7142b84fbb71db143cf788c",
 	},
 }
 
