@@ -167,6 +167,7 @@ func TestBlockEncodingAura(t *testing.T) {
 			assert.NotNil(t, auraBlock.Header)
 			stdHeader := auraBlock.Header.TranslateIntoHeader()
 			stdHeaderHash := stdHeader.Hash()
+			assert.Equal(t, stdBlock.header, stdHeader)
 			assert.Equal(t, stdHeaderHash, stdBlockHash)
 		})
 	})
