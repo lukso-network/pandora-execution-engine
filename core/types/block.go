@@ -158,17 +158,21 @@ func (h *Header) Hash() common.Hash {
 			Extra:       h.Extra,
 		}
 
-		for index, value := range h.Seal {
-			if 0 == index {
-				// step
-				auraHeader.Step = binary.LittleEndian.Uint64(value)
-			}
-
-			if 1 == index {
-				// signature
-				auraHeader.Signature = value
-			}
+		if len(h.Seal) < 1 {
+			return rlpHash(auraHeader)
 		}
+
+		step := h.Seal[0]
+		signature := h.Seal[1]
+
+		// If step is like 0x or is invalid cast it to 0 in []uint8 format
+		if len(step) != 8 {
+			step = make([]byte, 8)
+			binary.LittleEndian.PutUint64(step, 0)
+		}
+
+		auraHeader.Step = binary.LittleEndian.Uint64(step)
+		auraHeader.Signature = signature
 
 		return rlpHash(auraHeader)
 	} else {
