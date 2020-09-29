@@ -147,7 +147,7 @@ func TestBlockEncodingAura(t *testing.T) {
 
 		type mappedAura struct {
 			Block *AuraBlock
-			TD *big.Int
+			TD    *big.Int
 		}
 
 		var mappedAuraResp mappedAura
@@ -199,6 +199,22 @@ func TestBlockEncodingAura(t *testing.T) {
 			stdHeader := header.TranslateIntoHeader()
 			stdHeaderHash := stdHeader.Hash()
 			assert.Equal(t, hashExpected, stdHeaderHash.String())
+			if header.Number.Int64() == int64(1) {
+				extraSeal := 65
+				currentSignature := stdHeader.Seal[1]
+				signature := currentSignature[len(currentSignature)-extraSeal:]
+
+				// Recover the public key and the Ethereum address
+				pubkey, err := crypto.Ecrecover(header.Hash().Bytes(), signature)
+				assert.Nil(t, err)
+				var signer common.Address
+				copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+				assert.Equal(t, "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf", signer.Hex())
+				//var signer common.Address
+				//copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+				//sigcache.Add(hash, signer)
+			}
 		}
 	})
 }
