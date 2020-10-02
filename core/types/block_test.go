@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"hash"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -200,20 +202,13 @@ func TestBlockEncodingAura(t *testing.T) {
 			stdHeaderHash := stdHeader.Hash()
 			assert.Equal(t, hashExpected, stdHeaderHash.String())
 			if header.Number.Int64() == int64(1) {
-				extraSeal := 65
-				currentSignature := stdHeader.Seal[1]
-				signature := currentSignature[len(currentSignature)-extraSeal:]
-
-				// Recover the public key and the Ethereum address
-				pubkey, err := crypto.Ecrecover(header.Hash().Bytes(), signature)
+				messageHash, err := hexutil.Decode("0x1e1eb0a19950239566988fc61cc981b880df57c25c50d879c1f1f4b8d0ce6a71")
+				pubkey, err := crypto.Ecrecover(messageHash, stdHeader.Seal[1])
 				assert.Nil(t, err)
 				var signer common.Address
 				copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-				assert.Equal(t, "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf", signer.Hex())
-				//var signer common.Address
-				//copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-				//sigcache.Add(hash, signer)
+				println(signer.Hex())
+				assert.Equal(t, "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf", strings.ToLower(signer.Hex()))
 			}
 		}
 	})

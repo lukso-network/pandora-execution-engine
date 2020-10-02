@@ -602,10 +602,13 @@ func (a *Aura) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
-	//hasher := sha3.NewLegacyKeccak256()
-	//encodeSigHeader(hasher, header)
+	hasher := new(bytes.Buffer)
+	encodeSigHeader(hasher, header)
+	signatureHash := crypto.Keccak256(hasher.Bytes())
 	//hasher.Sum(hash[:0])
-	return header.Hash()
+	var arr [32]byte
+	copy(arr[:], signatureHash)
+	return arr
 }
 
 // AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
@@ -636,9 +639,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Seal[0])-crypto.SignatureLength], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
+		header.Extra, // Yes, this will panic if extra is too short
 	})
 	if err != nil {
 		panic("can't encode: " + err.Error())
