@@ -310,7 +310,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	}
 
 	// All basic checks passed, verify the seal and return
-	return a.verifySeal(chain, header, parents)
+	return a.verifySeal(header)
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -405,15 +405,15 @@ func (a *Aura) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (a *Aura) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return a.verifySeal(chain, header, nil)
+func (a *Aura) VerifySeal(header *types.Header) error {
+	return a.verifySeal(header)
 }
 
 // verifySeal checks whether the signature contained in the header satisfies the
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
 // from.
-func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (a *Aura) verifySeal(header *types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
