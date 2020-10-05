@@ -7,7 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
@@ -72,13 +74,23 @@ func TestAura_VerifySeal(t *testing.T) {
 		if header.Number.Int64() == int64(1) {
 			signatureForSeal := new(bytes.Buffer)
 			encodeSigHeader(signatureForSeal, stdHeader)
-			println(SealHash(stdHeader).String())
-			println("\n\n")
 			messageHashForSeal := SealHash(stdHeader).Bytes()
 			hexutil.Encode(crypto.Keccak256(signatureForSeal.Bytes()))
 			pubkey, err := crypto.Ecrecover(messageHashForSeal, stdHeader.Seal[1])
 			assert.Nil(t, err)
 			var aura Aura
+			auraConfig := &params.AuraConfig{
+				Period: uint64(5),
+				Authorities: []common.Address{
+					common.HexToAddress("0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf"),
+					common.HexToAddress("0xafe443af9d1504de4c2d486356c421c160fdd7b1"),
+				},
+			}
+			aura.config = auraConfig
+			var auraSignatures *lru.ARCCache
+			auraSignatures, _ = lru.NewARC(inmemorySignatures)
+			auraSignatures.Add(0, "0x6f17a2ade9f6daed3968b73514466e07e3c1fef2d6350946e1a12d2b577af0aa")
+			aura.signatures = auraSignatures
 			err = aura.VerifySeal(nil, stdHeader)
 			assert.Nil(t, err)
 			var signer common.Address
