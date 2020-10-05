@@ -20,6 +20,7 @@ package aura
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync"
@@ -425,12 +426,15 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 		return err
 	}
 	// Checking authorization
-	ts := uint64(time.Now().Unix())
-	step := ts % a.config.Period
+	ts := header.Time
+
+	step := ts / a.config.Period
+	println(header.Number.Uint64())
+
 	turn := step % uint64(len(a.config.Authorities))
-	// For Patrick purpose:
-	//fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].Hash().String(), signer.Hash().String()))
+
 	if signer != a.config.Authorities[turn] {
+		fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
