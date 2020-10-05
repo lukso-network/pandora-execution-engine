@@ -79,7 +79,7 @@ func TestAura_VerifySeal(t *testing.T) {
 			pubkey, err := crypto.Ecrecover(messageHashForSeal, stdHeader.Seal[1])
 			assert.Nil(t, err)
 			var aura Aura
-			err = aura.VerifySeal(stdHeader)
+			err = aura.VerifySeal(nil, stdHeader)
 			assert.Nil(t, err)
 			var signer common.Address
 			copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
