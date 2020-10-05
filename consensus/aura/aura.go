@@ -619,7 +619,6 @@ func SealHash(header *types.Header) (hash common.Hash) {
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func AuraRLP(header *types.Header) []byte {
-	//
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
 	return header.Hash().Bytes()
