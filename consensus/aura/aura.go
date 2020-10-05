@@ -428,6 +428,8 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	ts := uint64(time.Now().Unix())
 	step := ts % a.config.Period
 	turn := step % uint64(len(a.config.Authorities))
+	// For Patrick purpose:
+	//fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].Hash().String(), signer.Hash().String()))
 	if signer != a.config.Authorities[turn] {
 		// not authorized to sign
 		return errUnauthorizedSigner
