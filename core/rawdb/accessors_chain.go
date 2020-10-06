@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -273,12 +274,19 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
-	data, _ := db.Ancient(freezerHeaderTable, number)
+	data, err := db.Ancient(freezerHeaderTable, number)
+	if nil != err && 1 == number {
+		log.Error(fmt.Sprintf("[ReadHeaderRLP] ancient no %v ||| err = %v", number, err))
+	}
+	//fmt.Printf("\n\nCIUPAS hash %s || numer: %v TO JE LON: %s", hash.String(), number, string(data[:]))
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 		return data
 	}
 	// Then try to look up the data in leveldb.
-	data, _ = db.Get(headerKey(number, hash))
+	data, err = db.Get(headerKey(number, hash))
+	if nil != err && 1 == number {
+		log.Error(fmt.Sprintf("\n\n[ReadHeaderRLP] leveldb no %v ||| err = %v", number, err))
+	}
 	if len(data) > 0 {
 		return data
 	}
@@ -286,8 +294,15 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	// So during the first check for ancient db, the data is not yet in there,
 	// but when we reach into leveldb, the data was already moved. That would
 	// result in a not found error.
-	data, _ = db.Ancient(freezerHeaderTable, number)
+	data, err = db.Ancient(freezerHeaderTable, number)
+	if nil != err && 1 == number {
+		log.Error(fmt.Sprintf("[ReadHeaderRLP] ancient2 no %v ||| err = %v", number, err))
+	}
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		return data
+	}
+	if 1 == number {
+		log.Info(fmt.Sprintf("\n\n[ReadHeaderRLP] Keccak256Hash: %x ||| HASH: %x ||| Keccak256: %x", crypto.Keccak256Hash(data), hash, crypto.Keccak256(data)))
 		return data
 	}
 	return nil // Can't find the data anywhere.
