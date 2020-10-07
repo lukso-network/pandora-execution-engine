@@ -287,25 +287,49 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	// but when we reach into leveldb, the data was already moved. That would
 	// result in a not found error.
 	data, _ = db.Ancient(freezerHeaderTable, number)
-	//if 1 == number {
-	//	//var stdHeader *types.Header
-	//	//var auraHeader *types.AuraHeader
-	//	//err := rlp.Decode(bytes.NewReader(data), &auraHeader)
-	//	//if nil != err {
-	//	//	panic("Youhuhuhuhuhuhuhuhu")
-	//	//	log.Error("Error with rlp.Decode(bytes.NewReader(data), &stdHeader)")
-	//	//}
-	//	////decoded, err := hexutil.Decode("0x1314e684")
-	//	////if nil != err {
-	//	////	log.Error("Error with hexutil.Decode(0x1314e684)")
-	//	////}
-	//	//data, err = rlp.EncodeToBytes(auraHeader)
-	//	//log.Info(fmt.Sprintf("\n\n[ReadHeaderRLP] Keccak256Hash: %x ||| HASH: %x ||| Keccak256: %x", crypto.Keccak256Hash(data), hash, crypto.Keccak256(data)))
-	//	panic("This is the end of the journey")
-	//}
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 		return data
 	}
+
+	if len(data) < 1 {
+		return nil
+	}
+
+	// Try to decode it into aura header and then hash it
+	var (
+		header     types.Header
+		auraHeader types.AuraHeader
+	)
+	err := rlp.DecodeBytes(data, &header)
+
+	if nil != err {
+		return nil
+	}
+
+	err = auraHeader.FromHeader(&header)
+
+	if nil != err {
+		return nil
+	}
+
+	if hash == auraHeader.Hash() {
+		//panic("I am here")
+		return data
+	}
+
+	//if 1 == number && common.HexToHash("0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4") == hash {
+	//	//panic("I am here and I should not be here")
+	//	fmt.Printf("\n\n\n\n\n I am here and should not be here: %x \n\n\n\n\n\n\n", crypto.Keccak256Hash(data))
+	//	//var auraHeader types.AuraHeader
+	//	//err := rlp.DecodeBytes(data, &auraHeader)
+	//	//
+	//	//if nil != err {
+	//	//	panic(err.Error())
+	//	//}
+	//
+	//	panic(hexutil.Encode(data))
+	//
+	//}
 	return nil // Can't find the data anywhere.
 }
 
