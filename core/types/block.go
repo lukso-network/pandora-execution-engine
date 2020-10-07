@@ -318,6 +318,36 @@ type storageblock struct {
 	TD     *big.Int
 }
 
+func (auraHeader *AuraHeader) FromHeader(header *Header) (err error) {
+	sealLen := len(header.Seal)
+
+	if sealLen < 2 {
+		err = fmt.Errorf("expected 2 or more Seal fields, got: %d", sealLen)
+		return
+	}
+
+	auraHeader.ParentHash = header.ParentHash
+	auraHeader.UncleHash = header.UncleHash
+	auraHeader.Coinbase = header.Coinbase
+	auraHeader.Root = header.Root
+	auraHeader.TxHash = header.TxHash
+	auraHeader.ReceiptHash = header.ReceiptHash
+	auraHeader.Bloom = header.Bloom
+	auraHeader.Difficulty = header.Difficulty
+	auraHeader.Number = header.Number
+	auraHeader.GasLimit = header.GasLimit
+	auraHeader.GasUsed = header.GasUsed
+	auraHeader.Time = header.Time
+	auraHeader.Extra = header.Extra
+	auraHeader.Step = binary.LittleEndian.Uint64(header.Seal[0])
+	auraHeader.Signature = header.Seal[1]
+	auraHeader.SealFields = make([]interface{}, 2)
+	auraHeader.SealFields[0] = auraHeader.Step
+	auraHeader.SealFields[1] = auraHeader.Signature
+
+	return
+}
+
 func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
 	currentSeal := make([][]byte, 2)
 
