@@ -232,7 +232,8 @@ var (
 			Period: 15,
 			Epoch:  30000,
 			Authorities: []common.Address{
-				common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942"),
+				common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07"),
+				common.HexToAddress("0x00faa37564140c1a5e96095f05466b9f73441e44"),
 			},
 			Difficulty: big.NewInt(131072),
 		},
@@ -353,8 +354,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	Aura *AuraConfig 	 `json:"aura,omitempty"`
-
+	Aura   *AuraConfig   `json:"aura,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -371,17 +371,23 @@ type CliqueConfig struct {
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 }
 
+type Signature []byte
+type Signatures []Signature
+
+// AuraConfig is the consensus engine configs for proof-of-authority based sealing.
+
+//TODO: THIS IMHO SHOULD BE SAME AS IN PARITY (do not break naming convention)
+type AuraConfig struct {
+	Period      uint64           `json:"period"`      // Number of seconds between blocks to enforce
+	Epoch       uint64           `json:"epoch"`       // Epoch length to reset votes and checkpoint
+	Authorities []common.Address `json:"authorities"` // list of addresses of authorities
+	Difficulty  *big.Int         `json:"difficulty"`  // Constant block difficulty
+	Signatures  Signatures       `json:"signatures"`
+}
+
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
-}
-
-// AuraConfig is the consensus engine configs for proof-of-authority based sealing.
-type AuraConfig struct {
-	Period uint64 					`json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 					`json:"epoch"`  // Epoch length to reset votes and checkpoint
-	Difficulty *big.Int 			`json:"difficulty"` // Constant block difficulty
-	Authorities []common.Address 	`json:"authorities"` // list of addresses of authorities
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -667,16 +673,5 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainID == nil {
 		chainID = new(big.Int)
 	}
-	return Rules{
-		ChainID:          new(big.Int).Set(chainID),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsYoloV1:         c.IsYoloV1(num),
-	}
+	return Rules{ChainID: new(big.Int).Set(chainID), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
 }

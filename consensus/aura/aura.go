@@ -190,7 +190,7 @@ type Aura struct {
 	fakeDiff bool // Skip difficulty verifications
 }
 
-// New creates a Aura proof-of-authority consensus engine with the initial
+// New creates a AuthorityRound proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	// Set any missing consensus parameters to their defaults

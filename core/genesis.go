@@ -65,7 +65,7 @@ type Genesis struct {
 	ParentHash common.Hash `json:"parentHash"`
 
 	// Seal field is used for aura consensus engine
-	Seal 		Seal		`json:"seal"`
+	Seal Seal `json:"seal"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -85,8 +85,8 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 
 // Seal is a struct for aura consensus engine
 type Seal struct {
-	Step 		[]byte		`json:"step,omitempty"`
-	Signature 	[]byte      `json:"signature,omitempty"`
+	Step      []byte `json:"step,omitempty"`
+	Signature []byte `json:"signature,omitempty"`
 }
 
 // GenesisAccount is an account in the state of the genesis block.
@@ -120,8 +120,8 @@ type genesisAccountMarshaling struct {
 
 // Seal marshaling struct used for gencodec
 type genesisSealMarshaling struct {
-	Step       hexutil.Bytes
-	Signature  hexutil.Bytes
+	Step      hexutil.Bytes
+	Signature hexutil.Bytes
 }
 
 // storageJSON represents a 256 bit byte array, but allows less than 256 bits when
@@ -283,19 +283,19 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	root := statedb.IntermediateRoot(false)
 	head := &types.Header{
-		ParentHash: g.ParentHash,
-		Time:       g.Timestamp,
-		Number:     new(big.Int).SetUint64(g.Number),
-		Coinbase:   g.Coinbase,
-		TxHash:     types.EmptyRootHash,
-		UncleHash:  types.EmptyUncleHash,
-		Extra:      g.ExtraData,
-		Root:       root,
+		ParentHash:  g.ParentHash,
+		Time:        g.Timestamp,
+		Number:      new(big.Int).SetUint64(g.Number),
+		Coinbase:    g.Coinbase,
+		TxHash:      types.EmptyRootHash,
+		UncleHash:   types.EmptyUncleHash,
+		Extra:       g.ExtraData,
+		Root:        root,
 		ReceiptHash: types.EmptyRootHash,
-		GasUsed:    g.GasUsed,
-		GasLimit:   g.GasLimit,
-		Difficulty: g.Difficulty,
-		Seal: 		make([][]byte, 2),
+		GasUsed:     g.GasUsed,
+		GasLimit:    g.GasLimit,
+		Difficulty:  g.Difficulty,
+		Seal:        make([][]byte, 2),
 	}
 
 	// assign step and signature in header
