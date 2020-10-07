@@ -49,7 +49,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {
-		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
+		t.Fatalf("Retrieved header mismatch: have %x, want %x", entry.Hash(), header.Hash())
 	}
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")

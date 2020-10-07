@@ -141,43 +141,45 @@ func (auraHeader *AuraHeader) Hash() common.Hash {
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
 	// TODO : Keccak256 of RLP encoded Aura header. Needs to check when header sync and sealing work
-	if h.Seal != nil {
-		auraHeader := AuraHeader{
-			ParentHash:  h.ParentHash,
-			UncleHash:   h.UncleHash,
-			Coinbase:    h.Coinbase,
-			Root:        h.Root,
-			TxHash:      h.TxHash,
-			ReceiptHash: h.ReceiptHash,
-			Bloom:       h.Bloom,
-			Difficulty:  h.Difficulty,
-			Number:      h.Number,
-			GasLimit:    h.GasLimit,
-			GasUsed:     h.GasUsed,
-			Time:        h.Time,
-			Extra:       h.Extra,
-		}
-
-		if len(h.Seal) < 1 {
-			return rlpHash(auraHeader)
-		}
-
-		step := h.Seal[0]
-		signature := h.Seal[1]
-
-		// If step is like 0x or is invalid cast it to 0 in []uint8 format
-		if len(step) != 8 {
-			step = make([]byte, 8)
-			binary.LittleEndian.PutUint64(step, 0)
-		}
-
-		auraHeader.Step = binary.LittleEndian.Uint64(step)
-		auraHeader.Signature = signature
-
-		return rlpHash(auraHeader)
-	} else {
+	if h.Seal == nil {
 		return rlpHash(h)
 	}
+
+	auraHeader := AuraHeader{
+		ParentHash:  h.ParentHash,
+		UncleHash:   h.UncleHash,
+		Coinbase:    h.Coinbase,
+		Root:        h.Root,
+		TxHash:      h.TxHash,
+		ReceiptHash: h.ReceiptHash,
+		Bloom:       h.Bloom,
+		Difficulty:  h.Difficulty,
+		Number:      h.Number,
+		GasLimit:    h.GasLimit,
+		GasUsed:     h.GasUsed,
+		Time:        h.Time,
+		Extra:       h.Extra,
+	}
+
+	// fields are not propagated, we should return normal header
+	// TODO: deduce how to remove this recursion
+	if len(h.Seal) < 1 {
+		return rlpHash(h)
+	}
+
+	step := h.Seal[0]
+	signature := h.Seal[1]
+
+	// If step is like 0x or is invalid cast it to 0 in []uint8 format
+	if len(step) != 8 {
+		step = make([]byte, 8)
+		binary.LittleEndian.PutUint64(step, 0)
+	}
+
+	auraHeader.Step = binary.LittleEndian.Uint64(step)
+	auraHeader.Signature = signature
+
+	return rlpHash(auraHeader)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
