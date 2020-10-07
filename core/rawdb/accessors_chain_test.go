@@ -85,12 +85,18 @@ func TestEncodeAndDecodeAuraToDatabase(t *testing.T) {
 
 		t.Run("should not find any value", func(t *testing.T) {
 			db := NewMemoryDatabase()
+			defer func() {
+				_ = db.Close()
+			}()
 			rawValue := ReadHeaderRLP(db, expectedDataHash, number)
 			assert.Nil(t, rawValue)
 		})
 
 		t.Run("should find hash in database", func(t *testing.T) {
 			db := NewMemoryDatabase()
+			defer func() {
+				_ = db.Close()
+			}()
 			assert.NotEmpty(t, auraHeaders)
 			expectedBytes, err := rlp.EncodeToBytes(auraHeaders[0])
 			assert.Nil(t, err)
