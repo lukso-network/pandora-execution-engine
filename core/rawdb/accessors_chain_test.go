@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -47,7 +48,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {
-		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
+		t.Fatalf("Retrieved header mismatch: have %x, want %x", entry.Hash(), header.Hash())
 	}
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
@@ -64,6 +65,43 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 	}
+}
+
+func TestEncodeAndDecodeAuraToDatabase(t *testing.T) {
+	t.Run("Block 1 from parity", func(t *testing.T) {
+		number := uint64(1)
+		expectedDataHash := common.HexToHash("0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4")
+
+		t.Run("should not find any value", func(t *testing.T) {
+			db := NewMemoryDatabase()
+			defer func() {
+				_ = db.Close()
+			}()
+			rawValue := ReadHeaderRLP(db, expectedDataHash, number)
+			assert.Nil(t, rawValue)
+		})
+
+		t.Run("should find hash in leveldb", func(t *testing.T) {
+			db := NewMemoryDatabase()
+			defer func() {
+				_ = db.Close()
+			}()
+			block1Data := "0xf9026ea02778716827366f0a5479d7a907800d183c57382fa7142b84fbb71db143cf788ca01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d493479470ad1a5fba52e27173d23ad87ad97c9bbe249abfa040cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133ba056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090ffffffffffffffffffffffffeceb197b0183222aa980845f6880949cdb830300018c4f70656e457468657265756d86312e34332e31826c69a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f84c8884e6141300000000b84179d277eb6b97d25776793c1a98639d8d41da413fba24c338ee83bff533eac3695a0afaec6df1b77a48681a6a995798964adec1bb406c91b6bbe35f115a828a4101"
+			block1Bytes := common.FromHex(block1Data)
+			levelDbHeaderKey := headerKey(number, expectedDataHash)
+			err := db.Put(levelDbHeaderKey, block1Bytes)
+			assert.Nil(t, err)
+
+			// mock behaviour of get block 1 from leveldb
+			blockBytes, err := db.Get(levelDbHeaderKey)
+			assert.Nil(t, err)
+			assert.NotEmpty(t, blockBytes)
+			assert.Equal(t, block1Bytes, blockBytes)
+
+			rawValue := ReadHeaderRLP(db, expectedDataHash, number)
+			assert.NotNil(t, rawValue)
+		})
+	})
 }
 
 // Tests block body storage and retrieval operations.

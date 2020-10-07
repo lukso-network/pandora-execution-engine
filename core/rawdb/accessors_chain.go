@@ -290,6 +290,32 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 		return data
 	}
+
+	if len(data) < 1 {
+		return nil
+	}
+
+	// Try to decode it into aura header and then hash it
+	var (
+		header     types.Header
+		auraHeader types.AuraHeader
+	)
+	err := rlp.DecodeBytes(data, &header)
+
+	if nil != err {
+		return nil
+	}
+
+	err = auraHeader.FromHeader(&header)
+
+	if nil != err {
+		return nil
+	}
+
+	if hash == auraHeader.Hash() {
+		return data
+	}
+
 	return nil // Can't find the data anywhere.
 }
 

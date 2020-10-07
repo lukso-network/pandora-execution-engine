@@ -426,13 +426,17 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 		return err
 	}
 	// Checking authorization
-	ts := uint64(time.Now().Unix())
-	step := ts % a.config.Period
+	ts := header.Time
+
+	step := ts / a.config.Period
+	println(header.Number.Uint64())
+
 	turn := step % uint64(len(a.config.Authorities))
+
 	if signer != a.config.Authorities[turn] {
-		fmt.Println(fmt.Sprintf("Expecting: %s, current: %s", a.config.Authorities[turn].Hash().String(), signer.Hash().String()))
+		fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
 		// not authorized to sign
-		//return errUnauthorizedSigner
+		return errUnauthorizedSigner
 	}
 
 	return nil
@@ -602,10 +606,13 @@ func (a *Aura) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
-	//hasher := sha3.NewLegacyKeccak256()
-	//encodeSigHeader(hasher, header)
+	hasher := new(bytes.Buffer)
+	encodeSigHeader(hasher, header)
+	signatureHash := crypto.Keccak256(hasher.Bytes())
 	//hasher.Sum(hash[:0])
-	return header.Hash()
+	var arr [32]byte
+	copy(arr[:], signatureHash)
+	return arr
 }
 
 // AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
@@ -616,9 +623,8 @@ func SealHash(header *types.Header) (hash common.Hash) {
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func AuraRLP(header *types.Header) []byte {
-	//
-	//b := new(bytes.Buffer)
-	//encodeSigHeader(b, header)
+	b := new(bytes.Buffer)
+	encodeSigHeader(b, header)
 	return header.Hash().Bytes()
 }
 
@@ -636,9 +642,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Seal[0])-crypto.SignatureLength], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
+		header.Extra, // Yes, this will panic if extra is too short
 	})
 	if err != nil {
 		panic("can't encode: " + err.Error())
