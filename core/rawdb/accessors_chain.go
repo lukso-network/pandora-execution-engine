@@ -19,8 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -290,33 +288,20 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	// result in a not found error.
 	data, _ = db.Ancient(freezerHeaderTable, number)
 	if 1 == number {
-		var stdHeader *types.Header
-		err := rlp.Decode(bytes.NewReader(data), &stdHeader)
-		if nil != err {
-			log.Error("Error with rlp.Decode(bytes.NewReader(data), &stdHeader)")
-		}
-		decoded, err := hexutil.Decode("0x1314e684")
-		if nil != err {
-			log.Error("Error with hexutil.Decode(0x1314e684)")
-		}
-		data, err = rlp.EncodeToBytes([]interface{}{
-			stdHeader.ParentHash,
-			stdHeader.UncleHash,
-			stdHeader.Coinbase,
-			stdHeader.Root,
-			stdHeader.TxHash,
-			stdHeader.ReceiptHash,
-			stdHeader.Bloom,
-			stdHeader.Difficulty,
-			stdHeader.Number,
-			stdHeader.GasLimit,
-			stdHeader.GasUsed,
-			stdHeader.Time,
-			stdHeader.Extra, // Yes, this will panic if extra is too short
-			decoded,         // stdHeader Step is wrong, I've updated with proper = decoded
-			stdHeader.Seal[1],
-		})
-		log.Info(fmt.Sprintf("\n\n[ReadHeaderRLP] Keccak256Hash: %x ||| HASH: %x ||| Keccak256: %x", crypto.Keccak256Hash(data), hash, crypto.Keccak256(data)))
+		//var stdHeader *types.Header
+		//var auraHeader *types.AuraHeader
+		//err := rlp.Decode(bytes.NewReader(data), &auraHeader)
+		//if nil != err {
+		//	panic("Youhuhuhuhuhuhuhuhu")
+		//	log.Error("Error with rlp.Decode(bytes.NewReader(data), &stdHeader)")
+		//}
+		////decoded, err := hexutil.Decode("0x1314e684")
+		////if nil != err {
+		////	log.Error("Error with hexutil.Decode(0x1314e684)")
+		////}
+		//data, err = rlp.EncodeToBytes(auraHeader)
+		//log.Info(fmt.Sprintf("\n\n[ReadHeaderRLP] Keccak256Hash: %x ||| HASH: %x ||| Keccak256: %x", crypto.Keccak256Hash(data), hash, crypto.Keccak256(data)))
+		//panic("This is the end of the journey")
 	}
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 		return data
