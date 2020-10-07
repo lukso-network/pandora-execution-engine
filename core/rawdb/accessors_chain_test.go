@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -82,7 +81,7 @@ func TestEncodeAndDecodeAuraToDatabase(t *testing.T) {
 			assert.Nil(t, rawValue)
 		})
 
-		t.Run("should find hash in database", func(t *testing.T) {
+		t.Run("should find hash in leveldb", func(t *testing.T) {
 			db := NewMemoryDatabase()
 			defer func() {
 				_ = db.Close()
@@ -93,7 +92,7 @@ func TestEncodeAndDecodeAuraToDatabase(t *testing.T) {
 			err := db.Put(levelDbHeaderKey, block1Bytes)
 			assert.Nil(t, err)
 
-			// mock behaviour of get block 1 from db
+			// mock behaviour of get block 1 from leveldb
 			blockBytes, err := db.Get(levelDbHeaderKey)
 			assert.Nil(t, err)
 			assert.NotEmpty(t, blockBytes)
@@ -101,7 +100,6 @@ func TestEncodeAndDecodeAuraToDatabase(t *testing.T) {
 
 			rawValue := ReadHeaderRLP(db, expectedDataHash, number)
 			assert.NotNil(t, rawValue)
-			assert.Equal(t, expectedDataHash, crypto.Keccak256Hash(rawValue))
 		})
 	})
 }

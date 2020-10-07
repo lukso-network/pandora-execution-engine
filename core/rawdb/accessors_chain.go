@@ -313,23 +313,9 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	}
 
 	if hash == auraHeader.Hash() {
-		//panic("I am here")
 		return data
 	}
 
-	//if 1 == number && common.HexToHash("0x4d286e4f0dbce8d54b27ea70c211bc4b00c8a89ac67f132662c6dc74d9b294e4") == hash {
-	//	//panic("I am here and I should not be here")
-	//	fmt.Printf("\n\n\n\n\n I am here and should not be here: %x \n\n\n\n\n\n\n", crypto.Keccak256Hash(data))
-	//	//var auraHeader types.AuraHeader
-	//	//err := rlp.DecodeBytes(data, &auraHeader)
-	//	//
-	//	//if nil != err {
-	//	//	panic(err.Error())
-	//	//}
-	//
-	//	panic(hexutil.Encode(data))
-	//
-	//}
 	return nil // Can't find the data anywhere.
 }
 
