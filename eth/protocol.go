@@ -198,6 +198,11 @@ type newBlockData struct {
 	TD    *big.Int
 }
 
+type auraNewBlockData struct {
+	Block *types.AuraBlock
+	TD *big.Int
+}
+
 // sanityCheck verifies that the values are reasonable, as a DoS protection
 func (request *newBlockData) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {
@@ -205,7 +210,7 @@ func (request *newBlockData) sanityCheck() error {
 	}
 	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
 	// larger, it will still fit within 100 bits
-	if tdlen := request.TD.BitLen(); tdlen > 100 {
+	if tdlen := request.TD.BitLen(); tdlen > 168 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
 	return nil

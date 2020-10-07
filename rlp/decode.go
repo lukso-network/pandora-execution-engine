@@ -131,7 +131,7 @@ func wrapStreamError(err error, typ reflect.Type) error {
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
 	case errNotAtEOL:
-		return &decodeError{msg: "input list has too many elements", typ: typ}
+		return &decodeError{msg: fmt.Sprintf("input list has too many elements got: %v", typ), typ: typ}
 	}
 	return err
 }
@@ -150,6 +150,7 @@ var (
 
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
+
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
@@ -748,6 +749,7 @@ func (s *Stream) Decode(val interface{}) error {
 	if val == nil {
 		return errDecodeIntoNil
 	}
+
 	rval := reflect.ValueOf(val)
 	rtyp := rval.Type()
 	if rtyp.Kind() != reflect.Ptr {
@@ -762,6 +764,7 @@ func (s *Stream) Decode(val interface{}) error {
 	}
 
 	err = decoder(s, rval.Elem())
+
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math"
 	"math/big"
 	"sync"
@@ -388,6 +389,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
+	// Handle aura engine separately
+	engine := pm.blockchain.Engine()
+	_, isAura := engine.(*aura.Aura)
+
 	// Handle the message depending on its contents
 	switch {
 	case msg.Code == StatusMsg:
@@ -485,8 +490,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
-		if err := msg.Decode(&headers); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+
+		err := basicDecodeIfNotAura(msg, &headers, isAura)
+
+		if nil != err {
+			return err
+		}
+
+		if isAura {
+			var auraHeaders []*types.AuraHeader
+			err = msg.Decode(&auraHeaders)
+
+			for _, header := range auraHeaders {
+				headers = append(headers, header.TranslateIntoHeader())
+			}
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that
 		if len(headers) == 0 && p.syncDrop != nil {
@@ -707,9 +724,32 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == NewBlockMsg:
 		// Retrieve and decode the propagated block
 		var request newBlockData
-		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
+
+		if isAura {
+			var mappedRequest auraNewBlockData
+			err = msg.Decode(&mappedRequest)
+
+			if nil != err {
+				return errResp(ErrDecode, "%v: %v", msg, err)
+			}
+
+			auraBlock := mappedRequest.Block
+			err, block := auraBlock.TranslateIntoBlock()
+
+			if nil != err {
+				return errResp(ErrDecode, "%v: %v", msg, err)
+			}
+
+			request.Block = block
+			request.TD = mappedRequest.TD
 		}
+
+		err := basicDecodeIfNotAura(msg, &request, isAura)
+
+		if nil != err {
+			return err
+		}
+
 		if hash := types.CalcUncleHash(request.Block.Uncles()); hash != request.Block.UncleHash() {
 			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", request.Block.UncleHash())
 			break // TODO(karalabe): return error eventually, but wait a few releases
@@ -943,4 +983,18 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, isAura bool) (err error) {
+	if isAura {
+		return
+	}
+
+	err = msg.Decode(&value)
+
+	if nil != err {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+
+	return
 }

@@ -83,11 +83,31 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
+	MixDigest   common.Hash    `json:"mixHash, omitempty"`
+	Nonce       BlockNonce     `json:"nonce,omitempty"`
 
 	// seal field for aura engine
-	Seal		[][]byte  	   `json:"seal"`
+	Seal [][]uint8 `json:"seal"`
+}
+
+//go:generate gencodec -type AuraHeader -field-override headerMarshaling -out gen_aura_header_json.go
+type AuraHeader struct {
+	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
+	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	Coinbase    common.Address `json:"miner"            gencodec:"required"`
+	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
+	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
+	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
+	Number      *big.Int       `json:"number"           gencodec:"required"`
+	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
+	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
+	Time        uint64         `json:"timestamp"        gencodec:"required"`
+	Extra       []byte         `json:"extraData"        gencodec:"required"`
+	Step        uint64         `json:"step"             gencodec:"required"`
+	SealFields  []interface{}  `json:"sealFields"       gencodec:"required"           rlp:"-"`
+	Signature   []byte         `json:"-"`
 }
 
 // field type overrides for gencodec
@@ -101,28 +121,60 @@ type headerMarshaling struct {
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
+func (auraHeader *AuraHeader) Hash() common.Hash {
+	currentSeal := make([][]byte, 2)
+
+	for index, seal := range auraHeader.SealFields {
+		sealBytes, ok := seal.([]byte)
+
+		if !ok {
+			continue
+		}
+
+		currentSeal[index] = sealBytes
+	}
+
+	return rlpHash(auraHeader)
+}
+
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
 	// TODO : Keccak256 of RLP encoded Aura header. Needs to check when header sync and sealing work
 	if h.Seal != nil {
-		return rlpHash([]interface{} {
-			h.ParentHash,
-			h.UncleHash,
-			h.Coinbase,
-			h.Root,
-			h.TxHash,
-			h.ReceiptHash,
-			h.Bloom,
-			h.Difficulty,
-			h.Number,
-			h.GasLimit,
-			h.GasUsed,
-			h.Time,
-			h.Extra,
-			h.Seal[0],
-			h.Seal[1],
-		})
+		auraHeader := AuraHeader{
+			ParentHash:  h.ParentHash,
+			UncleHash:   h.UncleHash,
+			Coinbase:    h.Coinbase,
+			Root:        h.Root,
+			TxHash:      h.TxHash,
+			ReceiptHash: h.ReceiptHash,
+			Bloom:       h.Bloom,
+			Difficulty:  h.Difficulty,
+			Number:      h.Number,
+			GasLimit:    h.GasLimit,
+			GasUsed:     h.GasUsed,
+			Time:        h.Time,
+			Extra:       h.Extra,
+		}
+
+		if len(h.Seal) < 1 {
+			return rlpHash(auraHeader)
+		}
+
+		step := h.Seal[0]
+		signature := h.Seal[1]
+
+		// If step is like 0x or is invalid cast it to 0 in []uint8 format
+		if len(step) != 8 {
+			step = make([]byte, 8)
+			binary.LittleEndian.PutUint64(step, 0)
+		}
+
+		auraHeader.Step = binary.LittleEndian.Uint64(step)
+		auraHeader.Signature = signature
+
+		return rlpHash(auraHeader)
 	} else {
 		return rlpHash(h)
 	}
@@ -145,7 +197,7 @@ func (h *Header) SanityCheck() error {
 		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
 	}
 	if h.Difficulty != nil {
-		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
+		if diffLen := h.Difficulty.BitLen(); diffLen > 168 {
 			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
 		}
 	}
@@ -187,6 +239,32 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
+}
+
+// TODO: I know that it can be done via inheritance but too much work for now.
+type AuraBlock struct {
+	Header       *AuraHeader
+	Uncles       []*Header
+	Transactions Transactions
+	Rest         []interface{} `rlp:"tail"`
+}
+
+func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
+	header := auraBlock.Header
+
+	if nil == header {
+		return fmt.Errorf("header in aura block is nil"), nil
+	}
+
+	standardHeader := header.TranslateIntoHeader()
+
+	block = &Block{
+		header:       standardHeader,
+		uncles:       auraBlock.Uncles,
+		transactions: auraBlock.Transactions,
+	}
+
+	return
 }
 
 // Block represents an entire block in the Ethereum blockchain.
@@ -236,6 +314,49 @@ type storageblock struct {
 	Txs    []*Transaction
 	Uncles []*Header
 	TD     *big.Int
+}
+
+func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
+	currentSeal := make([][]byte, 2)
+
+	// From Json there is no Header Seal
+	for index, seal := range auraHeader.SealFields {
+		sealBytes, ok := seal.([]byte)
+
+		if !ok {
+			continue
+		}
+
+		currentSeal[index] = sealBytes
+	}
+
+	// From RLP there is no SealFields
+	if len(auraHeader.SealFields) < 1 {
+		stepBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(stepBytes, auraHeader.Step)
+
+		currentSeal[0] = stepBytes
+		currentSeal[1] = auraHeader.Signature
+	}
+
+	header = &Header{
+		ParentHash:  auraHeader.ParentHash,
+		UncleHash:   auraHeader.UncleHash,
+		Coinbase:    auraHeader.Coinbase,
+		Root:        auraHeader.Root,
+		TxHash:      auraHeader.TxHash,
+		ReceiptHash: auraHeader.ReceiptHash,
+		Bloom:       auraHeader.Bloom,
+		Difficulty:  auraHeader.Difficulty,
+		Number:      auraHeader.Number,
+		GasLimit:    auraHeader.GasLimit,
+		GasUsed:     auraHeader.GasUsed,
+		Time:        auraHeader.Time,
+		Extra:       auraHeader.Extra,
+		Seal:        currentSeal,
+	}
+
+	return
 }
 
 // NewBlock creates a new block. The input data is copied,
@@ -306,6 +427,9 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
+		// [19 21 174 194]
+		//panic(fmt.Sprintf("%v", *b))
+
 		return err
 	}
 	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs

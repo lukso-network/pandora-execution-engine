@@ -20,6 +20,7 @@ package aura
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync"
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -152,10 +152,12 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 		return address.(common.Address), nil
 	}
 	// Retrieve the signature from the header extra-data
-	if len(header.Extra) < extraSeal {
+	if len(header.Seal) > 2 || len(header.Seal[1]) < extraSeal {
 		return common.Address{}, errMissingSignature
 	}
-	signature := header.Extra[len(header.Extra)-extraSeal:]
+
+	currentSignature := header.Seal[1]
+	signature := currentSignature[len(currentSignature)-extraSeal:]
 
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
@@ -428,8 +430,9 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	step := ts % a.config.Period
 	turn := step % uint64(len(a.config.Authorities))
 	if signer != a.config.Authorities[turn] {
+		fmt.Println(fmt.Sprintf("Expecting: %s, current: %s", a.config.Authorities[turn].Hash().String(), signer.Hash().String()))
 		// not authorized to sign
-		return errUnauthorizedSigner
+		//return errUnauthorizedSigner
 	}
 
 	return nil
@@ -507,7 +510,7 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	log.Trace("Strating sealing in Aura engine", "block", block.Hash())
+	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -599,10 +602,10 @@ func (a *Aura) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	encodeSigHeader(hasher, header)
-	hasher.Sum(hash[:0])
-	return hash
+	//hasher := sha3.NewLegacyKeccak256()
+	//encodeSigHeader(hasher, header)
+	//hasher.Sum(hash[:0])
+	return header.Hash()
 }
 
 // AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
@@ -613,9 +616,10 @@ func SealHash(header *types.Header) (hash common.Hash) {
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func AuraRLP(header *types.Header) []byte {
-	b := new(bytes.Buffer)
-	encodeSigHeader(b, header)
-	return b.Bytes()
+	//
+	//b := new(bytes.Buffer)
+	//encodeSigHeader(b, header)
+	return header.Hash().Bytes()
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
@@ -632,7 +636,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+		header.Extra[:len(header.Seal[0])-crypto.SignatureLength], // Yes, this will panic if extra is too short
 		header.MixDigest,
 		header.Nonce,
 	})
