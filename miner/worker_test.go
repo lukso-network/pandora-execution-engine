@@ -52,6 +52,7 @@ var (
 	testTxPoolConfig  core.TxPoolConfig
 	ethashChainConfig *params.ChainConfig
 	cliqueChainConfig *params.ChainConfig
+	auraChainConfig   *params.ChainConfig
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
@@ -80,6 +81,16 @@ func init() {
 	cliqueChainConfig.Clique = &params.CliqueConfig{
 		Period: 10,
 		Epoch:  30000,
+	}
+	auraChainConfig = params.TestChainConfig
+	auraChainConfig.Aura = &params.AuraConfig{
+		Period:      5,
+		Epoch:       500,
+		Authorities: []common.Address{
+			testBankAddress,
+		},
+		Difficulty:  big.NewInt(int64(131072)),
+		Signatures:  nil,
 	}
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
@@ -184,28 +195,31 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
+	db          := rawdb.NewMemoryDatabase()
+	chainConfig := params.AllEthashProtocolChanges
+	engine := ethash.NewFaker()
+	testGenerateBlockAndImport(t, engine, chainConfig, db)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	testGenerateBlockAndImport(t, true)
+	db          := rawdb.NewMemoryDatabase()
+	chainConfig := params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine := clique.New(chainConfig.Clique, db)
+	testGenerateBlockAndImport(t, engine, chainConfig, db)
 }
 
-func testGenerateBlockAndImport(t *testing.T, isClique bool) {
-	var (
-		engine      consensus.Engine
-		chainConfig *params.ChainConfig
-		db          = rawdb.NewMemoryDatabase()
-	)
-	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
-	} else {
-		chainConfig = params.AllEthashProtocolChanges
-		engine = ethash.NewFaker()
-	}
+func TestGenerateBlockAndImportAura(t *testing.T) {
 
+}
+
+// Here pass engine and deduce logic by engine type
+func testGenerateBlockAndImport(
+	t *testing.T,
+	engine consensus.Engine,
+	chainConfig *params.ChainConfig,
+	db ethdb.Database,
+	) {
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 

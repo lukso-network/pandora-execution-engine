@@ -327,6 +327,11 @@ func (auraHeader *AuraHeader) FromHeader(header *Header) (err error) {
 		return
 	}
 
+	if len(header.Seal[0]) != 8 {
+		err = fmt.Errorf("expected 8 bytes in step")
+		return
+	}
+
 	auraHeader.ParentHash = header.ParentHash
 	auraHeader.UncleHash = header.UncleHash
 	auraHeader.Coinbase = header.Coinbase
