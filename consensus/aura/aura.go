@@ -518,6 +518,14 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
 
+	blockBytes, err := rlp.EncodeToBytes(block)
+	if nil != err {
+		panic(err.Error())
+	}
+
+	myHex := hexutil.Encode(blockBytes)
+	fmt.Println(myHex)
+
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
