@@ -124,7 +124,6 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		signerFunc = func(account accounts.Account, s string, data []byte) ([]byte, error) {
 			return crypto.Sign(crypto.Keccak256(data), testBankKey)
 		}
-
 	)
 
 	switch e := engine.(type) {

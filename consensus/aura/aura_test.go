@@ -116,7 +116,7 @@ func TestAura_Seal(t *testing.T) {
 		copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
 
 		// Signer should be equal sealer
-		assert.Equal(t, testBankAddress.String(), strings.ToLower(signer.Hex()))
+		assert.Equal(t, strings.ToLower(testBankAddress.String()), strings.ToLower(signer.Hex()))
 	case receivedStop := <-stopChan:
 		t.Fatalf("Received stop, but did not expect this, %v", receivedStop)
 	}

@@ -19,7 +19,6 @@ package aura
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -561,8 +560,9 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	header.Seal = make([][]byte, 2)
 	var stepBytes []byte
 	stepBytes = make([]byte, 8)
-	binary.LittleEndian.PutUint64(stepBytes, step)
+	//binary.LittleEndian.PutUint64(stepBytes, step)
 	header.Seal[0] = stepBytes
+	fmt.Println(sighash)
 	header.Seal[1] = sighash
 
 	// Wait until sealing is terminated or delay timeout.
@@ -640,9 +640,10 @@ func SealHash(header *types.Header) (hash common.Hash) {
 func AuraRLP(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
-	return header.Hash().Bytes()
+	return b.Bytes()
 }
 
+// Encode to bare hash
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
 		header.ParentHash,
