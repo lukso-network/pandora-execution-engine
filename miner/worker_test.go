@@ -18,9 +18,7 @@ package miner
 
 import (
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
-	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -273,18 +271,7 @@ func testGenerateBlockAndImport(
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
-		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
-			keys := make([]string, 0)
-			blocks := make([]string, 0)
-			sealHashes := make([]string, 0)
-			for key, value := range w.pendingTasks {
-				keys = append(keys, key.String())
-				myBytes, _ := rlp.EncodeToBytes(value.block)
-				blocks = append(blocks, hexutil.Encode(myBytes))
-				sealHashes = append(sealHashes, w.engine.SealHash(value.block.Header()).String())
-			}
-			//myTasks := fmt.Sprintf("%v", w.pendingTasks)
-			//t.Log(myTasks)
+		case <-time.After(10 * time.Second): // Worker needs 1s to include new changes. For aura this is near 6s
 			t.Fatalf("timeout")
 		}
 	}
