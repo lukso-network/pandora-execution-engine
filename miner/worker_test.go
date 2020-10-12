@@ -17,6 +17,8 @@
 package miner
 
 import (
+	"encoding/binary"
+	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -84,13 +86,13 @@ func init() {
 	}
 	auraChainConfig = params.TestChainConfig
 	auraChainConfig.Aura = &params.AuraConfig{
-		Period:      5,
-		Epoch:       500,
+		Period: 5,
+		Epoch:  500,
 		Authorities: []common.Address{
 			testBankAddress,
 		},
-		Difficulty:  big.NewInt(int64(131072)),
-		Signatures:  nil,
+		Difficulty: big.NewInt(int64(131072)),
+		Signatures: nil,
 	}
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
@@ -123,6 +125,14 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			return crypto.Sign(crypto.Keccak256(data), testBankKey)
 		})
 	case *ethash.Ethash:
+	case *aura.Aura:
+		stepBytes := make([]byte, 8)
+		signature := make([]byte, crypto.SignatureLength)
+		binary.LittleEndian.PutUint64(stepBytes, 0)
+		gspec.Seal = core.Seal{
+			Step:      stepBytes,
+			Signature: signature,
+		}
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -195,14 +205,14 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	db          := rawdb.NewMemoryDatabase()
+	db := rawdb.NewMemoryDatabase()
 	chainConfig := params.AllEthashProtocolChanges
 	engine := ethash.NewFaker()
 	testGenerateBlockAndImport(t, engine, chainConfig, db)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	db          := rawdb.NewMemoryDatabase()
+	db := rawdb.NewMemoryDatabase()
 	chainConfig := params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine := clique.New(chainConfig.Clique, db)
@@ -210,7 +220,9 @@ func TestGenerateBlockAndImportClique(t *testing.T) {
 }
 
 func TestGenerateBlockAndImportAura(t *testing.T) {
-
+	db := rawdb.NewMemoryDatabase()
+	engine := aura.New(auraChainConfig.Aura, db)
+	testGenerateBlockAndImport(t, engine, auraChainConfig, db)
 }
 
 // Here pass engine and deduce logic by engine type
@@ -219,7 +231,7 @@ func testGenerateBlockAndImport(
 	engine consensus.Engine,
 	chainConfig *params.ChainConfig,
 	db ethdb.Database,
-	) {
+) {
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 
