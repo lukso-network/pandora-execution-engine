@@ -116,18 +116,22 @@ type testWorkerBackend struct {
 }
 
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
-	var gspec = core.Genesis{
-		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
-	}
+	var (
+		gspec = core.Genesis{
+			Config: chainConfig,
+			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		}
+		signerFunc = func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		}
+
+	)
 
 	switch e := engine.(type) {
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
-		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testBankKey)
-		})
+		e.Authorize(testBankAddress, signerFunc)
 	case *ethash.Ethash:
 	case *aura.Aura:
 		stepBytes := make([]byte, 8)
@@ -137,10 +141,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Step:      stepBytes,
 			Signature: signature,
 		}
-		e.Authorize(testBankAddress, func(signer accounts.Account, mimeType string, message []byte) ([]byte, error) {
-			// for now mock it very quick
-			return []byte("fkhg"), nil
-		})
+		e.Authorize(testBankAddress, signerFunc)
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
