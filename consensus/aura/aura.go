@@ -19,6 +19,7 @@ package aura
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -537,9 +538,6 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	turn := step % uint64(len(a.config.Authorities))
 
 	if a.signer != a.config.Authorities[turn] {
-		currentSigner := a.signer.String()
-		authority := a.config.Authorities[turn].String()
-		log.Debug(currentSigner, authority)
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
@@ -552,7 +550,13 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	if err != nil {
 		return err
 	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
+	header.Seal = make([][]byte, 2)
+	var stepBytes []byte
+	stepBytes = make([]byte, 8)
+	binary.LittleEndian.PutUint64(stepBytes, step)
+	header.Seal[0] = stepBytes
+	header.Seal[1] = sighash
+
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {

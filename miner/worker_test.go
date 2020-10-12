@@ -277,10 +277,12 @@ func testGenerateBlockAndImport(
 		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
 			keys := make([]string, 0)
 			blocks := make([]string, 0)
+			sealHashes := make([]string, 0)
 			for key, value := range w.pendingTasks {
 				keys = append(keys, key.String())
 				myBytes, _ := rlp.EncodeToBytes(value.block)
 				blocks = append(blocks, hexutil.Encode(myBytes))
+				sealHashes = append(sealHashes, w.engine.SealHash(value.block.Header()).String())
 			}
 			//myTasks := fmt.Sprintf("%v", w.pendingTasks)
 			//t.Log(myTasks)
