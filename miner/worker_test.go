@@ -18,7 +18,9 @@ package miner
 
 import (
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/aura"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -94,6 +96,8 @@ func init() {
 		Difficulty: big.NewInt(int64(131072)),
 		Signatures: nil,
 	}
+	auraChainConfig.Clique = nil
+	auraChainConfig.Ethash = nil
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
 	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
@@ -133,6 +137,10 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Step:      stepBytes,
 			Signature: signature,
 		}
+		e.Authorize(testBankAddress, func(signer accounts.Account, mimeType string, message []byte) ([]byte, error) {
+			// for now mock it very quick
+			return []byte("fkhg"), nil
+		})
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -266,6 +274,15 @@ func testGenerateBlockAndImport(
 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
 		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
+			keys := make([]string, 0)
+			blocks := make([]string, 0)
+			for key, value := range w.pendingTasks {
+				keys = append(keys, key.String())
+				myBytes, _ := rlp.EncodeToBytes(value.block)
+				blocks = append(blocks, hexutil.Encode(myBytes))
+			}
+			//myTasks := fmt.Sprintf("%v", w.pendingTasks)
+			//t.Log(myTasks)
 			t.Fatalf("timeout")
 		}
 	}

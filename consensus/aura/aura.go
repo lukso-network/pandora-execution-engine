@@ -537,6 +537,9 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	turn := step % uint64(len(a.config.Authorities))
 
 	if a.signer != a.config.Authorities[turn] {
+		currentSigner := a.signer.String()
+		authority := a.config.Authorities[turn].String()
+		log.Debug(currentSigner, authority)
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
