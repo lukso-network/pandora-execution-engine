@@ -189,12 +189,22 @@ func TestAura_Seal(t *testing.T) {
 
 	// Wait for next turn to start sealing
 	timeout := 3
-	//timeNow := time.Now().Unix()
+	timeNow := time.Now().Unix()
+	closestSealTurnStart, _, err := auraEngine.CountClosestTurn(timeNow, int64(timeout))
+	assert.Nil(t, err)
 
 	// Seal the block
 	chain := core.BlockChain{}
 	resultsChan := make(chan *types.Block)
 	stopChan := make(chan struct{})
+	waitFor := closestSealTurnStart - timeNow
+
+	if waitFor < 1 {
+		waitFor = 0
+	}
+
+	t.Logf("Test is waiting for proper turn to start sealing. Waiting: %v secs", waitFor)
+	time.Sleep(time.Duration(waitFor) * time.Second)
 	err = auraEngine.Seal(&chain, &block, resultsChan, stopChan)
 
 	select {
