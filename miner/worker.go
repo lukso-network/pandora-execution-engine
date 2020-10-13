@@ -19,8 +19,6 @@ package miner
 import (
 	"bytes"
 	"errors"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -593,17 +591,7 @@ func (w *worker) resultLoop() {
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
 			if !exist {
-				sealHash := sealhash.String()
-				keys := make([]string, 0)
-				blocks := make([]string, 0)
-				sealHashes := make([]string, 0)
-				for key, value := range w.pendingTasks {
-					keys = append(keys, key.String())
-					myBytes, _ := rlp.EncodeToBytes(value.block)
-					blocks = append(blocks, hexutil.Encode(myBytes))
-					sealHashes = append(sealHashes, w.engine.SealHash(block.Header()).String())
-				}
-				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash, "sh", sealHash)
+				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
 				continue
 			}
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
