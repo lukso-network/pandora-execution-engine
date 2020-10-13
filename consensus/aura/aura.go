@@ -639,8 +639,13 @@ func AuraRLP(header *types.Header) []byte {
 // For example if sealing the block is about 1 sec and period is 5 secs you would like to know if your
 // committed work will ever have a chance to be accepted by others
 // Allowed returns if possible to seal
-// NextInterval returns when time frame of next turn starts in unixTime
-func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (allowed bool, nextInterval int64) {
+// currentTurnTimestamp returns when time frame of current turn starts in unixTime
+// nextTurnTimestamp returns when time frame of next turn starts in unixTime
+func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
+	allowed bool,
+	currentTurnTimestamp int64,
+	nextTurnTimestamp int64,
+) {
 	guardStepByUnixTime := func(unixTime int64)(allowed bool) {
 		step := uint64(unixTime) / a.config.Period
 		turn := step % uint64(len(a.config.Authorities))
@@ -663,7 +668,7 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (allowed bo
 
 	checkForProvidedUnix := guardStepByUnixTime(unixTimeToCheck)
 	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
-	_, nextInterval = countTimeFrameForTurn(unixTimeToCheck)
+	currentTurnTimestamp, nextTurnTimestamp = countTimeFrameForTurn(unixTimeToCheck)
 	allowed = checkForProvidedUnix && checkForPromisedInterval
 
 	return
