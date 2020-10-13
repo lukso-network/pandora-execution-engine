@@ -190,7 +190,7 @@ func TestAura_Seal(t *testing.T) {
 	// Wait for next turn to start sealing
 	timeout := 3
 	timeNow := time.Now().Unix()
-	closestSealTurnStart, _, err := auraEngine.CountClosestTurn(timeNow, int64(timeout))
+	closestSealTurnStart, _, err := auraEngine.CountClosestTurn(timeNow, int64(timeout) - 1)
 	assert.Nil(t, err)
 
 	// Seal the block
