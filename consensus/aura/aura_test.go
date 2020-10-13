@@ -46,7 +46,6 @@ func TestAura_Seal(t *testing.T) {
 			var signer common.Address
 
 			copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-			println(signer.Hex())
 			// 0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf - Block 1 miner
 			assert.Equal(t, "0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf", strings.ToLower(signer.Hex()))
 		}

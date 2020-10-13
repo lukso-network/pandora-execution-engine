@@ -29,8 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/aura"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -245,7 +245,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
-	} else if chainConfig.Aura != nil {
+	}
+
+	if chainConfig.Aura != nil {
 		return aura.New(chainConfig.Aura, db)
 	}
 	// Otherwise assume proof-of-work
@@ -458,16 +460,17 @@ func (s *Ethereum) StartMining(threads int) error {
 				return fmt.Errorf("signer missing: %v", err)
 			}
 			clique.Authorize(eb, wallet.SignData)
-		} else {
-			if aura, ok := s.engine.(*aura.Aura); ok {
-				wallet, e := s.accountManager.Find(accounts.Account{Address: eb})
-				if wallet == nil || e != nil {
-					log.Error("Etherbase account unavailable locally", "err", err)
-					return fmt.Errorf("signer missing: %v", err)
-				}
-				aura.Authorize(eb, wallet.SignData)
-			}
 		}
+
+		if aura, ok := s.engine.(*aura.Aura); ok {
+			wallet, e := s.accountManager.Find(accounts.Account{Address: eb})
+			if wallet == nil || e != nil {
+				log.Error("Etherbase account unavailable locally", "err", err)
+				return fmt.Errorf("signer missing: %v", err)
+			}
+			aura.Authorize(eb, wallet.SignData)
+		}
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)

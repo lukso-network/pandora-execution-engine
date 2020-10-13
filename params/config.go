@@ -31,7 +31,6 @@ var (
 	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	LuksoGenesisHash   = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	YoloV1GenesisHash  = common.HexToHash("0xc3fd235071f24f93865b0850bd2a2119b30f7224d18a0e34c7bbf549ad7e3d36")
 )
 
@@ -187,10 +186,6 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(1561651),
 		MuirGlacierBlock:    nil,
-		Aura: &AuraConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
 	}
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
@@ -212,31 +207,6 @@ var (
 			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
 		},
 		Threshold: 2,
-	}
-
-	// LuksoChainConfig contains the chain parameters to run a node on the lukso-aura test network.
-	LuksoChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(5),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(1561651),
-		MuirGlacierBlock:    nil,
-		Aura: &AuraConfig{
-			Period: 15,
-			Epoch:  30000,
-			Authorities: []common.Address{
-				common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07"),
-				common.HexToAddress("0x00faa37564140c1a5e96095f05466b9f73441e44"),
-			},
-			Difficulty: big.NewInt(131072),
-		},
 	}
 
 	// YoloV1ChainConfig contains the chain parameters to run a node on the YOLOv1 test network.
@@ -273,8 +243,6 @@ var (
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
-
-	AuraProtocolChanges = &ChainConfig{big.NewInt(5), big.NewInt(2), nil, false, big.NewInt(2), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, nil, nil, &AuraConfig{Period: 15, Epoch: 30000, Authorities: []common.Address{common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942")}, Difficulty: big.NewInt(131072)}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -376,7 +344,6 @@ type Signatures []Signature
 
 // AuraConfig is the consensus engine configs for proof-of-authority based sealing.
 
-//TODO: THIS IMHO SHOULD BE SAME AS IN PARITY (do not break naming convention)
 type AuraConfig struct {
 	Period      uint64           `json:"period"`      // Number of seconds between blocks to enforce
 	Epoch       uint64           `json:"epoch"`       // Epoch length to reset votes and checkpoint

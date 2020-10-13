@@ -131,7 +131,7 @@ func wrapStreamError(err error, typ reflect.Type) error {
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
 	case errNotAtEOL:
-		return &decodeError{msg: fmt.Sprintf("input list has too many elements got: %v", typ), typ: typ}
+		return &decodeError{msg: "input list has too many elements", typ: typ}
 	}
 	return err
 }
@@ -150,7 +150,6 @@ var (
 
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
-
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil

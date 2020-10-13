@@ -63,13 +63,6 @@ var GoerliBootnodes = []string{
 	"enode://a61215641fb8714a373c80edbfa0ea8878243193f57c96eeb44d0bc019ef295abd4e044fd619bfc4c59731a73fb79afe84e9ab6da0c743ceb479cbb6d263fa91@3.11.147.67:30303",
 }
 
-// LuksoBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Lukso aura test network
-var LuksoBootnodes = []string{
-	// TODO - Need to change
-	"enode://011f758e6552d105183b1761c5e2dea0111bc20fd5f6422bc7f91e0fabbec9a6595caf6239b37feb773dddd3f87240d99d859431891e4a642cf2a0a9e6cbb98a@51.141.78.53:30303",
-}
-
 // YoloV1Bootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // YOLOv1 ephemeral test network.
 var YoloV1Bootnodes = []string{

@@ -137,7 +137,7 @@ var (
 		Usage: "Görli network: pre-configured proof-of-authority test network",
 	}
 	LuksoFlag = cli.BoolFlag{
-		Name: "luksoAura",
+		Name:  "luksoAura",
 		Usage: "Lukso aura network: pre-configured proof-of-authority(Aura) test network",
 	}
 	YoloV1Flag = cli.BoolFlag{
@@ -811,8 +811,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(LuksoFlag.Name):
-		urls = params.LuksoBootnodes
 	case ctx.GlobalBool(YoloV1Flag.Name):
 		urls = params.YoloV1Bootnodes
 	case cfg.BootstrapNodes != nil:
@@ -849,8 +847,6 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(LuksoFlag.Name):
-		urls = params.LuksoBootnodes
 	case ctx.GlobalBool(YoloV1Flag.Name):
 		urls = params.YoloV1Bootnodes
 	case cfg.BootstrapNodesV5 != nil:
@@ -1618,12 +1614,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		setDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(LuksoFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 5
-		}
-		cfg.Genesis = core.DefaultLuksoGenesisBlock()
-		setDNSDiscoveryDefaults(cfg, params.LuksoGenesisHash)
 	case ctx.GlobalBool(YoloV1Flag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 133519467574833 // "yolov1"
@@ -1812,8 +1802,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(LuksoFlag.Name):
-		genesis = core.DefaultLuksoGenesisBlock()
 	case ctx.GlobalBool(YoloV1Flag.Name):
 		genesis = core.DefaultYoloV1GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):

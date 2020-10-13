@@ -403,18 +403,6 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultLuksoGenesisBlock returns the Lukso-aura network genesis block.
-func DefaultLuksoGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.LuksoChainConfig,
-		Timestamp:  0,
-		ExtraData:  hexutil.MustDecode("0x"),
-		GasLimit:   6000000,
-		Difficulty: big.NewInt(131072),
-		Alloc:      decodePrealloc(luksoAllocData),
-	}
-}
-
 func DefaultYoloV1GenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.YoloV1ChainConfig,
