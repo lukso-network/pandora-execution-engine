@@ -648,15 +648,25 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (allowed bo
 		return a.signer == a.config.Authorities[turn]
 	}
 
-	checkForProvidedUnix := guardStepByUnixTime(unixTimeToCheck)
-	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
+	countTimeFrameForTurn := func(unixTime int64)(turnStart int64, nextTurn int64) {
+		timeGap := unixTime % int64(a.config.Period)
+		turnStart = unixTime
 
-	if checkForProvidedUnix && checkForPromisedInterval {
-		// TODO: decduce in-flight next interval
-		return true, 0
+		if timeGap > 0 {
+			turnStart = unixTime - timeGap
+		}
+
+		nextTurn = turnStart + int64(a.config.Period)
+
+		return
 	}
 
-	return false, 0
+	checkForProvidedUnix := guardStepByUnixTime(unixTimeToCheck)
+	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
+	_, nextInterval = countTimeFrameForTurn(unixTimeToCheck)
+	allowed = checkForProvidedUnix && checkForPromisedInterval
+
+	return
 }
 
 // Encode to bare hash

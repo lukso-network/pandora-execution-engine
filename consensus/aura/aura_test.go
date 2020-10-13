@@ -57,7 +57,8 @@ func TestAura_CheckStep(t *testing.T) {
 	t.Run("should return true with no tolerance", func(t *testing.T) {
 		allowed, nextInterval := auraEngine.CheckStep(currentTime, 0)
 		assert.True(t, allowed)
-		assert.Equal(t, int64(0), nextInterval)
+		// Period is 5 so next time frame starts within 4 secs from unix time
+		assert.Equal(t, currentTime + 4, nextInterval)
 	})
 
 	t.Run("should return true with small tolerance", func(t *testing.T) {
@@ -66,24 +67,27 @@ func TestAura_CheckStep(t *testing.T) {
 			time.Unix(currentTime, 25).Unix(),
 		)
 		assert.True(t, allowed)
-		assert.Equal(t, int64(0), nextInterval)
+		// Period is 5 so next time frame starts within 4 secs from unix time
+		assert.Equal(t, currentTime + 4, nextInterval)
 	})
 
 	t.Run("should return false with no tolerance", func(t *testing.T) {
-		allowed, nextInterval := auraEngine.CheckStep(currentTime + int64(5), 0)
+		timeToCheck := currentTime + int64(6)
+		allowed, nextInterval := auraEngine.CheckStep(timeToCheck, 0)
 		assert.False(t, allowed)
-		assert.Equal(t, int64(0), nextInterval)
+		assert.Equal(t, timeToCheck + 4, nextInterval)
 	})
 
 	// If base unixTime is invalid fail no matter what tolerance is
 	// If you start sealing before its your turn or you have missed your time frame you should resubmit work
 	t.Run("should return false with tolerance", func(t *testing.T) {
+		timeToCheck := currentTime + int64(5)
 		allowed, nextInterval := auraEngine.CheckStep(
-			currentTime + int64(5),
+			timeToCheck,
 			time.Unix(currentTime + 80, 0).Unix(),
 		)
 		assert.False(t, allowed)
-		assert.Equal(t, int64(0), nextInterval)
+		assert.Equal(t, timeToCheck + 4, nextInterval)
 	})
 }
 
