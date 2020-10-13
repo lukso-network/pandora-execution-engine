@@ -517,6 +517,7 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
+// You should use Seal only if current sealer is within its turn, otherwise you will get error
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
@@ -537,11 +538,9 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	a.lock.RUnlock()
 
 	// check if authorized to sign
-	step := uint64(time.Now().Unix()) / a.config.Period
-	turn := step % uint64(len(a.config.Authorities))
+	allowed, _, _ := a.CheckStep(time.Now().Unix(), 0)
 
-	if a.signer != a.config.Authorities[turn] {
-		fmt.Println(fmt.Sprintf("2222 Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
+	if !allowed {
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
@@ -550,11 +549,12 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
 
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, AuraRLP(header))
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeAura, AuraRLP(header))
 	if err != nil {
 		return err
 	}
 	header.Seal = make([][]byte, 2)
+	step := uint64(time.Now().Unix()) / a.config.Period
 	var stepBytes []byte
 	stepBytes = make([]byte, 8)
 	binary.LittleEndian.PutUint64(stepBytes, step)
