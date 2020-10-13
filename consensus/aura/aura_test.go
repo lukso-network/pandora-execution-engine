@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -27,11 +28,15 @@ var (
 )
 
 func init() {
+	authority1, _ := crypto.GenerateKey()
+	authority2, _ := crypto.GenerateKey()
 	auraChainConfig = &params.AuraConfig{
 		Period: 5,
 		Epoch:  500,
 		Authorities: []common.Address{
 			testBankAddress,
+			crypto.PubkeyToAddress(authority1.PublicKey),
+			crypto.PubkeyToAddress(authority2.PublicKey),
 		},
 		Difficulty: big.NewInt(int64(131072)),
 		Signatures: nil,
@@ -44,6 +49,42 @@ func init() {
 		return crypto.Sign(crypto.Keccak256(data), testBankKey)
 	}
 	auraEngine.Authorize(testBankAddress, signerFunc)
+}
+
+func TestAura_CheckStep(t *testing.T) {
+	currentTime := int64(1602588556)
+
+	t.Run("should return true with no tolerance", func(t *testing.T) {
+		allowed, nextInterval := auraEngine.CheckStep(currentTime, 0)
+		assert.True(t, allowed)
+		assert.Equal(t, int64(0), nextInterval)
+	})
+
+	t.Run("should return true with small tolerance", func(t *testing.T) {
+		allowed, nextInterval := auraEngine.CheckStep(
+			currentTime,
+			time.Unix(currentTime, 25).Unix(),
+		)
+		assert.True(t, allowed)
+		assert.Equal(t, int64(0), nextInterval)
+	})
+
+	t.Run("should return false with no tolerance", func(t *testing.T) {
+		allowed, nextInterval := auraEngine.CheckStep(currentTime + int64(5), 0)
+		assert.False(t, allowed)
+		assert.Equal(t, int64(0), nextInterval)
+	})
+
+	// If base unixTime is invalid fail no matter what tolerance is
+	// If you start sealing before its your turn or you have missed your time frame you should resubmit work
+	t.Run("should return false with tolerance", func(t *testing.T) {
+		allowed, nextInterval := auraEngine.CheckStep(
+			currentTime + int64(5),
+			time.Unix(currentTime + 80, 0).Unix(),
+		)
+		assert.False(t, allowed)
+		assert.Equal(t, int64(0), nextInterval)
+	})
 }
 
 func TestAura_DecodeSeal(t *testing.T) {
@@ -117,6 +158,9 @@ func TestAura_Seal(t *testing.T) {
 
 		// Signer should be equal sealer
 		assert.Equal(t, strings.ToLower(testBankAddress.String()), strings.ToLower(signer.Hex()))
+	case <- time.After(5 * time.Second):
+		t.Fatalf("Received timeout")
+
 	case receivedStop := <-stopChan:
 		t.Fatalf("Received stop, but did not expect this, %v", receivedStop)
 	}

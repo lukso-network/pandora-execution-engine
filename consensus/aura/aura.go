@@ -537,6 +537,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	turn := step % uint64(len(a.config.Authorities))
 
 	if a.signer != a.config.Authorities[turn] {
+		fmt.Println(fmt.Sprintf("2222 Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
@@ -625,14 +626,37 @@ func SealHash(header *types.Header) (hash common.Hash) {
 // AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
 // sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
 func AuraRLP(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
 	return b.Bytes()
+}
+
+
+// CheckStep should assure you that current time frame allows you to seal block based on validator set
+// UnixTimeToCheck allows you to deduce time not based on current time which might be handy
+// TimeTolerance allows you to in-flight deduce that propagation is likely or unlikely to fail. Provide 0 if strict.
+// For example if sealing the block is about 1 sec and period is 5 secs you would like to know if your
+// committed work will ever have a chance to be accepted by others
+// Allowed returns if possible to seal
+// NextInterval returns when time frame of next turn starts in unixTime
+func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (allowed bool, nextInterval int64) {
+	guardStepByUnixTime := func(unixTime int64)(allowed bool) {
+		step := uint64(unixTime) / a.config.Period
+		turn := step % uint64(len(a.config.Authorities))
+
+		return a.signer == a.config.Authorities[turn]
+	}
+
+	checkForProvidedUnix := guardStepByUnixTime(unixTimeToCheck)
+	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
+
+	if checkForProvidedUnix && checkForPromisedInterval {
+		// TODO: decduce in-flight next interval
+		return true, 0
+	}
+
+	return false, 0
 }
 
 // Encode to bare hash
@@ -650,7 +674,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra, // Yes, this will panic if extra is too short
+		header.Extra,
 	})
 	if err != nil {
 		panic("can't encode: " + err.Error())

@@ -19,6 +19,7 @@ package miner
 import (
 	"encoding/binary"
 	"github.com/ethereum/go-ethereum/consensus/aura"
+	"github.com/stretchr/testify/assert"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -84,12 +85,16 @@ func init() {
 		Period: 10,
 		Epoch:  30000,
 	}
+	authority1, _ := crypto.GenerateKey()
+	authority2, _ := crypto.GenerateKey()
 	auraChainConfig = params.TestChainConfig
 	auraChainConfig.Aura = &params.AuraConfig{
 		Period: 5,
 		Epoch:  500,
 		Authorities: []common.Address{
 			testBankAddress,
+			crypto.PubkeyToAddress(authority1.PublicKey),
+			crypto.PubkeyToAddress(authority2.PublicKey),
 		},
 		Difficulty: big.NewInt(int64(131072)),
 		Signatures: nil,
@@ -259,6 +264,16 @@ func testGenerateBlockAndImport(
 	// Start mining!
 	w.start()
 
+	timeout := time.Duration(3)
+	_, isAuraEngine := engine.(*aura.Aura)
+	insertedBlocks := make([]*types.Block, 0)
+
+	if isAuraEngine {
+		timeout = 3
+	}
+
+	// TODO: when AURA we need to seal/mine only when is our turn. Mechanism now is invalid. Maybe reduce period to ~~1s and try to get into gap
+
 	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
@@ -271,9 +286,17 @@ func testGenerateBlockAndImport(
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
-		case <-time.After(10 * time.Second): // Worker needs 1s to include new changes. For aura this is near 6s
-			t.Fatalf("timeout")
+
+			insertedBlocks = append(insertedBlocks, block)
+		case <-time.After(timeout * time.Second): // Worker needs 1s to include new changes. In aura logic is different
+			if !isAuraEngine {
+				t.Fatalf("timeout")
+			}
 		}
+	}
+
+	if isAuraEngine {
+		assert.Equal(t, 3, len(insertedBlocks))
 	}
 }
 
