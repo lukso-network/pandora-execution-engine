@@ -97,6 +97,49 @@ func TestAura_CheckStep(t *testing.T) {
 	})
 }
 
+func TestAura_CountClosestTurn(t *testing.T) {
+	currentTime := int64(1602588556)
+
+	t.Run("should return error, because validator wont be able to seal", func(t *testing.T) {
+		randomValidatorKey, err := crypto.GenerateKey()
+		assert.Nil(t, err)
+		auraChainConfig = &params.AuraConfig{
+			Period: 5,
+			Epoch:  500,
+			Authorities: []common.Address{
+				crypto.PubkeyToAddress(randomValidatorKey.PublicKey),
+			},
+			Difficulty: big.NewInt(int64(131072)),
+			Signatures: nil,
+		}
+
+		db := rawdb.NewMemoryDatabase()
+		modifiedAuraEngine := New(auraChainConfig, db)
+		closestSealTurnStart, closestSealTurnStop, err := modifiedAuraEngine.CountClosestTurn(
+			time.Now().Unix(),
+			0,
+		)
+		assert.Equal(t, errInvalidSigner, err)
+		assert.Equal(t, int64(0), closestSealTurnStart)
+		assert.Equal(t, int64(0), closestSealTurnStop)
+	})
+
+	t.Run("should return current time frame", func(t *testing.T) {
+		closestSealTurnStart, closestSealTurnStop, err := auraEngine.CountClosestTurn(currentTime, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, currentTime - 1, closestSealTurnStart)
+		assert.Equal(t, currentTime + 4, closestSealTurnStop)
+	})
+
+	t.Run("should return time frame in future", func(t *testing.T) {
+		timeModified := currentTime + 5
+		closestSealTurnStart, closestSealTurnStop, err := auraEngine.CountClosestTurn(timeModified, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, timeModified + 9, closestSealTurnStart)
+		assert.Equal(t, timeModified + 14, closestSealTurnStop)
+	})
+}
+
 func TestAura_DecodeSeal(t *testing.T) {
 	// Block 1 rlp data
 	msg4Node0 := "f90241f9023ea02778716827366f0a5479d7a907800d183c57382fa7142b84fbb71db143cf788ca01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d493479470ad1a5fba52e27173d23ad87ad97c9bbe249abfa040cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133ba056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090ffffffffffffffffffffffffeceb197b0183222aa980845f6880949cdb830300018c4f70656e457468657265756d86312e34332e31826c69841314e684b84179d277eb6b97d25776793c1a98639d8d41da413fba24c338ee83bff533eac3695a0afaec6df1b77a48681a6a995798964adec1bb406c91b6bbe35f115a828a4101"
@@ -144,6 +187,10 @@ func TestAura_Seal(t *testing.T) {
 	header := block.Header()
 	assert.Empty(t, header.Seal)
 
+	// Wait for next turn to start sealing
+	timeout := 3
+	//timeNow := time.Now().Unix()
+
 	// Seal the block
 	chain := core.BlockChain{}
 	resultsChan := make(chan *types.Block)
@@ -168,7 +215,7 @@ func TestAura_Seal(t *testing.T) {
 
 		// Signer should be equal sealer
 		assert.Equal(t, strings.ToLower(testBankAddress.String()), strings.ToLower(signer.Hex()))
-	case <- time.After(5 * time.Second):
+	case <- time.After(time.Duration(timeout) * time.Second):
 		t.Fatalf("Received timeout")
 
 	case receivedStop := <-stopChan:

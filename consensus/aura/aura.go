@@ -136,6 +136,9 @@ var (
 	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedSigner = errors.New("unauthorized signer")
 
+	// errInvalidSigner is returned if signer will not be able to sign due to validator config
+	errInvalidSigner = errors.New("unauthorized signer which is not within validators list")
+
 	// errRecentlySigned is returned if a header is signed by an authorized entity
 	// that already signed a header recently, thus is temporarily not allowed to.
 	errRecentlySigned = errors.New("recently signed")
@@ -617,7 +620,6 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := new(bytes.Buffer)
 	encodeSigHeader(hasher, header)
 	signatureHash := crypto.Keccak256(hasher.Bytes())
-	//hasher.Sum(hash[:0])
 	var arr [32]byte
 	copy(arr[:], signatureHash)
 	return arr
@@ -670,6 +672,30 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
 	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
 	currentTurnTimestamp, nextTurnTimestamp = countTimeFrameForTurn(unixTimeToCheck)
 	allowed = checkForProvidedUnix && checkForPromisedInterval
+
+	return
+}
+
+// CountClosestTurn provides you information should you wait and if so how long for next turn for current validator
+// If err is other than nil, it means that you wont be able to seal within this epoch or ever
+func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
+	closestSealTurnStart int64,
+	closestSealTurnStop int64,
+	err error,
+) {
+	for _, _ = range a.config.Authorities {
+		allowed, turnTimestamp, nextTurnTimestamp := a.CheckStep(unixTimeToCheck, timeTolerance)
+
+		if allowed {
+			closestSealTurnStart = turnTimestamp
+			closestSealTurnStop = nextTurnTimestamp
+			return
+		}
+
+		unixTimeToCheck = nextTurnTimestamp
+	}
+
+	err = errInvalidSigner
 
 	return
 }
