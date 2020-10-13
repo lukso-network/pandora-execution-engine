@@ -19,6 +19,7 @@ package aura
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -556,7 +557,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	header.Seal = make([][]byte, 2)
 	var stepBytes []byte
 	stepBytes = make([]byte, 8)
-	//binary.LittleEndian.PutUint64(stepBytes, step)
+	binary.LittleEndian.PutUint64(stepBytes, step)
 	header.Seal[0] = stepBytes
 	fmt.Println(sighash)
 	header.Seal[1] = sighash
@@ -633,7 +634,6 @@ func AuraRLP(header *types.Header) []byte {
 	encodeSigHeader(b, header)
 	return b.Bytes()
 }
-
 
 // CheckStep should assure you that current time frame allows you to seal block based on validator set
 // UnixTimeToCheck allows you to deduce time not based on current time which might be handy
