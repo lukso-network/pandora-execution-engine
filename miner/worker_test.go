@@ -269,10 +269,8 @@ func testGenerateBlockAndImport(
 	insertedBlocks := make([]*types.Block, 0)
 
 	if isAuraEngine {
-		timeout = 3
+		timeout = time.Duration(int(auraChainConfig.Aura.Period) * len(auraChainConfig.Aura.Authorities))
 	}
-
-	// TODO: when AURA we need to seal/mine only when is our turn. Mechanism now is invalid. Maybe reduce period to ~~1s and try to get into gap
 
 	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
@@ -289,14 +287,12 @@ func testGenerateBlockAndImport(
 
 			insertedBlocks = append(insertedBlocks, block)
 		case <-time.After(timeout * time.Second): // Worker needs 1s to include new changes. In aura logic is different
-			if !isAuraEngine {
-				t.Fatalf("timeout")
-			}
+			t.Fatalf("timeout")
 		}
 	}
 
 	if isAuraEngine {
-		assert.Equal(t, 3, len(insertedBlocks))
+		assert.Equal(t, 5, len(insertedBlocks))
 	}
 }
 

@@ -515,6 +515,23 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 	a.signFn = signFn
 }
 
+
+// Function should be used if you want to wait until there is current validator turn
+// If validator wont be able to seal anytime, function will return error
+// Be careful because it can set up very large delay if periods are so long
+func (a *Aura) WaitForNextSealerTurn(fromTime int64)(err error) {
+	closestSealTurnStart, _, err := a.CountClosestTurn(fromTime, 0)
+
+	if nil != err {
+		return
+	}
+
+	delay := closestSealTurnStart - fromTime
+
+	time.Sleep(time.Duration(delay) * time.Second)
+	return
+}
+
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 // You should use Seal only if current sealer is within its turn, otherwise you will get error
@@ -554,7 +571,15 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 		return err
 	}
 
-	// Sign all the things!
+	// check if in good turn time frame
+	allowed, _, _ := a.CheckStep(int64(header.Time), 0)
+
+	if !allowed {
+		return errInvalidTimestamp
+	}
+
+	// Attach time of future execution, not current time
+	//header.Time = uint64(closestSealTurnStart)
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeAura, AuraRLP(header))
 	if err != nil {
 		return err

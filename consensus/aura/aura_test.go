@@ -3,6 +3,7 @@ package aura
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -174,6 +175,39 @@ func TestAura_DecodeSeal(t *testing.T) {
 	}
 }
 
+func TestAura_WaitForNextSealerTurn(t *testing.T) {
+	fixedTime := int64(1602697742)
+	db := rawdb.NewMemoryDatabase()
+
+	t.Run("Should fail, signer not in validators list", func(t *testing.T) {
+		specificEngine := New(&params.AuraConfig{
+			Period:      0,
+			Epoch:       0,
+			Authorities: nil,
+			Difficulty:  nil,
+			Signatures:  nil,
+		}, db)
+		err := specificEngine.WaitForNextSealerTurn(fixedTime)
+		assert.NotNil(t, err)
+		assert.Equal(t, errInvalidSigner, err)
+	})
+
+	t.Run("should sleep", func(t *testing.T) {
+		timeNow := time.Now().Unix()
+		closestSealTurnStart, _, err := auraEngine.CountClosestTurn(timeNow, 0)
+		assert.Nil(t, err)
+
+		if closestSealTurnStart == timeNow {
+			t.Logf("Equal before start")
+		}
+
+		err = auraEngine.WaitForNextSealerTurn(timeNow)
+		assert.Nil(t, err)
+		assert.Equal(t, time.Now().Unix(), closestSealTurnStart)
+		fmt.Printf("should wait %d secs", closestSealTurnStart - timeNow)
+	})
+}
+
 func TestAura_Seal(t *testing.T) {
 	// block hex comes from worker test and is extracted due to unit-level of testing Seal
 	blockToSignHex := "0xf902c5f9025ca0f0513bebf98c814b3c28ff61746552f74ed65909a3ca4cc3ea5b56dc6021ee3ea01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a02c6e36b7f66da996dc550a19d56c9994626304dc77e459963c1b4dde768020cda02457516422f685ff3338d36c41f3eaa26c35b53f4d485d8d93543c1c4b8bdf6ba0056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000083020000018347e7c4825208845f84393fb86100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000880000000000000000c0f863f8618080825208943da0ae25cdf7004849e352ba1f8b59ea4b6ebd708203e8801ca00ab99fc4760dfddc35ebd4bf4c4be06e3a2b2d6995fa37b674142c573f7683dda008e2b5c9e9c4597b59d639d7d0aba1b0aa4ddeaf4dceb8b89b914272aa340a1ac0"
@@ -195,6 +229,17 @@ func TestAura_Seal(t *testing.T) {
 	chain := core.BlockChain{}
 	resultsChan := make(chan *types.Block)
 	stopChan := make(chan struct{})
+	timeNow := time.Now().Unix()
+	closestSealTurnStart, _, err := auraEngine.CountClosestTurn(timeNow, int64(timeout))
+	assert.Nil(t, err)
+	waitFor := closestSealTurnStart - timeNow
+
+	if waitFor < 1 {
+		waitFor = 0
+	}
+
+	t.Logf("Test is waiting for proper turn to start sealing. Waiting: %v secs", waitFor)
+	time.Sleep(time.Duration(waitFor) * time.Second)
 	err = auraEngine.Seal(&chain, &block, resultsChan, stopChan)
 
 	select {

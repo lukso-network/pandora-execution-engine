@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -558,6 +559,13 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
+
+			engine := w.engine
+			auraEngine, isAura := engine.(*aura.Aura)
+
+			if isAura {
+				_ = auraEngine.WaitForNextSealerTurn(time.Now().Unix())
+			}
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
