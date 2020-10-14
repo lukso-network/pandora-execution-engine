@@ -537,30 +537,28 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	// check if authorized to sign
-	allowed, _, _ := a.CheckStep(time.Now().Unix(), 0)
+	// check if sealer will be on time
+	tolerance := a.config.Period - 1
 
-	if !allowed {
-		// not authorized to sign
-		return errUnauthorizedSigner
+	if tolerance < 1 {
+		tolerance = a.config.Period
 	}
 
-	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	// check if sealer will be ever able to sign
+	timeNow := time.Now().Unix()
+	closestSealTurnStart, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
+	delay := time.Duration(closestSealTurnStart - timeNow) * time.Second
+
+	if nil != err {
+		// not authorized to sign ever
+		return err
+	}
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeAura, AuraRLP(header))
 	if err != nil {
 		return err
 	}
-	header.Seal = make([][]byte, 2)
-	step := uint64(time.Now().Unix()) / a.config.Period
-	var stepBytes []byte
-	stepBytes = make([]byte, 8)
-	binary.LittleEndian.PutUint64(stepBytes, step)
-	header.Seal[0] = stepBytes
-	fmt.Println(sighash)
-	header.Seal[1] = sighash
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
@@ -569,6 +567,13 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 		case <-stop:
 			return
 		case <-time.After(delay):
+			header.Seal = make([][]byte, 2)
+			step := uint64(time.Now().Unix()) / a.config.Period
+			var stepBytes []byte
+			stepBytes = make([]byte, 8)
+			binary.LittleEndian.PutUint64(stepBytes, step)
+			header.Seal[0] = stepBytes
+			header.Seal[1] = sighash
 		}
 
 		select {
