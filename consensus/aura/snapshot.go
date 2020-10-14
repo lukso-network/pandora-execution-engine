@@ -49,7 +49,7 @@ type Tally struct {
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.AuraConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache        // Cache of recent block signatures to speed up ecrecover
+	sigcache *lru.ARCCache      // Cache of recent block signatures to speed up ecrecover
 
 	Number  uint64                      `json:"number"`  // Block number where the snapshot was created
 	Hash    common.Hash                 `json:"hash"`    // Block hash where the snapshot was created
@@ -240,24 +240,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 				break // only one vote allowed
 			}
 		}
-		// Tally up the new vote from the signer
-		//var authorize bool
-		//switch {
-		//case bytes.Equal(header.Nonce[:], nonceAuthVote):
-		//	authorize = true
-		//case bytes.Equal(header.Nonce[:], nonceDropVote):
-		//	authorize = false
-		//default:
-		//	return nil, errInvalidVote
-		//}
-		//if snap.cast(header.Coinbase, authorize) {
-		//	snap.Votes = append(snap.Votes, &Vote{
-		//		Signer:    signer,
-		//		Block:     number,
-		//		Address:   header.Coinbase,
-		//		Authorize: authorize,
-		//	})
-		//}
+
 		// If the vote passed, update the list of signers
 		if tally := snap.Tally[header.Coinbase]; tally.Votes > len(snap.Signers)/2 {
 			if tally.Authorize {

@@ -456,11 +456,6 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 
 	number := header.Number.Uint64()
 
-	if number%a.config.Epoch == 0 {
-		//for _, signer := range snap.signers() {
-		//	header.Extra = append(header.Extra, signer[:]...)
-		//}
-	}
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	// Mix digest is reserved for now, set to empty
