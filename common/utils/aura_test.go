@@ -1,8 +1,7 @@
-package bindings
+package utils
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -24,7 +23,7 @@ func TestNewParityChainSpec(t *testing.T) {
 
 	parityGenesis, err := ioutil.ReadFile("./fixtures/parity-aura.json")
 	assert.Nil(t, err)
-	var parityChainSpec utils.ParityChainSpec
+	var parityChainSpec ParityChainSpec
 	err = json.Unmarshal(parityGenesis, &parityChainSpec)
 
 	t.Run("Genesis file from geth should produce proper spec in openethereum", func(t *testing.T) {
@@ -33,7 +32,7 @@ func TestNewParityChainSpec(t *testing.T) {
 		assert.Nil(t, err)
 		err = json.Unmarshal(gethGenesisFixture, &genesisGeth)
 		assert.Nil(t, err)
-		spec, err := utils.NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
+		spec, err := NewParityChainSpec("AuthorityRound", &genesisGeth, nil)
 		assert.Nil(t, err)
 		assert.NotNil(t, spec.Genesis)
 		assert.NotNil(t, spec.Name)
