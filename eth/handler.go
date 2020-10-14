@@ -491,7 +491,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
 
-		err := basicDecodeIfNotAura(msg, &headers, isAura)
+		err := basicDecodeIfNotAura(msg, &headers, engine)
 
 		if nil != err {
 			return err
@@ -744,7 +744,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			request.TD = mappedRequest.TD
 		}
 
-		err := basicDecodeIfNotAura(msg, &request, isAura)
+		err := basicDecodeIfNotAura(msg, &request, engine)
 
 		if nil != err {
 			return err
@@ -985,7 +985,10 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 	}
 }
 
-func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, isAura bool) (err error) {
+func basicDecodeIfNotAura(msg p2p.Msg, value interface{}, engine interface{}) (err error) {
+
+	_, isAura := engine.(*aura.Aura)
+
 	if isAura {
 		return
 	}
