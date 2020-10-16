@@ -515,11 +515,10 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 	a.signFn = signFn
 }
 
-
 // Function should be used if you want to wait until there is current validator turn
 // If validator wont be able to seal anytime, function will return error
 // Be careful because it can set up very large delay if periods are so long
-func (a *Aura) WaitForNextSealerTurn(fromTime int64)(err error) {
+func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 	closestSealTurnStart, _, err := a.CountClosestTurn(fromTime, 0)
 
 	if nil != err {
@@ -563,8 +562,8 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
-	closestSealTurnStart, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
-	delay := time.Duration(closestSealTurnStart - timeNow) * time.Second
+	_, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
+	//delay := time.Duration(closestSealTurnStart - timeNow) * time.Second
 
 	if nil != err {
 		// not authorized to sign ever
@@ -585,13 +584,13 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 		return err
 	}
 
-	// Wait until sealing is terminated or delay timeout.
-	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
+	//Wait until sealing is terminated or delay timeout.
+	//log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
 		select {
 		case <-stop:
 			return
-		case <-time.After(delay):
+		default:
 			header.Seal = make([][]byte, 2)
 			step := uint64(time.Now().Unix()) / a.config.Period
 			var stepBytes []byte
@@ -678,14 +677,14 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
 	currentTurnTimestamp int64,
 	nextTurnTimestamp int64,
 ) {
-	guardStepByUnixTime := func(unixTime int64)(allowed bool) {
+	guardStepByUnixTime := func(unixTime int64) (allowed bool) {
 		step := uint64(unixTime) / a.config.Period
 		turn := step % uint64(len(a.config.Authorities))
 
 		return a.signer == a.config.Authorities[turn]
 	}
 
-	countTimeFrameForTurn := func(unixTime int64)(turnStart int64, nextTurn int64) {
+	countTimeFrameForTurn := func(unixTime int64) (turnStart int64, nextTurn int64) {
 		timeGap := unixTime % int64(a.config.Period)
 		turnStart = unixTime
 

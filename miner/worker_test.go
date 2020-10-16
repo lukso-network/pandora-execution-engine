@@ -232,8 +232,22 @@ func TestGenerateBlockAndImportClique(t *testing.T) {
 
 func TestGenerateBlockAndImportAura(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	engine := aura.New(auraChainConfig.Aura, db)
-	testGenerateBlockAndImport(t, engine, auraChainConfig, db)
+	// Use config that has 1s period
+	authority1, _ := crypto.GenerateKey()
+	period1Config2nodes := &params.AuraConfig{
+		Period: 2,
+		Epoch:  500,
+		Authorities: []common.Address{
+			testBankAddress,
+			crypto.PubkeyToAddress(authority1.PublicKey),
+		},
+		Difficulty: big.NewInt(int64(131072)),
+		Signatures: nil,
+	}
+	currentAuraChainConfig := params.TestChainConfig
+	currentAuraChainConfig.Aura = period1Config2nodes
+	engine := aura.New(period1Config2nodes, db)
+	testGenerateBlockAndImport(t, engine, currentAuraChainConfig, db)
 }
 
 // Here pass engine and deduce logic by engine type
@@ -269,7 +283,7 @@ func testGenerateBlockAndImport(
 	insertedBlocks := make([]*types.Block, 0)
 
 	if isAuraEngine {
-		timeout = time.Duration(int(auraChainConfig.Aura.Period) * len(auraChainConfig.Aura.Authorities))
+		timeout = time.Duration(int(chainConfig.Aura.Period) * len(chainConfig.Aura.Authorities))
 	}
 
 	for i := 0; i < 5; i++ {
@@ -291,9 +305,7 @@ func testGenerateBlockAndImport(
 		}
 	}
 
-	if isAuraEngine {
-		assert.Equal(t, 5, len(insertedBlocks))
-	}
+	assert.Equal(t, 5, len(insertedBlocks))
 }
 
 func TestEmptyWorkEthash(t *testing.T) {
