@@ -341,7 +341,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	_, isAuraEngine := w.engine.(*aura.Aura)
+	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -351,11 +351,11 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		interrupt = new(int32)
 
 		// Prevent mining when sealer is not in his turn time frame
-		//if isAuraEngine {
-		//	timestamp = time.Now().Unix()
-		//	_ = auraEngine.WaitForNextSealerTurn(0)
-		//	timestamp = time.Now().Unix()
-		//}
+		if isAuraEngine {
+			timestamp = time.Now().Unix()
+			_ = auraEngine.WaitForNextSealerTurn(timestamp)
+			timestamp = time.Now().Unix()
+		}
 
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
