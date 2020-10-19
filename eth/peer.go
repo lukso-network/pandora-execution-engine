@@ -469,7 +469,22 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 		p.knownBlocks.Pop()
 	}
 	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+
+	blockHeader := block.Header()
+	isAuraBlockType := len(blockHeader.Seal) == 2
+
+	if !isAuraBlockType {
+		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+	}
+
+	auraBlock := &types.AuraBlock{}
+	err := auraBlock.FromBlock(block)
+
+	if nil != err {
+		return err
+	}
+
+	return p2p.Send(p.rw, NewBlockMsg, []interface{}{auraBlock, td})
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
