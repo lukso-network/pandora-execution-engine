@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"sync"
@@ -438,7 +437,6 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	turn := step % uint64(len(a.config.Authorities))
 
 	if signer != a.config.Authorities[turn] {
-		fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}

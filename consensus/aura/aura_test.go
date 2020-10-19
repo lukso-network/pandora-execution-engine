@@ -25,7 +25,7 @@ var (
 	auraChainConfig *params.AuraConfig
 	testBankKey, _  = crypto.GenerateKey()
 	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	auraEngine *Aura
+	auraEngine      *Aura
 )
 
 func init() {
@@ -59,9 +59,9 @@ func TestAura_CheckStep(t *testing.T) {
 		allowed, currentTurnTimestamp, nextTurnTimestamp := auraEngine.CheckStep(currentTime, 0)
 		assert.True(t, allowed)
 		// Period is 5 so next time frame started within -1 from unix time
-		assert.Equal(t, currentTime - 1, currentTurnTimestamp)
+		assert.Equal(t, currentTime-1, currentTurnTimestamp)
 		// Period is 5 so next time frame starts within 4 secs from unix time
-		assert.Equal(t, currentTime + 4, nextTurnTimestamp)
+		assert.Equal(t, currentTime+4, nextTurnTimestamp)
 	})
 
 	t.Run("should return true with small tolerance", func(t *testing.T) {
@@ -71,17 +71,17 @@ func TestAura_CheckStep(t *testing.T) {
 		)
 		assert.True(t, allowed)
 		// Period is 5 so next time frame started within -1 from unix time
-		assert.Equal(t, currentTime - 1, currentTurnTimestamp)
+		assert.Equal(t, currentTime-1, currentTurnTimestamp)
 		// Period is 5 so next time frame starts within 4 secs from unix time
-		assert.Equal(t, currentTime + 4, nextTurnTimestamp)
+		assert.Equal(t, currentTime+4, nextTurnTimestamp)
 	})
 
 	t.Run("should return false with no tolerance", func(t *testing.T) {
 		timeToCheck := currentTime + int64(6)
 		allowed, currentTurnTimestamp, nextTurnTimestamp := auraEngine.CheckStep(timeToCheck, 0)
 		assert.False(t, allowed)
-		assert.Equal(t, timeToCheck - 2, currentTurnTimestamp)
-		assert.Equal(t, timeToCheck + 3, nextTurnTimestamp)
+		assert.Equal(t, timeToCheck-2, currentTurnTimestamp)
+		assert.Equal(t, timeToCheck+3, nextTurnTimestamp)
 	})
 
 	// If base unixTime is invalid fail no matter what tolerance is
@@ -90,11 +90,11 @@ func TestAura_CheckStep(t *testing.T) {
 		timeToCheck := currentTime + int64(5)
 		allowed, currentTurnTimestamp, nextTurnTimestamp := auraEngine.CheckStep(
 			timeToCheck,
-			time.Unix(currentTime + 80, 0).Unix(),
+			time.Unix(currentTime+80, 0).Unix(),
 		)
 		assert.False(t, allowed)
-		assert.Equal(t, timeToCheck - 1, currentTurnTimestamp)
-		assert.Equal(t, timeToCheck + 4, nextTurnTimestamp)
+		assert.Equal(t, timeToCheck-1, currentTurnTimestamp)
+		assert.Equal(t, timeToCheck+4, nextTurnTimestamp)
 	})
 }
 
@@ -128,16 +128,16 @@ func TestAura_CountClosestTurn(t *testing.T) {
 	t.Run("should return current time frame", func(t *testing.T) {
 		closestSealTurnStart, closestSealTurnStop, err := auraEngine.CountClosestTurn(currentTime, 0)
 		assert.Nil(t, err)
-		assert.Equal(t, currentTime - 1, closestSealTurnStart)
-		assert.Equal(t, currentTime + 4, closestSealTurnStop)
+		assert.Equal(t, currentTime-1, closestSealTurnStart)
+		assert.Equal(t, currentTime+4, closestSealTurnStop)
 	})
 
 	t.Run("should return time frame in future", func(t *testing.T) {
 		timeModified := currentTime + 5
 		closestSealTurnStart, closestSealTurnStop, err := auraEngine.CountClosestTurn(timeModified, 0)
 		assert.Nil(t, err)
-		assert.Equal(t, timeModified + 9, closestSealTurnStart)
-		assert.Equal(t, timeModified + 14, closestSealTurnStop)
+		assert.Equal(t, timeModified+9, closestSealTurnStart)
+		assert.Equal(t, timeModified+14, closestSealTurnStop)
 	})
 }
 
@@ -204,7 +204,7 @@ func TestAura_WaitForNextSealerTurn(t *testing.T) {
 		err = auraEngine.WaitForNextSealerTurn(timeNow)
 		assert.Nil(t, err)
 		assert.Equal(t, time.Now().Unix(), closestSealTurnStart)
-		fmt.Printf("should wait %d secs", closestSealTurnStart - timeNow)
+		fmt.Printf("should wait %d secs", closestSealTurnStart-timeNow)
 	})
 }
 
@@ -260,12 +260,26 @@ func TestAura_Seal(t *testing.T) {
 
 		// Signer should be equal sealer
 		assert.Equal(t, strings.ToLower(testBankAddress.String()), strings.ToLower(signer.Hex()))
-	case <- time.After(time.Duration(timeout) * time.Second):
+	case <-time.After(time.Duration(timeout) * time.Second):
 		t.Fatalf("Received timeout")
 
 	case receivedStop := <-stopChan:
 		t.Fatalf("Received stop, but did not expect this, %v", receivedStop)
 	}
+}
+
+func TestAura_FromBlock(t *testing.T) {
+	invalidBlockRlp := "f902acf902a7a004013562d49a87c65aea12a13f12e63381647705f8e68841126a4620ac13927ca01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a040cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133ba056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008083035092837a120080845f89a639b861d883010916846765746888676f312e31352e32856c696e7578000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f84c88a5871b1300000000b841030916c553834125cab0ea384ab904bac2e7b7fe2a49fda62a98efb5c1b4fc2c26321fc433fe87d33285f1f696330c8cc94801483544eab72e1f289191466c5b01c0c0"
+	input, err := hex.DecodeString(invalidBlockRlp)
+	assert.Nil(t, err)
+	var standardBlock *types.Block
+	err = rlp.Decode(bytes.NewReader(input), &standardBlock)
+	assert.Nil(t, err)
+	assert.NotNil(t, standardBlock)
+
+	auraBlock := &types.AuraBlock{}
+	err = auraBlock.FromBlock(standardBlock)
+	assert.Nil(t, err)
 }
 
 func TestAura_VerifySeal(t *testing.T) {

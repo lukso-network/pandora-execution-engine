@@ -84,7 +84,7 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash, omitempty"`
+	MixDigest   common.Hash    `json:"mixHash,omitempty"`
 	Nonce       BlockNonce     `json:"nonce,omitempty"`
 
 	// seal field for aura engine
@@ -250,6 +250,16 @@ type AuraBlock struct {
 	Uncles       []*Header
 	Transactions Transactions
 	Rest         []interface{} `rlp:"tail"`
+}
+
+func (auraBlock *AuraBlock) FromBlock(block *Block) (err error) {
+	auraBlock.Transactions = block.transactions
+	auraBlock.Uncles = block.uncles
+	header := block.header
+	auraBlock.Header = &AuraHeader{}
+	err = auraBlock.Header.FromHeader(header)
+
+	return
 }
 
 func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
