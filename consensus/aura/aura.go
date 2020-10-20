@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"io"
 	"math/big"
 	"sync"
@@ -308,7 +310,9 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+a.config.Period > header.Time {
+	expectedTime := parent.Time + a.config.Period - (a.config.Period / uint64(len(a.config.Authorities)))
+	if parent.Time > header.Time {
+		panic(fmt.Sprintf("GOT: %d, WANT: %d", expectedTime, header.Time))
 		return errInvalidTimestamp
 	}
 
@@ -447,27 +451,8 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	// If the block isn't a checkpoint, cast a random vote (good enough for now)
-	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
-
-	// Set the correct difficulty
-	header.Difficulty = chain.Config().Aura.Difficulty
-
-	// Ensure the extra data has all it's components
-	if len(header.Extra) < extraVanity {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
-	}
-	//header.Extra = header.Extra[:extraVanity]
-
 	number := header.Number.Uint64()
-
-	if number%a.config.Epoch == 0 {
-		//for _, signer := range snap.signers() {
-		//	header.Extra = append(header.Extra, signer[:]...)
-		//}
-	}
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	// Mix digest is reserved for now, set to empty
 	header.MixDigest = common.Hash{}
@@ -477,6 +462,41 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
+
+	// Set the correct difficulty
+	calculateExpectedDifficulty := func(parentStep uint64, step uint64, emptyStepsLen uint64) (diff *big.Int) {
+		maxInt := big.NewInt(0)
+		maxBig128 := maxInt.Sqrt(math.MaxBig256)
+
+		//maxInt = uint64(340282366920938463463374607431768211455)
+		diff = big.NewInt(int64(parentStep - step + emptyStepsLen))
+		diff = diff.Add(maxBig128, diff)
+		return
+	}
+
+	auraHeader := &types.AuraHeader{}
+
+	if len(header.Seal) < 2 {
+		header.Seal = make([][]byte, 2)
+		step := uint64(time.Now().Unix()) / a.config.Period
+		var stepBytes []byte
+		stepBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(stepBytes, step)
+		header.Seal[0] = stepBytes
+	}
+
+	err := auraHeader.FromHeader(header)
+
+	if nil != err {
+		return err
+	}
+
+	auraParentHeader := &types.AuraHeader{}
+	err = auraParentHeader.FromHeader(parent)
+
+	header.Difficulty = calculateExpectedDifficulty(auraParentHeader.Step, auraHeader.Step, 0)
+
+	//TODO: this logic can also be improved and (potentially removed or replaced)
 	header.Time = parent.Time + a.config.Period
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
@@ -561,7 +581,6 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
 	_, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
-	//delay := time.Duration(closestSealTurnStart - timeNow) * time.Second
 
 	if nil != err {
 		// not authorized to sign ever
