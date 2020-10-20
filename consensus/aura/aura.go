@@ -451,13 +451,14 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	// Nonce is not used in aura engine
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()
 
-	// Mix digest is reserved for now, set to empty
+	// Mix digest is not used, set to empty
 	header.MixDigest = common.Hash{}
 
-	// Ensure the timestamp has the correct delay
+	// Fetch the parent
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
@@ -467,8 +468,6 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	calculateExpectedDifficulty := func(parentStep uint64, step uint64, emptyStepsLen uint64) (diff *big.Int) {
 		maxInt := big.NewInt(0)
 		maxBig128 := maxInt.Sqrt(math.MaxBig256)
-
-		//maxInt = uint64(340282366920938463463374607431768211455)
 		diff = big.NewInt(int64(parentStep - step + emptyStepsLen))
 		diff = diff.Add(maxBig128, diff)
 		return
@@ -595,14 +594,11 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	}
 
 	// Attach time of future execution, not current time
-	//header.Time = uint64(closestSealTurnStart)
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeAura, AuraRLP(header))
 	if err != nil {
 		return err
 	}
 
-	//Wait until sealing is terminated or delay timeout.
-	//log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
 		select {
 		case <-stop:
