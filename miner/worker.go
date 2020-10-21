@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -340,12 +341,22 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
+	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
+
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
+
+		// Prevent mining when sealer is not in his turn time frame
+		if isAuraEngine {
+			timestamp = time.Now().Unix()
+			_ = auraEngine.WaitForNextSealerTurn(timestamp)
+			timestamp = time.Now().Unix()
+		}
+
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
 		atomic.StoreInt32(&w.newTxs, 0)
@@ -365,7 +376,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		select {
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
-			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
@@ -374,6 +384,11 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
+			if w.isRunning() && isAuraEngine {
+				commit(true, commitInterruptResubmit)
+				continue
+			}
+
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
@@ -872,6 +887,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Time:       uint64(timestamp),
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
+	// Other check is if aura is running
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")

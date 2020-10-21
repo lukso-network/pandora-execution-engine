@@ -84,7 +84,7 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash, omitempty"`
+	MixDigest   common.Hash    `json:"mixHash,omitempty"`
 	Nonce       BlockNonce     `json:"nonce,omitempty"`
 
 	// seal field for aura engine
@@ -252,6 +252,16 @@ type AuraBlock struct {
 	Rest         []interface{} `rlp:"tail"`
 }
 
+func (auraBlock *AuraBlock) FromBlock(block *Block) (err error) {
+	auraBlock.Transactions = block.transactions
+	auraBlock.Uncles = block.uncles
+	header := block.header
+	auraBlock.Header = &AuraHeader{}
+	err = auraBlock.Header.FromHeader(header)
+
+	return
+}
+
 func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 	header := auraBlock.Header
 
@@ -324,6 +334,11 @@ func (auraHeader *AuraHeader) FromHeader(header *Header) (err error) {
 
 	if sealLen < 2 {
 		err = fmt.Errorf("expected 2 or more Seal fields, got: %d", sealLen)
+		return
+	}
+
+	if len(header.Seal[0]) != 8 {
+		err = fmt.Errorf("expected 8 bytes in step")
 		return
 	}
 

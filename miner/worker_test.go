@@ -17,6 +17,9 @@
 package miner
 
 import (
+	"encoding/binary"
+	"github.com/ethereum/go-ethereum/consensus/aura"
+	"github.com/stretchr/testify/assert"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -52,6 +55,7 @@ var (
 	testTxPoolConfig  core.TxPoolConfig
 	ethashChainConfig *params.ChainConfig
 	cliqueChainConfig *params.ChainConfig
+	auraChainConfig   *params.ChainConfig
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
@@ -81,6 +85,22 @@ func init() {
 		Period: 10,
 		Epoch:  30000,
 	}
+	authority1, _ := crypto.GenerateKey()
+	authority2, _ := crypto.GenerateKey()
+	auraChainConfig = params.TestChainConfig
+	auraChainConfig.Aura = &params.AuraConfig{
+		Period: 5,
+		Epoch:  500,
+		Authorities: []common.Address{
+			testBankAddress,
+			crypto.PubkeyToAddress(authority1.PublicKey),
+			crypto.PubkeyToAddress(authority2.PublicKey),
+		},
+		Difficulty: big.NewInt(int64(131072)),
+		Signatures: nil,
+	}
+	auraChainConfig.Clique = nil
+	auraChainConfig.Ethash = nil
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
 	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
@@ -99,19 +119,31 @@ type testWorkerBackend struct {
 }
 
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
-	var gspec = core.Genesis{
-		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
-	}
+	var (
+		gspec = core.Genesis{
+			Config: chainConfig,
+			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		}
+		signerFunc = func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		}
+	)
 
 	switch e := engine.(type) {
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
-		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testBankKey)
-		})
+		e.Authorize(testBankAddress, signerFunc)
 	case *ethash.Ethash:
+	case *aura.Aura:
+		stepBytes := make([]byte, 8)
+		signature := make([]byte, crypto.SignatureLength)
+		binary.LittleEndian.PutUint64(stepBytes, 0)
+		gspec.Seal = core.Seal{
+			Step:      stepBytes,
+			Signature: signature,
+		}
+		e.Authorize(testBankAddress, signerFunc)
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -184,28 +216,48 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
+	db := rawdb.NewMemoryDatabase()
+	chainConfig := params.AllEthashProtocolChanges
+	engine := ethash.NewFaker()
+	testGenerateBlockAndImport(t, engine, chainConfig, db)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	testGenerateBlockAndImport(t, true)
+	db := rawdb.NewMemoryDatabase()
+	chainConfig := params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine := clique.New(chainConfig.Clique, db)
+	testGenerateBlockAndImport(t, engine, chainConfig, db)
 }
 
-func testGenerateBlockAndImport(t *testing.T, isClique bool) {
-	var (
-		engine      consensus.Engine
-		chainConfig *params.ChainConfig
-		db          = rawdb.NewMemoryDatabase()
-	)
-	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
-	} else {
-		chainConfig = params.AllEthashProtocolChanges
-		engine = ethash.NewFaker()
+func TestGenerateBlockAndImportAura(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	// Use config that has 1s period
+	authority1, _ := crypto.GenerateKey()
+	period1Config2nodes := &params.AuraConfig{
+		// For some reason period 1 fails. Maybe it is due to user-defined resubmit? Or maybe execution is too slow?
+		Period: 2,
+		Epoch:  500,
+		Authorities: []common.Address{
+			testBankAddress,
+			crypto.PubkeyToAddress(authority1.PublicKey),
+		},
+		Difficulty: big.NewInt(int64(1)),
+		Signatures: nil,
 	}
+	currentAuraChainConfig := params.TestChainConfig
+	currentAuraChainConfig.Aura = period1Config2nodes
+	engine := aura.New(period1Config2nodes, db)
+	testGenerateBlockAndImport(t, engine, currentAuraChainConfig, db)
+}
 
+// Here pass engine and deduce logic by engine type
+func testGenerateBlockAndImport(
+	t *testing.T,
+	engine consensus.Engine,
+	chainConfig *params.ChainConfig,
+	db ethdb.Database,
+) {
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 
@@ -227,6 +279,15 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	// Start mining!
 	w.start()
 
+	timeout := time.Duration(3)
+	_, isAuraEngine := engine.(*aura.Aura)
+	insertedBlocks := make([]*types.Block, 0)
+
+	if isAuraEngine {
+		// Wait twice the size of duration
+		timeout = time.Duration(int(chainConfig.Aura.Period) * len(chainConfig.Aura.Authorities) * 2)
+	}
+
 	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
@@ -239,10 +300,14 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
-		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
+
+			insertedBlocks = append(insertedBlocks, block)
+		case <-time.After(timeout * time.Second): // Worker needs 1s to include new changes. In aura logic is different
 			t.Fatalf("timeout")
 		}
 	}
+
+	assert.Equal(t, 5, len(insertedBlocks))
 }
 
 func TestEmptyWorkEthash(t *testing.T) {

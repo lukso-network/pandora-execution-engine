@@ -19,8 +19,10 @@ package aura
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"io"
 	"math/big"
 	"sync"
@@ -135,6 +137,9 @@ var (
 
 	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedSigner = errors.New("unauthorized signer")
+
+	// errInvalidSigner is returned if signer will not be able to sign due to validator config
+	errInvalidSigner = errors.New("unauthorized signer which is not within validators list")
 
 	// errRecentlySigned is returned if a header is signed by an authorized entity
 	// that already signed a header recently, thus is temporarily not allowed to.
@@ -305,7 +310,9 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+a.config.Period > header.Time {
+	expectedTime := parent.Time + a.config.Period - (a.config.Period / uint64(len(a.config.Authorities)))
+	if parent.Time > header.Time {
+		panic(fmt.Sprintf("GOT: %d, WANT: %d", expectedTime, header.Time))
 		return errInvalidTimestamp
 	}
 
@@ -434,7 +441,6 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	turn := step % uint64(len(a.config.Authorities))
 
 	if signer != a.config.Authorities[turn] {
-		fmt.Println(fmt.Sprintf("Block no: %v, Expecting: %s, current: %s", number, a.config.Authorities[turn].String(), signer.String()))
 		// not authorized to sign
 		return errUnauthorizedSigner
 	}
@@ -445,36 +451,51 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	// If the block isn't a checkpoint, cast a random vote (good enough for now)
-	header.Coinbase = common.Address{}
+	// Nonce is not used in aura engine
 	header.Nonce = types.BlockNonce{}
-
-	// Set the correct difficulty
-	header.Difficulty = chain.Config().Aura.Difficulty
-
-	// Ensure the extra data has all it's components
-	if len(header.Extra) < extraVanity {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
-	}
-	//header.Extra = header.Extra[:extraVanity]
-
 	number := header.Number.Uint64()
 
-	if number%a.config.Epoch == 0 {
-		//for _, signer := range snap.signers() {
-		//	header.Extra = append(header.Extra, signer[:]...)
-		//}
-	}
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
-
-	// Mix digest is reserved for now, set to empty
+	// Mix digest is not used, set to empty
 	header.MixDigest = common.Hash{}
 
-	// Ensure the timestamp has the correct delay
+	// Fetch the parent
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
+
+	// Set the correct difficulty
+	calculateExpectedDifficulty := func(parentStep uint64, step uint64, emptyStepsLen uint64) (diff *big.Int) {
+		maxInt := big.NewInt(0)
+		maxBig128 := maxInt.Sqrt(math.MaxBig256)
+		diff = big.NewInt(int64(parentStep - step + emptyStepsLen))
+		diff = diff.Add(maxBig128, diff)
+		return
+	}
+
+	auraHeader := &types.AuraHeader{}
+
+	if len(header.Seal) < 2 {
+		header.Seal = make([][]byte, 2)
+		step := uint64(time.Now().Unix()) / a.config.Period
+		var stepBytes []byte
+		stepBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(stepBytes, step)
+		header.Seal[0] = stepBytes
+	}
+
+	err := auraHeader.FromHeader(header)
+
+	if nil != err {
+		return err
+	}
+
+	auraParentHeader := &types.AuraHeader{}
+	err = auraParentHeader.FromHeader(parent)
+
+	header.Difficulty = calculateExpectedDifficulty(auraParentHeader.Step, auraHeader.Step, 0)
+
+	//TODO: this logic can also be improved and (potentially removed or replaced)
 	header.Time = parent.Time + a.config.Period
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
@@ -511,8 +532,25 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 	a.signFn = signFn
 }
 
+// Function should be used if you want to wait until there is current validator turn
+// If validator wont be able to seal anytime, function will return error
+// Be careful because it can set up very large delay if periods are so long
+func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
+	closestSealTurnStart, _, err := a.CountClosestTurn(fromTime, 0)
+
+	if nil != err {
+		return
+	}
+
+	delay := closestSealTurnStart - fromTime
+
+	time.Sleep(time.Duration(delay) * time.Second)
+	return
+}
+
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
+// You should use Seal only if current sealer is within its turn, otherwise you will get error
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
@@ -532,31 +570,47 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	// check if authorized to sign
-	step := uint64(time.Now().Unix()) % a.config.Period
-	turn := step % uint64(len(a.config.Authorities))
+	// check if sealer will be on time
+	tolerance := a.config.Period - 1
 
-	if a.signer != a.config.Authorities[turn] {
-		// not authorized to sign
-		return errUnauthorizedSigner
+	if tolerance < 1 {
+		tolerance = a.config.Period
 	}
 
-	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	// check if sealer will be ever able to sign
+	timeNow := time.Now().Unix()
+	_, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
 
-	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, AuraRLP(header))
+	if nil != err {
+		// not authorized to sign ever
+		return err
+	}
+
+	// check if in good turn time frame
+	allowed, _, _ := a.CheckStep(int64(header.Time), 0)
+
+	if !allowed {
+		return errInvalidTimestamp
+	}
+
+	// Attach time of future execution, not current time
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeAura, AuraRLP(header))
 	if err != nil {
 		return err
 	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
-	// Wait until sealing is terminated or delay timeout.
-	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
+
 	go func() {
 		select {
 		case <-stop:
 			return
-		case <-time.After(delay):
+		default:
+			header.Seal = make([][]byte, 2)
+			step := uint64(time.Now().Unix()) / a.config.Period
+			var stepBytes []byte
+			stepBytes = make([]byte, 8)
+			binary.LittleEndian.PutUint64(stepBytes, step)
+			header.Seal[0] = stepBytes
+			header.Seal[1] = sighash
 		}
 
 		select {
@@ -609,7 +663,6 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := new(bytes.Buffer)
 	encodeSigHeader(hasher, header)
 	signatureHash := crypto.Keccak256(hasher.Bytes())
-	//hasher.Sum(hash[:0])
 	var arr [32]byte
 	copy(arr[:], signatureHash)
 	return arr
@@ -618,16 +671,78 @@ func SealHash(header *types.Header) (hash common.Hash) {
 // AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
 // sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
 func AuraRLP(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
-	return header.Hash().Bytes()
+	return b.Bytes()
 }
 
+// CheckStep should assure you that current time frame allows you to seal block based on validator set
+// UnixTimeToCheck allows you to deduce time not based on current time which might be handy
+// TimeTolerance allows you to in-flight deduce that propagation is likely or unlikely to fail. Provide 0 if strict.
+// For example if sealing the block is about 1 sec and period is 5 secs you would like to know if your
+// committed work will ever have a chance to be accepted by others
+// Allowed returns if possible to seal
+// currentTurnTimestamp returns when time frame of current turn starts in unixTime
+// nextTurnTimestamp returns when time frame of next turn starts in unixTime
+func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
+	allowed bool,
+	currentTurnTimestamp int64,
+	nextTurnTimestamp int64,
+) {
+	guardStepByUnixTime := func(unixTime int64) (allowed bool) {
+		step := uint64(unixTime) / a.config.Period
+		turn := step % uint64(len(a.config.Authorities))
+
+		return a.signer == a.config.Authorities[turn]
+	}
+
+	countTimeFrameForTurn := func(unixTime int64) (turnStart int64, nextTurn int64) {
+		timeGap := unixTime % int64(a.config.Period)
+		turnStart = unixTime
+
+		if timeGap > 0 {
+			turnStart = unixTime - timeGap
+		}
+
+		nextTurn = turnStart + int64(a.config.Period)
+
+		return
+	}
+
+	checkForProvidedUnix := guardStepByUnixTime(unixTimeToCheck)
+	checkForPromisedInterval := guardStepByUnixTime(unixTimeToCheck + timeTolerance)
+	currentTurnTimestamp, nextTurnTimestamp = countTimeFrameForTurn(unixTimeToCheck)
+	allowed = checkForProvidedUnix && checkForPromisedInterval
+
+	return
+}
+
+// CountClosestTurn provides you information should you wait and if so how long for next turn for current validator
+// If err is other than nil, it means that you wont be able to seal within this epoch or ever
+func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
+	closestSealTurnStart int64,
+	closestSealTurnStop int64,
+	err error,
+) {
+	for _, _ = range a.config.Authorities {
+		allowed, turnTimestamp, nextTurnTimestamp := a.CheckStep(unixTimeToCheck, timeTolerance)
+
+		if allowed {
+			closestSealTurnStart = turnTimestamp
+			closestSealTurnStop = nextTurnTimestamp
+			return
+		}
+
+		unixTimeToCheck = nextTurnTimestamp
+	}
+
+	err = errInvalidSigner
+
+	return
+}
+
+// Encode to bare hash
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
 		header.ParentHash,
@@ -642,7 +757,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra, // Yes, this will panic if extra is too short
+		header.Extra,
 	})
 	if err != nil {
 		panic("can't encode: " + err.Error())
