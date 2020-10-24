@@ -157,9 +157,9 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 			Ethash:              nil,
 			Clique:              nil,
 			Aura: &params.AuraConfig{
-				Period:      uint64(rand.Intn(5)),
+				Period:      uint64(rand.Intn(5)) + 1,
 				Epoch:       600,
-				Authorities: nil,
+				Authorities: make([]common.Address, len(sealers)),
 				Difficulty:  nil,
 				Signatures:  nil,
 			},
@@ -195,6 +195,8 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	for i, signer := range signers {
 		genesis.Config.Aura.Authorities[i] = signer
 	}
+
+	genesis.Coinbase = signers[0]
 	// Return the genesis block for initialization
 	return genesis
 }
@@ -232,7 +234,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			GasFloor: genesis.GasLimit * 9 / 10,
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
-			Recommit: time.Second,
 		},
 	})
 	if err != nil {
