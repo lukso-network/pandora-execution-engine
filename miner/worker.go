@@ -441,10 +441,15 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
 
 	for {
 		select {
 		case req := <-w.newWorkCh:
+			if isAuraEngine {
+				// Wait for your turn and do not start mining before in proper timeframe
+				_ = auraEngine.WaitForNextSealerTurn(time.Now().Unix())
+			}
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
 		case ev := <-w.chainSideCh:

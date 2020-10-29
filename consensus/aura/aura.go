@@ -310,9 +310,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	expectedTime := parent.Time + a.config.Period - (a.config.Period / uint64(len(a.config.Authorities)))
 	if parent.Time > header.Time {
-		panic(fmt.Sprintf("GOT: %d, WANT: %d", expectedTime, header.Time))
 		return errInvalidTimestamp
 	}
 
@@ -544,7 +542,13 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 
 	delay := closestSealTurnStart - fromTime
 
-	time.Sleep(time.Duration(delay) * time.Second)
+	if delay < 0 {
+		return
+	}
+
+	duration := time.Duration(delay) * time.Second
+	log.Warn(fmt.Sprintf("I will wait: %d seconds for sealing turn", delay))
+	time.Sleep(duration)
 	return
 }
 
@@ -579,7 +583,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
-	_, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
+	_, _, err := a.CountClosestTurn(timeNow, int64(0))
 
 	if nil != err {
 		// not authorized to sign ever
@@ -590,6 +594,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	allowed, _, _ := a.CheckStep(int64(header.Time), 0)
 
 	if !allowed {
+		log.Warn(fmt.Sprintf("Could not seal, because timestamp of header is invalid: Header time: %d, time now: %d", header.Time, time.Now().Unix()))
 		return errInvalidTimestamp
 	}
 
@@ -725,8 +730,9 @@ func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
 	closestSealTurnStop int64,
 	err error,
 ) {
-	for _, _ = range a.config.Authorities {
+	for _, authority := range a.config.Authorities {
 		allowed, turnTimestamp, nextTurnTimestamp := a.CheckStep(unixTimeToCheck, timeTolerance)
+		log.Warn(fmt.Sprintf("this is one of the validators: %s, this is one we seek for: %s", authority.String(), a.signer.String()))
 
 		if allowed {
 			closestSealTurnStart = turnTimestamp
