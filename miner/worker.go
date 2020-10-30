@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math/big"
 	"sync"
@@ -218,8 +219,20 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
-	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
+
+	auraEngine, isAuraEngine := engine.(*aura.Aura)
+	// Mine only when its validators turn
+	if isAuraEngine {
+		auraConfig := chainConfig.Aura
+		period := auraConfig.Period
+		validatorsLen := len(auraConfig.Authorities)
+		recommit = time.Duration(period*uint64(validatorsLen)) * time.Second
+		// Wait with registration of loops until its turn of validator. It should be already authorized in auraEngine.
+		_ = auraEngine.WaitForNextSealerTurn(time.Now().Unix())
+	}
+
+	// Sanitize recommit interval if the user-specified one is too short.
 	if recommit < minRecommitInterval {
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
@@ -341,7 +354,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
+	_, isAuraEngine := w.engine.(*aura.Aura)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -349,13 +362,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
-
-		// Prevent mining when sealer is not in his turn time frame
-		if isAuraEngine {
-			timestamp = time.Now().Unix()
-			_ = auraEngine.WaitForNextSealerTurn(timestamp)
-			timestamp = time.Now().Unix()
-		}
 
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
@@ -384,6 +390,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
+			log.Warn(fmt.Sprintf("TIMER: %d", time.Now().Unix()))
 			if w.isRunning() && isAuraEngine {
 				commit(true, commitInterruptResubmit)
 				continue
@@ -441,15 +448,10 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
-	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
 
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			if isAuraEngine {
-				// Wait for your turn and do not start mining before in proper timeframe
-				_ = auraEngine.WaitForNextSealerTurn(time.Now().Unix())
-			}
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
 		case ev := <-w.chainSideCh:

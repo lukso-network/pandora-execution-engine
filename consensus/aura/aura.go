@@ -494,10 +494,6 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	header.Difficulty = calculateExpectedDifficulty(auraParentHeader.Step, auraHeader.Step, 0)
 
 	//TODO: this logic can also be improved and (potentially removed or replaced)
-	header.Time = parent.Time + a.config.Period
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
-	}
 	return nil
 }
 
@@ -546,9 +542,8 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 		return
 	}
 
-	duration := time.Duration(delay) * time.Second
-	log.Warn(fmt.Sprintf("I will wait: %d seconds for sealing turn", delay))
-	time.Sleep(duration)
+	log.Warn(fmt.Sprintf("waiting: %d seconds for sealing turn", delay))
+	<-time.After(time.Duration(delay) * time.Second)
 	return
 }
 
@@ -595,7 +590,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 
 	if !allowed {
 		log.Warn(fmt.Sprintf("Could not seal, because timestamp of header is invalid: Header time: %d, time now: %d", header.Time, time.Now().Unix()))
-		return errInvalidTimestamp
+		return nil
 	}
 
 	// Attach time of future execution, not current time
@@ -730,9 +725,8 @@ func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
 	closestSealTurnStop int64,
 	err error,
 ) {
-	for _, authority := range a.config.Authorities {
+	for range a.config.Authorities {
 		allowed, turnTimestamp, nextTurnTimestamp := a.CheckStep(unixTimeToCheck, timeTolerance)
-		log.Warn(fmt.Sprintf("this is one of the validators: %s, this is one we seek for: %s", authority.String(), a.signer.String()))
 
 		if allowed {
 			closestSealTurnStart = turnTimestamp

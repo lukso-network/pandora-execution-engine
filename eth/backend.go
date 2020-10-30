@@ -252,7 +252,8 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
-	} else if chainConfig.Aura != nil {
+	}
+	if chainConfig.Aura != nil {
 		return aura.New(chainConfig.Aura, db)
 	}
 	// Otherwise assume proof-of-work
