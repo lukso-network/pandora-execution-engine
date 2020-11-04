@@ -17,10 +17,12 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus/aura"
+	"io"
 	"math"
 	"math/big"
 	"sync"
@@ -498,11 +500,22 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		if isAura {
+			var bufferCopy bytes.Buffer
+			tee := io.TeeReader(msg.Payload, &bufferCopy)
+			err = rlp.Decode(tee, &headers)
+
+			if nil != err {
+				log.Warn("Encountered error in aura incoming header", "err", err)
+			}
+
+			// Fallback as auraHeaders
 			var auraHeaders []*types.AuraHeader
 			err = msg.Decode(&auraHeaders)
 
 			for _, header := range auraHeaders {
-				headers = append(headers, header.TranslateIntoHeader())
+				if header != nil && err != nil {
+					headers = append(headers, header.TranslateIntoHeader())
+				}
 			}
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that

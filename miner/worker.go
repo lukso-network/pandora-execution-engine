@@ -19,7 +19,6 @@ package miner
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"math/big"
 	"sync"
@@ -219,17 +218,52 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
+	// Recommit should match specific engine demands
 	recommit := worker.config.Recommit
 
-	auraEngine, isAuraEngine := engine.(*aura.Aura)
-	// Mine only when its validators turn
-	if isAuraEngine {
-		auraConfig := chainConfig.Aura
-		period := auraConfig.Period
-		validatorsLen := len(auraConfig.Authorities)
-		recommit = time.Duration(period*uint64(validatorsLen)) * time.Second
-		// Wait with registration of loops until its turn of validator. It should be already authorized in auraEngine.
-		_ = auraEngine.WaitForNextSealerTurn(time.Now().Unix())
+	if nil != chainConfig.Aura {
+		recommit = time.Duration(int(chainConfig.Aura.Period)) * time.Second
+		worker.disablePreseal()
+		// skipSealHook will prevent sealing block that is too quick to its parent
+		worker.skipSealHook = func(t *task) (shouldSkip bool) {
+			pendingBlock := t.block
+			blockchain := eth.BlockChain()
+			currentHeader := blockchain.CurrentHeader()
+			interval := time.Duration(pendingBlock.Time()-currentHeader.Time) * time.Second
+			expectedInterval := time.Duration(chainConfig.Aura.Period) * time.Second
+			shouldSkip = expectedInterval > interval
+
+			if shouldSkip {
+				log.Info(
+					"skipping sealing, interval lower than expected",
+					"expected",
+					expectedInterval,
+					"current",
+					interval,
+				)
+
+				return
+			}
+
+			// It will panic if engine is other than aura
+			auraEngine := engine.(*aura.Aura)
+			allowed, _, _ := auraEngine.CheckStep(int64(t.block.Time()), 0)
+			shouldSkip = !allowed
+
+			if shouldSkip {
+				log.Info("skipping sealing, wrong step for sealer")
+			}
+
+			currentHeader.Time = uint64(time.Now().Unix())
+
+			return
+		}
+	}
+
+	// Sanitize recommit interval if the user-specified one is too short.
+	if recommit < minRecommitInterval {
+		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
+		recommit = minRecommitInterval
 	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -390,8 +424,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
-			log.Warn(fmt.Sprintf("TIMER: %d", time.Now().Unix()))
 			if w.isRunning() && isAuraEngine {
+				timestamp = time.Now().Unix()
 				commit(true, commitInterruptResubmit)
 				continue
 			}
@@ -876,7 +910,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	parent := w.chain.CurrentBlock()
 
 	if parent.Time() >= uint64(timestamp) {
-		// TODO: WTF? This one is doing wrong assumption
 		timestamp = int64(parent.Time() + 1)
 	}
 	// this will ensure we're not going off too far in the future

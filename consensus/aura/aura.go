@@ -572,7 +572,15 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	allowed, _, _ := a.CheckStep(int64(header.Time), 0)
 
 	if !allowed {
-		log.Warn(fmt.Sprintf("Could not seal, because timestamp of header is invalid: Header time: %d, time now: %d", header.Time, time.Now().Unix()))
+		log.Warn(
+			"Could not seal, because timestamp of header is invalid: Header time: %d, time now: %d",
+			"headerTime",
+			header.Time,
+			"timeNow",
+			time.Now().Unix(),
+			"hash",
+			SealHash(header),
+		)
 		return nil
 	}
 
