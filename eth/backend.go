@@ -500,7 +500,6 @@ func (s *Ethereum) authorizeEngine() (eb common.Address, err error) {
 	case *aura.Aura:
 		{
 			engine.Authorize(eb, wallet.SignData)
-
 		}
 	}
 

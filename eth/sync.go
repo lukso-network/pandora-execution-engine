@@ -259,7 +259,12 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 	mode, ourTD := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
-	if op.td.Cmp(ourTD) <= 0 {
+
+	if nil == ourTD {
+		ourTD = big.NewInt(0)
+	}
+
+	if nil != op && op.td.Cmp(ourTD) <= 0 {
 		return nil // We're in sync.
 	}
 	return op
