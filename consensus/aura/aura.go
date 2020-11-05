@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/math"
 	"io"
 	"math/big"
@@ -193,11 +194,12 @@ type Aura struct {
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
+	contract	*ValidatorSetContract
 }
 
 // New creates a AuthorityRound proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *params.AuraConfig, db ethdb.Database) *Aura {
+func New(config *params.AuraConfig, db ethdb.Database, ethClient bind.ContractBackend) *Aura {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {
@@ -213,6 +215,10 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		recents:    recents,
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
+		contract: &ValidatorSetContract{
+			address: common.Address{},
+			backend: ethClient,
+		},
 	}
 }
 

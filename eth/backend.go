@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"runtime"
 	"sync"
@@ -246,7 +247,10 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	} else if chainConfig.Aura != nil {
-		return aura.New(chainConfig.Aura, db)
+		// Create a client to interact with local geth node.
+		rpcClient, _ := stack.Attach()
+		ethClient := ethclient.NewClient(rpcClient)
+		return aura.New(chainConfig.Aura, db, ethClient)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

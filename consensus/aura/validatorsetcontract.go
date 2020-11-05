@@ -6,12 +6,15 @@ import (
 "github.com/ethereum/go-ethereum/accounts/abi/bind"
 "github.com/ethereum/go-ethereum/common"
 "github.com/ethereum/go-ethereum/consensus/aura/validatorset"
+	"math/big"
 )
 
 // RelaySet is a Go wrapper around an on-chain validator set contract.
 type ValidatorSetContract struct {
-	address  common.Address
-	contract *validatorset.ValidatorSet
+	address  		common.Address
+	contract 		*validatorset.ValidatorSet
+	backend 		bind.ContractBackend // Smart contract backend
+	ValidatorList 	[]common.Address
 }
 
 // NewValidatorSet binds ValidatorSet contract and returns a registrar instance.
@@ -33,4 +36,15 @@ func (validatorSetContract *ValidatorSetContract) ContractAddr() common.Address 
 // Contract returns the underlying contract instance.
 func (validatorSetContract *ValidatorSetContract) Contract() *validatorset.ValidatorSet {
 	return validatorSetContract.contract
+}
+
+// Contract returns all the validator list.
+func (validatorSetContract *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Address {
+	callOpts := &bind.CallOpts{BlockNumber: blockNumber}
+	validatorList, error := validatorSetContract.contract.ValidatorSetCaller.GetValidators(callOpts)
+	if error == nil {
+		validatorSetContract.ValidatorList = validatorList
+		return validatorList
+	}
+	return validatorSetContract.ValidatorList
 }

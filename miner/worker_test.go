@@ -18,6 +18,7 @@ package miner
 
 import (
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -247,7 +248,9 @@ func TestGenerateBlockAndImportAura(t *testing.T) {
 	}
 	currentAuraChainConfig := params.TestChainConfig
 	currentAuraChainConfig.Aura = period1Config2nodes
-	engine := aura.New(period1Config2nodes, db)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 10000000)
+	defer contractBackend.Close()
+	engine := aura.New(period1Config2nodes, db, contractBackend)
 	testGenerateBlockAndImport(t, engine, currentAuraChainConfig, db)
 }
 
