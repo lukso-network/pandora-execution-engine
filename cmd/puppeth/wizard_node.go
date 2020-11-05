@@ -118,7 +118,8 @@ func (w *wizard) deployNode(boot bool) {
 				fmt.Printf("What address should the miner use? (default = %s)\n", infos.etherbase)
 				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
 			}
-		} else if w.conf.Genesis.Config.Clique != nil {
+		}
+		if w.conf.Genesis.Config.Clique != nil || w.conf.Genesis.Config.Aura != nil {
 			// If a previous signer was already set, offer to reuse it
 			if infos.keyJSON != "" {
 				if key, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {
@@ -167,7 +168,13 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
 		nocache = w.readDefaultYesNo(false)
 	}
-	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
+
+	dockerImage := "ethereum/client-go:latest"
+	fmt.Println()
+	fmt.Printf("Please provide geth docker image you would like to use (y/n)? (default = %s)\n", dockerImage)
+	dockerImage = w.readDefaultString(dockerImage)
+
+	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache, dockerImage); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

@@ -32,7 +32,7 @@ import (
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
-FROM ethereum/client-go:latest
+FROM {{.DockerImage}}
 
 ADD genesis.json /genesis.json
 {{if .Unlock}}
@@ -82,7 +82,14 @@ services:
 // deployNode deploys a new Ethereum node container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployNode(client *sshClient, network string, bootnodes []string, config *nodeInfos, nocache bool) ([]byte, error) {
+func deployNode(
+	client *sshClient,
+	network string,
+	bootnodes []string,
+	config *nodeInfos,
+	nocache bool,
+	dockerImage string,
+) ([]byte, error) {
 	kind := "sealnode"
 	if config.keyJSON == "" && config.etherbase == "" {
 		kind = "bootnode"
@@ -98,18 +105,19 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 	}
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(nodeDockerfile)).Execute(dockerfile, map[string]interface{}{
-		"NetworkID": config.network,
-		"Port":      config.port,
-		"IP":        client.address,
-		"Peers":     config.peersTotal,
-		"LightFlag": lightFlag,
-		"Bootnodes": strings.Join(bootnodes, ","),
-		"Ethstats":  config.ethstats,
-		"Etherbase": config.etherbase,
-		"GasTarget": uint64(1000000 * config.gasTarget),
-		"GasLimit":  uint64(1000000 * config.gasLimit),
-		"GasPrice":  uint64(1000000000 * config.gasPrice),
-		"Unlock":    config.keyJSON != "",
+		"DockerImage": dockerImage,
+		"NetworkID":   config.network,
+		"Port":        config.port,
+		"IP":          client.address,
+		"Peers":       config.peersTotal,
+		"LightFlag":   lightFlag,
+		"Bootnodes":   strings.Join(bootnodes, ","),
+		"Ethstats":    config.ethstats,
+		"Etherbase":   config.etherbase,
+		"GasTarget":   uint64(1000000 * config.gasTarget),
+		"GasLimit":    uint64(1000000 * config.gasLimit),
+		"GasPrice":    uint64(1000000000 * config.gasPrice),
+		"Unlock":      config.keyJSON != "",
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 

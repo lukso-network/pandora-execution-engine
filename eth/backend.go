@@ -198,6 +198,13 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
 		return nil, err
 	}
+
+	_, err = eth.authorizeEngine()
+
+	if nil != err {
+		log.Error(fmt.Sprintf("could not authorize engine. Err: %s", err.Error()))
+	}
+
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
@@ -245,7 +252,8 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
-	} else if chainConfig.Aura != nil {
+	}
+	if chainConfig.Aura != nil {
 		return aura.New(chainConfig.Aura, db)
 	}
 	// Otherwise assume proof-of-work
@@ -444,38 +452,11 @@ func (s *Ethereum) StartMining(threads int) error {
 		price := s.gasPrice
 		s.lock.RUnlock()
 		s.txPool.SetGasPrice(price)
+		eb, err := s.authorizeEngine()
 
-		// Configure the local mining address
-		eb, err := s.Etherbase()
-		if err != nil {
-			log.Error("Cannot start mining without etherbase", "err", err)
-			return fmt.Errorf("etherbase missing: %v", err)
+		if nil != err {
+			return err
 		}
-		if clique, ok := s.engine.(*clique.Clique); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			clique.Authorize(eb, wallet.SignData)
-		}
-
-		auraEngine, isAuraEngine := s.engine.(*aura.Aura)
-
-		// If mining is started, we can disable the transaction rejection mechanism
-		// introduced to speed sync times.
-		if !isAuraEngine {
-			atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
-			go s.miner.Start(eb)
-			return nil
-		}
-
-		wallet, e := s.accountManager.Find(accounts.Account{Address: eb})
-		if wallet == nil || e != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
-			return fmt.Errorf("signer missing: %v", err)
-		}
-		auraEngine.Authorize(eb, wallet.SignData)
 
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
@@ -483,6 +464,46 @@ func (s *Ethereum) StartMining(threads int) error {
 		go s.miner.Start(eb)
 	}
 	return nil
+}
+
+// Authorize engine varies on type of consensus
+func (s *Ethereum) authorizeEngine() (eb common.Address, err error) {
+	eb, err = s.Etherbase()
+
+	if err != nil {
+		log.Error("Cannot autorize engine without etherbase", "err", err)
+		err = fmt.Errorf("etherbase missing: %v", err)
+		return
+	}
+
+	wallet, e := s.accountManager.Find(accounts.Account{Address: eb})
+
+	if wallet == nil || e != nil {
+		log.Error("Etherbase account unavailable locally", "err", err)
+		err = fmt.Errorf("signer missing: %v", err)
+		return
+	}
+
+	var emptyAddress common.Address
+
+	// Assign config etherbase to miner if was not previously set
+	if emptyAddress == s.config.Miner.Etherbase {
+		s.config.Miner.Etherbase = eb
+	}
+
+	// Specific engines will be signed by its non interface authorization
+	switch engine := s.engine.(type) {
+	case *clique.Clique:
+		{
+			engine.Authorize(eb, wallet.SignData)
+		}
+	case *aura.Aura:
+		{
+			engine.Authorize(eb, wallet.SignData)
+		}
+	}
+
+	return
 }
 
 // StopMining terminates the miner, both at the consensus engine level as well as
