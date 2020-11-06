@@ -89,6 +89,18 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	return backend
 }
 
+func NewSimulatedBackendWithChain(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) *SimulatedBackend {
+	log.Debug("in simulated.go file")
+	backend := &SimulatedBackend{
+		database:   chainDb,
+		blockchain: chain,
+		config:     config,
+		events:     filters.NewEventSystem(&filterBackend{chainDb, chain}, false),
+	}
+	//backend.rollback()
+	return backend
+}
+
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {

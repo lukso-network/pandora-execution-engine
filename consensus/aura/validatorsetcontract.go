@@ -14,7 +14,7 @@ import (
 	"math/big"
 )
 
-var SYSTEM_ADDRESS = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
+var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 // RelaySet is a Go wrapper around an on-chain validator set contract.
 type ValidatorSetContract struct {
@@ -49,6 +49,18 @@ func NewValidatorSet(contractAddr common.Address) (*ValidatorSetContract, error)
 		contract: c}, nil
 }
 
+func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.ContractBackend) (*ValidatorSetContract, error) {
+	c, err := validatorset.NewValidatorSet(contractAddr, backend)
+	if err != nil {
+		log.Debug("Getting error when initialize validator set contract", "error", err)
+		return nil, err
+	}
+	log.Debug("Validator contract is getting initiated ", "contract", c)
+	return &ValidatorSetContract{
+		address: contractAddr,
+		contract: c}, nil
+}
+
 // ContractAddr returns the address of contract.
 func (v *ValidatorSetContract) ContractAddr() common.Address {
 	return v.address
@@ -62,12 +74,7 @@ func (v *ValidatorSetContract) Contract() *validatorset.ValidatorSet {
 // Contract returns all the validator list.
 func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Address {
 	log.Debug("Getting block number to call method", "blockNumber", blockNumber, "signer", v.signer)
-	callOpts := &bind.CallOpts{
-		Pending: false,
-		From: v.signer,
-		BlockNumber: blockNumber,
-	}
-	validatorList, err := v.contract.ValidatorSetCaller.GetValidators(callOpts)
+	validatorList, err := v.contract.ValidatorSetCaller.GetValidators(nil)
 	if err != nil {
 		log.Debug("Getting error while calling GetValidators method", "error", err)
 		return nil
@@ -79,19 +86,21 @@ func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Addr
 
 // System call - finalizeChange function
 func (v *ValidatorSetContract) FinalizeChange(header *types.Header) (*types.Transaction, error) {
+	log.Debug("Calling FinalizeChange method", "nonce", header.Nonce)
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
-		Nonce: new(big.Int).SetUint64(header.Nonce.Uint64()),
+		//Nonce: new(big.Int).SetUint64(header.Nonce.Uint64()),
 		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			return v.signTxFn(accounts.Account{Address: v.signer}, tx, v.chainID)
 		},
-		Value: nil,
-		GasPrice: big.NewInt(0),
-		GasLimit: 3000000,
+		//Value: nil,
+		//GasPrice: big.NewInt(1),
+		GasLimit: 9000000,
 	}
 	tx, err := v.contract.FinalizeChange(opts)
 	if err != nil {
 		log.Debug("Error occur while transact to finalizeChange method", "err", err)
+		return nil, err
 	}
 	log.Debug("Getting transaction for finalizeChange method", "tx", tx.Hash(), "err", err)
 	return tx, err

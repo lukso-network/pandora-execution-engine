@@ -22,7 +22,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
 	"io"
 	"math/big"
 	"sync"
@@ -210,21 +212,13 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
-	// todo Need to change here
-	// For validator set contract testing purpose
-	contractAddr := common.HexToAddress("0x0F6D56D64FAb064728aba54d8D8C030b5086d51D")
-	validatorContract, err := NewValidatorSet(contractAddr)
-	if err != nil {
-		log.Error("Failed to initiate contract instance", "address", contractAddr)
-	}
-
 	return &Aura{
 		config:     &conf,
 		db:         db,
 		recents:    recents,
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
-		contract: 	validatorContract,
+		contract: 	nil,
 	}
 }
 
@@ -463,15 +457,6 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	// Call to finalize change method one time for test
-	//log.Debug("Going to call finalizeChange method")
-	//a.contract.FinalizeChange(header)
-	log.Debug("Going to call getValidators method")
-	a.contract.GetValidators(header.Number)
-
-
-
-
 	// Nonce is not used in aura engine
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()
@@ -552,7 +537,7 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn, signTxFn SignTx
 	a.signer = signer
 	a.signFn = signFn
 
-	log.Debug("Setting singer, signTxFn and chainId", "signer", signer)
+	log.Debug("Setting singer, signTxFn and chainId", "signer", signer, "signTxFn", signTxFn, "chainID", chainID)
 	a.contract.signer = signer
 	a.contract.signTxFn = signTxFn
 	a.contract.chainID = chainID
@@ -578,6 +563,13 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 // the local signing credentials.
 // You should use Seal only if current sealer is within its turn, otherwise you will get error
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	// Call to finalize change method one time for test
+	//log.Debug("Going to call finalizeChange method")
+	//a.contract.FinalizeChange(block.Header())
+
+	log.Debug("Going to call getValidators method")
+	a.contract.GetValidators(block.Header().Number)
+
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
 
@@ -788,4 +780,18 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	if err != nil {
 		panic("can't encode: " + err.Error())
 	}
+}
+
+func (a *Aura) InitValidatorSetContract(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) {
+	log.Debug("No reason found. Feeling bad")
+	// todo Need to change here
+	// For validator set contract testing purpose
+	contractAddr := common.HexToAddress("0xe55CDFf3471f396EED96B19485095574b231409D")
+	backend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
+	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, backend)
+	if err != nil {
+		log.Error("Failed to initiate contract instance", "address", contractAddr)
+	}
+	log.Debug("Sucessfully setup simulated backed for interacting with contract")
+	a.contract = validatorContract
 }

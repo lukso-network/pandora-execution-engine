@@ -475,6 +475,8 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
+
+		auraEngine.InitValidatorSetContract(s.blockchain, s.chainDb, s.blockchain.Config())
 		auraEngine.Authorize(eb, wallet.SignData, wallet.SignTx, s.APIBackend.ChainConfig().ChainID)
 
 		// If mining is started, we can disable the transaction rejection mechanism
