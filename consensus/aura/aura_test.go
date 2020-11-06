@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -45,15 +44,12 @@ func init() {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 10000000)
-	defer contractBackend.Close()
-	auraEngine = New(auraChainConfig, db, contractBackend)
+	auraEngine = New(auraChainConfig, db)
 
 	signerFunc := func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), testBankKey)
 	}
-	auraEngine.Authorize(testBankAddress, signerFunc)
+	auraEngine.Authorize(testBankAddress, signerFunc, nil, nil)
 }
 
 func TestAura_CheckStep(t *testing.T) {
@@ -119,9 +115,7 @@ func TestAura_CountClosestTurn(t *testing.T) {
 		}
 
 		db := rawdb.NewMemoryDatabase()
-		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 10000000)
-		defer contractBackend.Close()
-		modifiedAuraEngine := New(auraChainConfig, db, contractBackend)
+		modifiedAuraEngine := New(auraChainConfig, db)
 		closestSealTurnStart, closestSealTurnStop, err := modifiedAuraEngine.CountClosestTurn(
 			time.Now().Unix(),
 			0,
@@ -186,15 +180,13 @@ func TestAura_WaitForNextSealerTurn(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 
 	t.Run("Should fail, signer not in validators list", func(t *testing.T) {
-		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 10000000)
-		defer contractBackend.Close()
 		specificEngine := New(&params.AuraConfig{
 			Period:      0,
 			Epoch:       0,
 			Authorities: nil,
 			Difficulty:  nil,
 			Signatures:  nil,
-		}, db, contractBackend)
+		}, db)
 		err := specificEngine.WaitForNextSealerTurn(fixedTime)
 		assert.NotNil(t, err)
 		assert.Equal(t, errInvalidSigner, err)

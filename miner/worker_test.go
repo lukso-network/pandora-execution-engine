@@ -18,7 +18,6 @@ package miner
 
 import (
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/consensus/aura"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -144,7 +143,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Step:      stepBytes,
 			Signature: signature,
 		}
-		e.Authorize(testBankAddress, signerFunc)
+		e.Authorize(testBankAddress, signerFunc, nil, nil)
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -248,9 +247,7 @@ func TestGenerateBlockAndImportAura(t *testing.T) {
 	}
 	currentAuraChainConfig := params.TestChainConfig
 	currentAuraChainConfig.Aura = period1Config2nodes
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{}, 10000000)
-	defer contractBackend.Close()
-	engine := aura.New(period1Config2nodes, db, contractBackend)
+	engine := aura.New(period1Config2nodes, db)
 	testGenerateBlockAndImport(t, engine, currentAuraChainConfig, db)
 }
 

@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/math"
 	"io"
 	"math/big"
@@ -150,6 +149,8 @@ var (
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 
+type SignTxFn func(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
+
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -199,7 +200,7 @@ type Aura struct {
 
 // New creates a AuthorityRound proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *params.AuraConfig, db ethdb.Database, ethClient bind.ContractBackend) *Aura {
+func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {
@@ -209,16 +210,21 @@ func New(config *params.AuraConfig, db ethdb.Database, ethClient bind.ContractBa
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
+	// todo Need to change here
+	// For validator set contract testing purpose
+	contractAddr := common.HexToAddress("0x0F6D56D64FAb064728aba54d8D8C030b5086d51D")
+	validatorContract, err := NewValidatorSet(contractAddr)
+	if err != nil {
+		log.Error("Failed to initiate contract instance", "address", contractAddr)
+	}
+
 	return &Aura{
 		config:     &conf,
 		db:         db,
 		recents:    recents,
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
-		contract: &ValidatorSetContract{
-			address: common.Address{},
-			backend: ethClient,
-		},
+		contract: 	validatorContract,
 	}
 }
 
@@ -457,6 +463,15 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	// Call to finalize change method one time for test
+	//log.Debug("Going to call finalizeChange method")
+	//a.contract.FinalizeChange(header)
+	log.Debug("Going to call getValidators method")
+	a.contract.GetValidators(header.Number)
+
+
+
+
 	// Nonce is not used in aura engine
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()
@@ -530,12 +545,17 @@ func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
+func (a *Aura) Authorize(signer common.Address, signFn SignerFn, signTxFn SignTxFn, chainID *big.Int) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
 	a.signer = signer
 	a.signFn = signFn
+
+	log.Debug("Setting singer, signTxFn and chainId", "signer", signer)
+	a.contract.signer = signer
+	a.contract.signTxFn = signTxFn
+	a.contract.chainID = chainID
 }
 
 // Function should be used if you want to wait until there is current validator turn

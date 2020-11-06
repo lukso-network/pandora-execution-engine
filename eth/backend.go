@@ -20,7 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"runtime"
 	"sync"
@@ -247,10 +246,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	} else if chainConfig.Aura != nil {
-		// Create a client to interact with local geth node.
-		rpcClient, _ := stack.Attach()
-		ethClient := ethclient.NewClient(rpcClient)
-		return aura.New(chainConfig.Aura, db, ethClient)
+		return aura.New(chainConfig.Aura, db)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
@@ -479,7 +475,7 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-		auraEngine.Authorize(eb, wallet.SignData)
+		auraEngine.Authorize(eb, wallet.SignData, wallet.SignTx, s.APIBackend.ChainConfig().ChainID)
 
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
