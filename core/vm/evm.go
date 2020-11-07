@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -259,6 +260,31 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
+}
+
+// SystemCallCode executes the validator set contract from system address
+// No gas is required for system call code
+func (evm *EVM) SystemCallCode(caller ContractRef, addr common.Address, input []byte, value *big.Int, gas uint64) (ret []byte, err error) {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		return nil, nil
+	}
+	// Fail if we're trying to execute above the call depth limit
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, ErrDepth
+	}
+	var snapshot = evm.StateDB.Snapshot()
+	addrCopy := addr
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only.
+	contract := NewContract(caller, AccountRef(caller.Address()), value, 300000000)
+	contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+	ret, err = run(evm, contract, input, false)
+
+	if err != nil {
+		log.Error("Error when running evm", "err", err)
+		evm.StateDB.RevertToSnapshot(snapshot)
+	}
+	return ret, err
 }
 
 // CallCode executes the contract associated with the addr with the given input

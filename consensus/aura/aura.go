@@ -563,12 +563,12 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 // the local signing credentials.
 // You should use Seal only if current sealer is within its turn, otherwise you will get error
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	// Call to finalize change method one time for test
-	//log.Debug("Going to call finalizeChange method")
-	//a.contract.FinalizeChange(block.Header())
-
 	log.Debug("Going to call getValidators method")
 	a.contract.GetValidators(block.Header().Number)
+
+	// Call to finalize change method one time for test
+	log.Debug("Going to call finalizeChange method")
+	a.contract.FinalizeChange(block.Header())
 
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()

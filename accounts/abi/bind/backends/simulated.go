@@ -45,6 +45,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+
 // This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
@@ -399,6 +401,20 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
+
+	// Checking from address. if it comes from system address
+	// then the transacton flow will be different
+	if call.From == SYSTEM_ADDRESS {
+		log.Debug("Calling systemCallContract")
+		res, err := b.systemCallContract(call, b.blockchain.CurrentBlock(), stateDB)
+		if err != nil {
+			log.Debug("Getting err when calling systemCallContract", "err", err, "res", res)
+			return res.Return(), res.Err
+		}
+		return res.Return(), res.Err
+	}
+
+
 	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
 	if err != nil {
 		return nil, err
@@ -533,6 +549,30 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		}
 	}
 	return hi, nil
+}
+
+// callContract implements common code between normal and pending contract calls.
+// state is modified during execution, make sure to copy it if necessary.
+func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+	// Ensure message is initialized properly.
+	if call.GasPrice == nil {
+		call.GasPrice = big.NewInt(1)
+	}
+	if call.Gas == 0 {
+		call.Gas = 90000000
+	}
+	if call.Value == nil {
+		call.Value = new(big.Int)
+	}
+	// Execute the call.
+	msg := callMsg{call}
+
+	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{})
+
+	return core.NewStateTransition(vmEnv, msg, nil).TransitionDBForSystemCall()
 }
 
 // callContract implements common code between normal and pending contract calls.

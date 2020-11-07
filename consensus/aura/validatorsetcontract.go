@@ -18,7 +18,7 @@ var SYSTEM_ADDRESS = common.HexToAddress("0xffffffffffffffffffffffffffffffffffff
 
 // RelaySet is a Go wrapper around an on-chain validator set contract.
 type ValidatorSetContract struct {
-	address  		common.Address
+	address  		common.Address		// contract address
 	contract 		*validatorset.ValidatorSet
 	backend 		bind.ContractBackend // Smart contract backend
 	ValidatorList 	[]common.Address
@@ -86,7 +86,8 @@ func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Addr
 
 // System call - finalizeChange function
 func (v *ValidatorSetContract) FinalizeChange(header *types.Header) (*types.Transaction, error) {
-	log.Debug("Calling FinalizeChange method", "nonce", header.Nonce)
+	log.Debug("Calling FinalizeChange method", "systemAddr", SYSTEM_ADDRESS, "signerAddr", v.signer, "ChainId", v.chainID)
+
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
 		//Nonce: new(big.Int).SetUint64(header.Nonce.Uint64()),
@@ -102,6 +103,6 @@ func (v *ValidatorSetContract) FinalizeChange(header *types.Header) (*types.Tran
 		log.Debug("Error occur while transact to finalizeChange method", "err", err)
 		return nil, err
 	}
-	log.Debug("Getting transaction for finalizeChange method", "tx", tx.Hash(), "err", err)
+	log.Debug("Getting transaction for finalizeChange method", "tx", tx, "err", err)
 	return tx, err
 }

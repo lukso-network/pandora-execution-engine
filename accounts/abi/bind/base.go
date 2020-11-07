@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -29,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 )
+
+var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
@@ -171,6 +174,19 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 	if err != nil {
 		return nil, err
 	}
+	// Checking from address. if it comes from system address
+	// then the transacton flow will be different
+	if opts.From == SYSTEM_ADDRESS {
+		log.Debug("Transaction from system address for system call")
+		var (
+			msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
+			ctx    = ensureContext(opts.Context)
+			output []byte
+		)
+		output, err = c.caller.CallContract(ctx, msg, nil)
+		log.Debug("Getting output from system call", "output", output)
+		return &types.Transaction{}, err
+	}
 	// todo(rjl493456442) check the method is payable or not,
 	// reject invalid transaction at the first place
 	return c.transact(opts, &c.address, input)
@@ -240,8 +256,10 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	var rawTx *types.Transaction
 	if contract == nil {
 		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input)
+		log.Debug("Getting contract creation raw transaction", "rawTx", rawTx)
 	} else {
 		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
+		log.Debug("Getting contract calling raw transaction", "rawTx", rawTx)
 	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
@@ -250,6 +268,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if err != nil {
 		return nil, err
 	}
+	log.Debug("Getting signed transaction", "signedTx", signedTx)
 	if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
 		return nil, err
 	}
