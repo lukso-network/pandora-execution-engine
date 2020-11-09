@@ -2,9 +2,7 @@ package aura
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -547,43 +545,43 @@ func deployTestContract(t *testing.T, abiJSON string, abiBin string, simBackend 
 }
 
 
-func TestValidatorContractDeployment(t *testing.T) {
-	deployerAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	simBackend := simTestBackend(deployerAddr)
-	defer simBackend.Close()
-
-	relaySetContractAddr, relaysetContract, err := deployTestContract(t, abiJSONRelaySet, abiBinRelaySet, simBackend)
-	if err != nil {
-		t.Errorf("could not deploy err: %v contract: %v", err, relaysetContract)
-	}
-
-	bgCtx := context.Background()
-	codeRelaySet, err := simBackend.CodeAt(bgCtx, relaySetContractAddr,nil)
-	hexCodeRelaySet := hex.EncodeToString(codeRelaySet)
-	if deployedCodeRelaySet != hexCodeRelaySet {
-		t.Errorf("Deployed code mismatch. actualDeployedCode: %v expectedDeployedCode: %v", hexCodeRelaySet, deployedCodeRelaySet)
-	}
-}
-
-func TestGetValidatorList(t *testing.T) {
-	deployerAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	simBackend := simTestBackend(deployerAddr)
-	defer simBackend.Close()
-
-	relaySetContractAddr, relaysetContract, err := deployTestContract(t, abiJSONRelaySet, abiBinRelaySet, simBackend)
-	if err != nil {
-		t.Errorf("could not deploy err: %v contract: %v", err, relaysetContract)
-	}
-
-	validatorSetContract, err := NewValidatorSet(relaySetContractAddr, simBackend)
-	if err != nil {
-		t.Errorf("could not initiate validator set contract err: %v contractAddress: %v", err, relaySetContractAddr)
-	}
-
-	validatorList := validatorSetContract.GetValidators(nil)
-	if len(validatorList) != 0 {
-		t.Errorf("wrong result found for validator list. err: %v contractAddress: %v", err, relaySetContractAddr)
-	}
-
-}
+//func TestValidatorContractDeployment(t *testing.T) {
+//	deployerAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+//	simBackend := simTestBackend(deployerAddr)
+//	defer simBackend.Close()
+//
+//	relaySetContractAddr, relaysetContract, err := deployTestContract(t, abiJSONRelaySet, abiBinRelaySet, simBackend)
+//	if err != nil {
+//		t.Errorf("could not deploy err: %v contract: %v", err, relaysetContract)
+//	}
+//
+//	bgCtx := context.Background()
+//	codeRelaySet, err := simBackend.CodeAt(bgCtx, relaySetContractAddr,nil)
+//	hexCodeRelaySet := hex.EncodeToString(codeRelaySet)
+//	if deployedCodeRelaySet != hexCodeRelaySet {
+//		t.Errorf("Deployed code mismatch. actualDeployedCode: %v expectedDeployedCode: %v", hexCodeRelaySet, deployedCodeRelaySet)
+//	}
+//}
+//
+//func TestGetValidatorList(t *testing.T) {
+//	deployerAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+//	simBackend := simTestBackend(deployerAddr)
+//	defer simBackend.Close()
+//
+//	relaySetContractAddr, relaysetContract, err := deployTestContract(t, abiJSONRelaySet, abiBinRelaySet, simBackend)
+//	if err != nil {
+//		t.Errorf("could not deploy err: %v contract: %v", err, relaysetContract)
+//	}
+//
+//	validatorSetContract, err := NewValidatorSet(relaySetContractAddr, simBackend)
+//	if err != nil {
+//		t.Errorf("could not initiate validator set contract err: %v contractAddress: %v", err, relaySetContractAddr)
+//	}
+//
+//	validatorList := validatorSetContract.GetValidators(nil)
+//	if len(validatorList) != 0 {
+//		t.Errorf("wrong result found for validator list. err: %v contractAddress: %v", err, relaySetContractAddr)
+//	}
+//
+//}
 

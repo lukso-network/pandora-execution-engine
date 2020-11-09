@@ -17,7 +17,6 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"math/big"
 
@@ -273,12 +272,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 // TransitionDBForSystemCall will transact when calling from system address to call for state change of
 // system contract
 func (st *StateTransition) TransitionDBForSystemCall() (*ExecutionResult, error) {
-	log.Debug("Calling transitionDBForSystemCall")
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	log.Debug("Calling evm SystemCallCode method", "sender", sender, "address", st.to())
 	ret, vmerr := st.evm.SystemCallCode(sender, st.to(), st.data, st.value, st.gas)
-	log.Debug("Getting result from system contract", "ret", ret, "vmerr", vmerr)
 	return &ExecutionResult{
 		UsedGas:    0,
 		Err:        vmerr,

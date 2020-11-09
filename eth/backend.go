@@ -220,6 +220,13 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+	// Initiate validator set contract for aura engine
+	auraEngine, isAuraEngine := eth.engine.(*aura.Aura)
+	if isAuraEngine {
+		log.Info("Initialising validator set contract")
+		auraEngine.InitValidatorSetContract(eth.BlockChain(), eth.chainDb, chainConfig)
+	}
+
 	return eth, nil
 }
 
@@ -475,9 +482,7 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-
-		auraEngine.InitValidatorSetContract(s.blockchain, s.chainDb, s.blockchain.Config())
-		auraEngine.Authorize(eb, wallet.SignData, wallet.SignTx, s.APIBackend.ChainConfig().ChainID)
+		auraEngine.Authorize(eb, wallet.SignData)
 
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.

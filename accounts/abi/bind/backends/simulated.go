@@ -72,6 +72,8 @@ type SimulatedBackend struct {
 	events *filters.EventSystem // Event system for filtering log events live
 
 	config *params.ChainConfig
+	header *types.Header		// Current header
+	stateDB  *state.StateDB
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
@@ -92,14 +94,12 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 }
 
 func NewSimulatedBackendWithChain(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) *SimulatedBackend {
-	log.Debug("in simulated.go file")
 	backend := &SimulatedBackend{
 		database:   chainDb,
 		blockchain: chain,
 		config:     config,
 		events:     filters.NewEventSystem(&filterBackend{chainDb, chain}, false),
 	}
-	//backend.rollback()
 	return backend
 }
 
@@ -401,20 +401,15 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-
 	// Checking from address. if it comes from system address
-	// then the transacton flow will be different
+	// then flow will be different and for system call, no gas has been deducted from account.
 	if call.From == SYSTEM_ADDRESS {
-		log.Debug("Calling systemCallContract")
-		res, err := b.systemCallContract(call, b.blockchain.CurrentBlock(), stateDB)
+		res, err := b.systemCallContract(call, b.header, b.stateDB)
 		if err != nil {
-			log.Debug("Getting err when calling systemCallContract", "err", err, "res", res)
 			return res.Return(), res.Err
 		}
 		return res.Return(), res.Err
 	}
-
-
 	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
 	if err != nil {
 		return nil, err
@@ -551,9 +546,14 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	return hi, nil
 }
 
-// callContract implements common code between normal and pending contract calls.
-// state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+// PrepareCurrentState prepares the current stateDB and header
+func (b *SimulatedBackend) PrepareCurrentState(header *types.Header, stateDB *state.StateDB) {
+	b.header = header
+	b.stateDB = stateDB
+}
+
+// systemCallContract implements system contract method call
+func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, curHeader *types.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
@@ -567,7 +567,7 @@ func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, block *type
 	// Execute the call.
 	msg := callMsg{call}
 
-	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
+	evmContext := core.NewEVMContext(msg, curHeader, b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{})

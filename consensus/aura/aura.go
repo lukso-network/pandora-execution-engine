@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"io"
@@ -150,8 +149,6 @@ var (
 
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
-
-type SignTxFn func(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
 
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
@@ -530,17 +527,12 @@ func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (a *Aura) Authorize(signer common.Address, signFn SignerFn, signTxFn SignTxFn, chainID *big.Int) {
+func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
 	a.signer = signer
 	a.signFn = signFn
-
-	log.Debug("Setting singer, signTxFn and chainId", "signer", signer, "signTxFn", signTxFn, "chainID", chainID)
-	a.contract.signer = signer
-	a.contract.signTxFn = signTxFn
-	a.contract.chainID = chainID
 }
 
 // Function should be used if you want to wait until there is current validator turn
@@ -565,10 +557,6 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	log.Debug("Going to call getValidators method")
 	a.contract.GetValidators(block.Header().Number)
-
-	// Call to finalize change method one time for test
-	log.Debug("Going to call finalizeChange method")
-	a.contract.FinalizeChange(block.Header())
 
 	log.Trace("Starting sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
@@ -782,16 +770,16 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
+// todo Need to change here
 func (a *Aura) InitValidatorSetContract(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) {
-	log.Debug("No reason found. Feeling bad")
-	// todo Need to change here
-	// For validator set contract testing purpose
-	contractAddr := common.HexToAddress("0xe55CDFf3471f396EED96B19485095574b231409D")
-	backend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
-	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, backend)
+	contractAddr := common.HexToAddress("0x1107C970670a4A92e22e5Ee94601f607263d8838")
+	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, chain, chainDb, config)
 	if err != nil {
 		log.Error("Failed to initiate contract instance", "address", contractAddr)
 	}
-	log.Debug("Sucessfully setup simulated backed for interacting with contract")
 	a.contract = validatorContract
+}
+
+func (a *Aura) CallFinalizeMethod(header *types.Header, state *state.StateDB,) {
+	a.contract.FinalizeChange(header, state)
 }
