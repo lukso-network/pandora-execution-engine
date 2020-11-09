@@ -220,12 +220,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
-	// Initiate validator set contract for aura engine
-	auraEngine, isAuraEngine := eth.engine.(*aura.Aura)
-	if isAuraEngine {
-		log.Info("Initialising validator set contract")
-		auraEngine.InitValidatorSetContract(eth.BlockChain(), eth.chainDb, chainConfig, auraEngine)
-	}
 
 	return eth, nil
 }

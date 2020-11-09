@@ -17,6 +17,10 @@
 package params
 
 import (
+	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"math/big"
 	"reflect"
 	"testing"
@@ -78,4 +82,20 @@ func TestCheckCompatible(t *testing.T) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nhead: %v\nerr: %v\nwant: %v", test.stored, test.new, test.head, err, test.wantErr)
 		}
 	}
+}
+
+func TestValidatorSetDeserialization(t *testing.T)  {
+	validatorSetJSON, err := ioutil.ReadFile("testdata/validatorset.json")
+	if err != nil {
+		t.Fatalf("could not read file: %v", err)
+	}
+
+	var authority ValidatorSet
+	err = json.Unmarshal(validatorSetJSON, &authority)
+	if err != nil {
+		t.Errorf("could not get code at test addr: %v", err)
+	}
+	multi := authority.Multi[20]
+	contractAddr := multi.Contract
+	assert.Equal(t, contractAddr, common.HexToAddress("0xc6d9d2cd449a754c494264e1809c50e34d64562b"))
 }

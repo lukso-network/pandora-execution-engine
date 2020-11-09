@@ -231,9 +231,12 @@ var (
 		Aura: &AuraConfig{
 			Period: 15,
 			Epoch:  30000,
-			Authorities: []common.Address{
-				common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07"),
-				common.HexToAddress("0x00faa37564140c1a5e96095f05466b9f73441e44"),
+			Authorities: ValidatorSet{
+				Multi: map[uint64]ValidatorSet {
+					0: ValidatorSet{
+						List: []common.Address{common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07")},
+					},
+				},
 			},
 			Difficulty: big.NewInt(131072),
 		},
@@ -274,7 +277,7 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
-	AuraProtocolChanges = &ChainConfig{big.NewInt(5), big.NewInt(2), nil, false, big.NewInt(2), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, nil, nil, &AuraConfig{Period: 15, Epoch: 30000, Authorities: []common.Address{common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942")}, Difficulty: big.NewInt(131072)}}
+	AuraProtocolChanges = &ChainConfig{big.NewInt(5), big.NewInt(2), nil, false, big.NewInt(2), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, nil, nil, &AuraConfig{Period: 15, Epoch: 30000, Authorities: ValidatorSet{ List: []common.Address{common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942")}}, Difficulty: big.NewInt(131072)}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -380,9 +383,16 @@ type Signatures []Signature
 type AuraConfig struct {
 	Period      uint64           `json:"period"`      // Number of seconds between blocks to enforce
 	Epoch       uint64           `json:"epoch"`       // Epoch length to reset votes and checkpoint
-	Authorities []common.Address `json:"authorities"` // list of addresses of authorities
+	Authorities ValidatorSet	 `json:"authorities"` // list of addresses of authorities
 	Difficulty  *big.Int         `json:"difficulty"`  // Constant block difficulty
 	Signatures  Signatures       `json:"signatures"`
+}
+
+type ValidatorSet struct {
+	List 			[]common.Address		`json:"list"`      		// Address list of validators
+	Contract		common.Address			`json:"contract"`      	// Address of a contract that indicates the list of authorities and enables reporting of theor misbehaviour using transactions.
+	SafeContract	common.Address			`json:"safeContract"`   // Address of a contract that indicates the list of authorities.
+	Multi			map[uint64]ValidatorSet	`json:"multi"`      	// A map of starting blocks for each validator set.
 }
 
 // String implements the stringer interface, returning the consensus engine details.

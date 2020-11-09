@@ -34,10 +34,12 @@ func init() {
 	auraChainConfig = &params.AuraConfig{
 		Period: 5,
 		Epoch:  500,
-		Authorities: []common.Address{
-			testBankAddress,
-			crypto.PubkeyToAddress(authority1.PublicKey),
-			crypto.PubkeyToAddress(authority2.PublicKey),
+		Authorities: params.ValidatorSet {
+			List: []common.Address {
+				testBankAddress,
+				crypto.PubkeyToAddress(authority1.PublicKey),
+				crypto.PubkeyToAddress(authority2.PublicKey),
+			},
 		},
 		Difficulty: big.NewInt(int64(131072)),
 		Signatures: nil,
@@ -49,7 +51,7 @@ func init() {
 	signerFunc := func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), testBankKey)
 	}
-	auraEngine.Authorize(testBankAddress, signerFunc, nil, nil)
+	auraEngine.Authorize(testBankAddress, signerFunc)
 }
 
 func TestAura_CheckStep(t *testing.T) {
@@ -107,8 +109,10 @@ func TestAura_CountClosestTurn(t *testing.T) {
 		auraChainConfig = &params.AuraConfig{
 			Period: 5,
 			Epoch:  500,
-			Authorities: []common.Address{
-				crypto.PubkeyToAddress(randomValidatorKey.PublicKey),
+			Authorities: params.ValidatorSet {
+					List: []common.Address {
+						crypto.PubkeyToAddress(randomValidatorKey.PublicKey),
+					},
 			},
 			Difficulty: big.NewInt(int64(131072)),
 			Signatures: nil,
@@ -222,7 +226,7 @@ func TestAura_Seal(t *testing.T) {
 	assert.Empty(t, header.Seal)
 
 	// Max timeout for next turn to start sealing
-	timeout := len(auraEngine.config.Authorities) * int(auraEngine.config.Period)
+	timeout := len(auraEngine.config.Authorities.List) * int(auraEngine.config.Period)
 	assert.Nil(t, err)
 
 	// Seal the block
@@ -294,9 +298,11 @@ func TestAura_VerifySeal(t *testing.T) {
 	var aura Aura
 	auraConfig := &params.AuraConfig{
 		Period: uint64(5),
-		Authorities: []common.Address{
-			common.HexToAddress("0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf"),
-			common.HexToAddress("0xafe443af9d1504de4c2d486356c421c160fdd7b1"),
+		Authorities: params.ValidatorSet {
+			List: []common.Address {
+					common.HexToAddress("0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf"),
+					common.HexToAddress("0xafe443af9d1504de4c2d486356c421c160fdd7b1"),
+			},
 		},
 	}
 	aura.config = auraConfig

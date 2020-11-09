@@ -19,18 +19,18 @@ var SYSTEM_ADDRESS = common.HexToAddress("0xffffffffffffffffffffffffffffffffffff
 
 // RelaySet is a Go wrapper around an on-chain validator set contract.
 type ValidatorSetContract struct {
-	address  		common.Address		// contract address
-	contract 		*validatorset.ValidatorSet
-	backend 		bind.ContractBackend // Smart contract backend
-	ValidatorList 	[]common.Address
-	eventCh 		chan *validatorset.ValidatorSetInitiateChange
-	exitCh          chan struct{}
-	auraEngine		*Aura
+	address  				common.Address		// contract address
+	contract 				*validatorset.ValidatorSet
+	backend 				bind.ContractBackend // Smart contract backend
+	pendingValidatorList 	[]common.Address
+	eventCh 				chan *validatorset.ValidatorSetInitiateChange
+	exitCh          		chan struct{}
+	auraEngine				*Aura
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, aura *Aura) (*ValidatorSetContract, error) {
+	log.Info("Signal for switch to contract-based validator set")
 	simBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
-	log.Debug("Getting simulated backed", "backend", simBackend)
 
 	c, err := validatorset.NewValidatorSet(contractAddr, simBackend)
 	if err != nil {
@@ -45,6 +45,9 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.Bloc
 		exitCh: make(chan struct{}),
 		auraEngine: aura,
 	}
+
+	// Activated validator set contract
+	contract.FinalizeChange()
 
 	go contract.watchingInitiateChangeLoop()
 	return contract, nil
@@ -67,8 +70,7 @@ func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Addr
 		return nil
 	}
 	log.Debug("Calling validator list.", "validatorList", validatorList)
-	v.ValidatorList = validatorList
-	return v.ValidatorList
+	return validatorList
 }
 
 // System call - finalizeChange function
@@ -93,6 +95,8 @@ func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	v.auraEngine.validatorList = v.pendingValidatorList
 	return tx, err
 }
 
@@ -115,8 +119,8 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 			if event == nil {
 				continue
 			}
-			pendingValidatorList := event.NewSet
-			log.Debug("Getting pending validator list", "pendingValidatorList", pendingValidatorList)
+			v.pendingValidatorList = event.NewSet
+			log.Debug("Getting pending validator list", "pendingValidatorList", v.pendingValidatorList)
 			v.FinalizeChange()
 		case <-v.exitCh:
 			return

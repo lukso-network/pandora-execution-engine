@@ -143,7 +143,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Step:      stepBytes,
 			Signature: signature,
 		}
-		e.Authorize(testBankAddress, signerFunc, nil, nil)
+		e.Authorize(testBankAddress, signerFunc)
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
