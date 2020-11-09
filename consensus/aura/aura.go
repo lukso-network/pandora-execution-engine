@@ -195,6 +195,8 @@ type Aura struct {
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 	contract	*ValidatorSetContract
+	curHeader 	*types.Header
+	curStateDB	*state.StateDB
 }
 
 // New creates a AuthorityRound proof-of-authority consensus engine with the initial
@@ -216,6 +218,8 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
 		contract: 	nil,
+		curHeader:  nil,
+		curStateDB: nil,
 	}
 }
 
@@ -771,15 +775,16 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 }
 
 // todo Need to change here
-func (a *Aura) InitValidatorSetContract(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) {
+func (a *Aura) InitValidatorSetContract(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, aura *Aura) {
 	contractAddr := common.HexToAddress("0x1107C970670a4A92e22e5Ee94601f607263d8838")
-	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, chain, chainDb, config)
+	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, chain, chainDb, config, aura)
 	if err != nil {
 		log.Error("Failed to initiate contract instance", "address", contractAddr)
 	}
 	a.contract = validatorContract
 }
 
-func (a *Aura) CallFinalizeMethod(header *types.Header, state *state.StateDB,) {
-	a.contract.FinalizeChange(header, state)
+func (a *Aura) SetCurHeaderAndState(header *types.Header, state *state.StateDB) {
+	a.curHeader = header
+	a.curStateDB = state
 }

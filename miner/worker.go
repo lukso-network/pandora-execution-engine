@@ -677,6 +677,12 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	w.current = env
+
+	// Initiate validator set contract for aura engine
+	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
+	if isAuraEngine {
+		auraEngine.SetCurHeaderAndState(w.current.header, w.current.state)
+	}
 	return nil
 }
 
@@ -995,11 +1001,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
-	// todo - this section will be removed here when getting contract address from genesis file
-	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
-	if isAuraEngine {
-		auraEngine.CallFinalizeMethod(w.current.header, w.current.state)
-	}
 	s := w.current.state.Copy()
 	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
 	if err != nil {

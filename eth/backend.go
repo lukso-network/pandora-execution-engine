@@ -224,7 +224,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	auraEngine, isAuraEngine := eth.engine.(*aura.Aura)
 	if isAuraEngine {
 		log.Info("Initialising validator set contract")
-		auraEngine.InitValidatorSetContract(eth.BlockChain(), eth.chainDb, chainConfig)
+		auraEngine.InitValidatorSetContract(eth.BlockChain(), eth.chainDb, chainConfig, auraEngine)
 	}
 
 	return eth, nil

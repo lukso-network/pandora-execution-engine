@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/aura/validatorset"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -24,9 +23,12 @@ type ValidatorSetContract struct {
 	contract 		*validatorset.ValidatorSet
 	backend 		bind.ContractBackend // Smart contract backend
 	ValidatorList 	[]common.Address
+	eventCh 		chan *validatorset.ValidatorSetInitiateChange
+	exitCh          chan struct{}
+	auraEngine		*Aura
 }
 
-func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) (*ValidatorSetContract, error) {
+func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, aura *Aura) (*ValidatorSetContract, error) {
 	simBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
 	log.Debug("Getting simulated backed", "backend", simBackend)
 
@@ -35,11 +37,17 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.Bloc
 		log.Debug("Getting error when initialize validator set contract", "error", err)
 		return nil, err
 	}
-	return &ValidatorSetContract{
+	contract := &ValidatorSetContract{
 		address: contractAddr,
 		contract: c,
 		backend: simBackend,
-	}, nil
+		eventCh: make(chan *validatorset.ValidatorSetInitiateChange),
+		exitCh: make(chan struct{}),
+		auraEngine: aura,
+	}
+
+	go contract.watchingInitiateChangeLoop()
+	return contract, nil
 }
 
 // ContractAddr returns the address of contract.
@@ -64,13 +72,19 @@ func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Addr
 }
 
 // System call - finalizeChange function
-func (v *ValidatorSetContract) FinalizeChange(header *types.Header, stateDB *state.StateDB) (*types.Transaction, error) {
+func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
 	simBackend, ok := v.backend.(*backends.SimulatedBackend)
 	if !ok {
 		log.Error("Getteing error in simulated backed")
 		return nil, nil
 	}
-	simBackend.PrepareCurrentState(header, stateDB)
+
+	if v.auraEngine.curHeader == nil || v.auraEngine.curStateDB == nil {
+		log.Error("Current header and state is nil")
+		return nil, nil
+	}
+	log.Debug("in finalizeChange method", "curHeader", v.auraEngine.curHeader.Number)
+	simBackend.PrepareCurrentState(v.auraEngine.curHeader, v.auraEngine.curStateDB)
 
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
@@ -80,4 +94,33 @@ func (v *ValidatorSetContract) FinalizeChange(header *types.Header, stateDB *sta
 		return nil, err
 	}
 	return tx, err
+}
+
+func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
+	opts := &bind.WatchOpts{
+		Start: nil,
+		Context: nil,
+	}
+	initChangeSub, err := v.contract.WatchInitiateChange(opts, v.eventCh, nil)
+	if err != nil {
+		log.Error("Getting error when start watching on event", "err", err)
+		return
+	}
+
+	for {
+		select {
+		case event := <-v.eventCh:
+			log.Debug("getting a new event", "event", event)
+			// Short circuit when receiving empty result.
+			if event == nil {
+				continue
+			}
+			pendingValidatorList := event.NewSet
+			log.Debug("Getting pending validator list", "pendingValidatorList", pendingValidatorList)
+			v.FinalizeChange()
+		case <-v.exitCh:
+			return
+		}
+	}
+	initChangeSub.Unsubscribe()
 }
