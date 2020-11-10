@@ -20,7 +20,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/aura"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -317,11 +316,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 				return nil, err
 			}
 		}
-	}
-	// For Aura, provisioning validator list
-	auraEngine, isAuraEngine := bc.engine.(*aura.Aura)
-	if isAuraEngine {
-		auraEngine.CheckingValidatorSetChange()
 	}
 
 	// The first thing the node will do is reconstruct the verification data for

@@ -22,10 +22,10 @@ type ValidatorSetContract struct {
 	address  				common.Address		// contract address
 	contract 				*validatorset.ValidatorSet
 	backend 				bind.ContractBackend // Smart contract backend
-	pendingValidatorList 	[]common.Address
 	eventCh 				chan *validatorset.ValidatorSetInitiateChange
 	exitCh          		chan struct{}
 	auraEngine				*Aura
+	isStarted				bool
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, aura *Aura) (*ValidatorSetContract, error) {
@@ -45,11 +45,6 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.Bloc
 		exitCh: make(chan struct{}),
 		auraEngine: aura,
 	}
-
-	// Activated validator set contract
-	contract.FinalizeChange()
-
-	go contract.watchingInitiateChangeLoop()
 	return contract, nil
 }
 
@@ -93,11 +88,21 @@ func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
 	}
 	tx, err := v.contract.FinalizeChange(opts)
 	if err != nil {
+		log.Error("Getting error from method calling", "err", err)
 		return nil, err
 	}
-
-	v.auraEngine.validatorList = v.pendingValidatorList
 	return tx, err
+}
+
+// Starting validator set contract
+func (v *ValidatorSetContract) StartWatchingEvent() {
+	// Activated validator set contract
+	v.FinalizeChange()
+	go v.watchingInitiateChangeLoop()
+}
+
+func (v *ValidatorSetContract) StopWatchingEvent() {
+	close(v.exitCh)
 }
 
 func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
@@ -112,6 +117,7 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 	}
 
 	for {
+		log.Debug("Watching on initiateChange event : 0x55252fa6eee4741b4e24a74a70e9c11fd2c2281df8d6ea13126ff845f7825c89" )
 		select {
 		case event := <-v.eventCh:
 			log.Debug("getting a new event", "event", event)
@@ -119,10 +125,15 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 			if event == nil {
 				continue
 			}
-			v.pendingValidatorList = event.NewSet
-			log.Debug("Getting pending validator list", "pendingValidatorList", v.pendingValidatorList)
-			v.FinalizeChange()
+			log.Debug("Getting pending validator list", "newValidatorSet", event.NewSet)
+			_, err := v.FinalizeChange()
+			if err == nil {
+				v.auraEngine.validatorList = event.NewSet
+				log.Debug("Getting validator list from finalizeMethod", "validatorList", v.auraEngine.validatorList)
+			}
+
 		case <-v.exitCh:
+			log.Debug("Going to shutdown watching")
 			return
 		}
 	}
