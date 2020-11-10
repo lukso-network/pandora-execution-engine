@@ -218,8 +218,49 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
-	// Sanitize recommit interval if the user-specified one is too short.
+	// Recommit should match specific engine demands
 	recommit := worker.config.Recommit
+
+	if nil != chainConfig.Aura {
+		recommit = time.Duration(int(chainConfig.Aura.Period)) * time.Second
+		worker.disablePreseal()
+		// skipSealHook will prevent sealing block that is too quick to its parent
+		worker.skipSealHook = func(t *task) (shouldSkip bool) {
+			pendingBlock := t.block
+			blockchain := eth.BlockChain()
+			currentHeader := blockchain.CurrentHeader()
+			interval := time.Duration(pendingBlock.Time()-currentHeader.Time) * time.Second
+			expectedInterval := time.Duration(chainConfig.Aura.Period) * time.Second
+			shouldSkip = expectedInterval > interval
+
+			if shouldSkip {
+				log.Info(
+					"skipping sealing, interval lower than expected",
+					"expected",
+					expectedInterval,
+					"current",
+					interval,
+				)
+
+				return
+			}
+
+			// It will panic if engine is other than aura
+			auraEngine := engine.(*aura.Aura)
+			allowed, _, _ := auraEngine.CheckStep(int64(t.block.Time()), 0)
+			shouldSkip = !allowed
+
+			if shouldSkip {
+				log.Info("skipping sealing, wrong step for sealer")
+			}
+
+			currentHeader.Time = uint64(time.Now().Unix())
+
+			return
+		}
+	}
+
+	// Sanitize recommit interval if the user-specified one is too short.
 	if recommit < minRecommitInterval {
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
@@ -341,7 +382,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
+	_, isAuraEngine := w.engine.(*aura.Aura)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -349,13 +390,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
-
-		// Prevent mining when sealer is not in his turn time frame
-		if isAuraEngine {
-			timestamp = time.Now().Unix()
-			_ = auraEngine.WaitForNextSealerTurn(timestamp)
-			timestamp = time.Now().Unix()
-		}
 
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
@@ -385,6 +419,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 		case <-timer.C:
 			if w.isRunning() && isAuraEngine {
+				timestamp = time.Now().Unix()
 				commit(true, commitInterruptResubmit)
 				continue
 			}
@@ -555,9 +590,16 @@ func (w *worker) taskLoop() {
 	for {
 		select {
 		case task := <-w.taskCh:
+			// Initiate validator set contract for aura engine
+			auraEngine, isAuraEngine := w.engine.(*aura.Aura)
+			if isAuraEngine {
+				auraEngine.SetCurHeaderAndState(w.chain, task.block, task.state)
+			}
+
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
+
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
@@ -570,6 +612,7 @@ func (w *worker) taskLoop() {
 			if w.skipSealHook != nil && w.skipSealHook(task) {
 				continue
 			}
+
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
@@ -684,11 +727,6 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.tcount = 0
 	w.current = env
 
-	// Initiate validator set contract for aura engine
-	auraEngine, isAuraEngine := w.engine.(*aura.Aura)
-	if isAuraEngine {
-		auraEngine.SetCurHeaderAndState(w.current.header, w.current.state)
-	}
 	return nil
 }
 

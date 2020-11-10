@@ -206,6 +206,8 @@ type Aura struct {
 	multiSet				map[uint64]*MultiSet
 	isContractActivated		bool
 	isEventLoopStarted		bool
+	loopCnt					*big.Int
+	flag 					bool
 }
 
 type MultiSet struct {
@@ -235,6 +237,7 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		curHeader:  nil,
 		curStateDB: nil,
 		multiSet: 	make(map[uint64]*MultiSet),
+		loopCnt: 	big.NewInt(0),
 	}
 
 	// parse authorities sturcture
@@ -261,7 +264,6 @@ func (a *Aura) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 func (a *Aura) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
-	log.Debug("Tracking-4: Invalid header encountered in Aura")
 	go func() {
 		for i, header := range headers {
 			err := a.verifyHeader(chain, header, headers[:i])
@@ -273,7 +275,6 @@ func (a *Aura) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 			}
 		}
 	}()
-	log.Debug("Tracking-5: Invalid header encountered")
 	return abort, results
 }
 
@@ -291,13 +292,6 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-
-	log.Debug("Extra data field", "extraData", header.Extra)
-	// Ensure that the extra-data contains a single signature
-	//signersBytes := len(header.Extra) - extraSeal
-	//if signersBytes != 0 {
-	//	return errInvalidExtraData
-	//}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -338,9 +332,8 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	expectedTime := parent.Time + a.config.Period - (a.config.Period / uint64(len(a.validatorList)))
+
 	if parent.Time > header.Time {
-		panic(fmt.Sprintf("GOT: %d, WANT: %d", expectedTime, header.Time))
 		return errInvalidTimestamp
 	}
 
@@ -520,14 +513,8 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 
 	auraParentHeader := &types.AuraHeader{}
 	err = auraParentHeader.FromHeader(parent)
-
 	header.Difficulty = calculateExpectedDifficulty(auraParentHeader.Step, auraHeader.Step, 0)
 
-	//TODO: this logic can also be improved and (potentially removed or replaced)
-	header.Time = parent.Time + a.config.Period
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
-	}
 	return nil
 }
 
@@ -542,6 +529,25 @@ func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+
+
+	//if a.isContractActivated {
+	//	if !a.contract.successCall {
+	//		log.Debug("From finalizeAndAssemble method for first time..................")
+	//		_, err := a.contract.FinalizeChange()
+	//		if err != nil {
+	//			log.Error("Getting error from calling finalize change method", "err", err)
+	//			a.contract.successCall = true
+	//		}
+	//	} else {
+	//		log.Debug("From CheckAndFinalizeChange method..................")
+	//		a.contract.CheckAndFinalizeChange()
+	//	}
+	//}
+
+
+
+
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -572,7 +578,13 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 
 	delay := closestSealTurnStart - fromTime
 
-	time.Sleep(time.Duration(delay) * time.Second)
+	if delay < 0 {
+		return
+	}
+
+	log.Warn(fmt.Sprintf("waiting: %d seconds for sealing turn, time now: %d", delay, fromTime))
+	<-time.After(time.Duration(delay) * time.Second)
+	log.Warn("this is time now", "timeNow", time.Now().Unix())
 	return
 }
 
@@ -580,7 +592,7 @@ func (a *Aura) WaitForNextSealerTurn(fromTime int64) (err error) {
 // the local signing credentials.
 // You should use Seal only if current sealer is within its turn, otherwise you will get error
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	log.Trace("Starting sealing in Aura engine", "block", block.Hash(), "curValidatorList", a.validatorList)
+	log.Trace("Starting sealing in Aura engine", "block", block.Hash(), "curValidatorList", a.validatorList, "stateRoot", block.Header().Root)
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -598,16 +610,9 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	// check if sealer will be on time
-	tolerance := a.config.Period - 1
-
-	if tolerance < 1 {
-		tolerance = a.config.Period
-	}
-
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
-	_, _, err := a.CountClosestTurn(timeNow, int64(tolerance))
+	_, _, err := a.CountClosestTurn(timeNow, int64(0))
 
 	if nil != err {
 		// not authorized to sign ever
@@ -618,7 +623,16 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	allowed, _, _ := a.CheckStep(int64(header.Time), 0)
 
 	if !allowed {
-		return errInvalidTimestamp
+		log.Warn(
+			"Could not seal, because timestamp of header is invalid: Header time: %d, time now: %d",
+			"headerTime",
+			header.Time,
+			"timeNow",
+			time.Now().Unix(),
+			"hash",
+			SealHash(header),
+		)
+		return nil
 	}
 
 	// Attach time of future execution, not current time
@@ -655,13 +669,6 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (a *Aura) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return chain.Config().Aura.Difficulty
-}
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
-// that a new block should have based on the previous blocks in the chain and the
-// current signer.
-func CalcDifficulty(chain consensus.ChainHeaderReader, snap *Snapshot, signer common.Address) *big.Int {
 	return chain.Config().Aura.Difficulty
 }
 
@@ -872,12 +879,46 @@ func (a *Aura) InitiateValidatorList(chain *core.BlockChain, config *params.Chai
 	return nil
 }
 
-func (a *Aura) SetCurHeaderAndState(header *types.Header, state *state.StateDB) {
-	a.curHeader = header
-	a.curStateDB = state
+func (a *Aura) SetCurHeaderAndState(chain *core.BlockChain, block *types.Block, stateDB *state.StateDB) {
+
+	_, err := a.contract.FinalizeChange(chain, a.db, chain.Config(), block.Header(), stateDB)
+	header := block.GetBlockHeader()
+	if err != nil {
+		log.Error("Getting error from calling finalize change method", "err", err)
+	} else {
+		log.Debug("Successfully calling finalizeChange method")
+		a.contract.successCall = true
+		log.Debug("Before calling statedb", "stateRoot", header.Root)
+		header.Root = stateDB.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		log.Debug("After calling statedb", "stateRoot", header.Root)
+	}
+
+
+	//if a.isContractActivated {
+	//	if !a.contract.successCall {
+	//		log.Debug("From finalizeAndAssemble method for first time..................")
+	//		_, err := a.contract.FinalizeChange()
+	//		if err != nil {
+	//			log.Error("Getting error from calling finalize change method", "err", err)
+	//		} else {
+	//			log.Debug("Successfully calling finalizeChange method")
+	//			a.contract.successCall = true
+	//
+	//			log.Debug("Before calling statedb", "stateRoot", block.Header().Root)
+	//			// No block rewards in PoA, so the state remains as is and uncles are dropped
+	//			root := a.curStateDB.IntermediateRoot(chain.Config().IsEIP158(block.Header().Number))
+	//			//block.Header().UncleHash = types.CalcUncleHash(nil)
+	//			log.Debug("After calling statedb", "stateRoot", root)
+	//		}
+	//	} else {
+	//		log.Debug("From CheckAndFinalizeChange method..................")
+	//		//a.contract.CheckAndFinalizeChange()
+	//	}
+	//}
+
 
 	log.Debug("In SetCurHeaderAndState", "curHeader", header.Number)
-	if a.isContractActivated && !a.isEventLoopStarted{
+	if a.isContractActivated && !a.isEventLoopStarted {
 		log.Debug("Starting watching event and first time call finalize method")
 		a.isEventLoopStarted = true
 		a.contract.StartWatchingEvent()

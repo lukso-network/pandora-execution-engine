@@ -8,11 +8,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/aura/validatorset"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+	"reflect"
 )
 
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
@@ -26,6 +28,8 @@ type ValidatorSetContract struct {
 	exitCh          		chan struct{}
 	auraEngine				*Aura
 	isStarted				bool
+	pendingValidatorList	[]common.Address
+	successCall				bool
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, aura *Aura) (*ValidatorSetContract, error) {
@@ -68,36 +72,63 @@ func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int) []common.Addr
 	return validatorList
 }
 
-// System call - finalizeChange function
-func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
-	simBackend, ok := v.backend.(*backends.SimulatedBackend)
-	if !ok {
-		log.Error("Getteing error in simulated backed")
+func (v *ValidatorSetContract) CheckAndFinalizeChange(
+	chain *core.BlockChain, chainDb ethdb.Database,
+	config *params.ChainConfig, header *types.Header,
+	stateDB *state.StateDB) (*types.Transaction, error) {
+
+	if len(v.pendingValidatorList) == 0 {
+		log.Debug("pending vaildator list size is zero....................")
 		return nil, nil
 	}
-
-	if v.auraEngine.curHeader == nil || v.auraEngine.curStateDB == nil {
-		log.Error("Current header and state is nil")
+	if reflect.DeepEqual(v.pendingValidatorList, v.auraEngine.validatorList) {
+		log.Debug("Same in validator list in finalize method", "pending", v.pendingValidatorList, v.auraEngine.validatorList)
 		return nil, nil
 	}
-	log.Debug("in finalizeChange method", "curHeader", v.auraEngine.curHeader.Number)
-	simBackend.PrepareCurrentState(v.auraEngine.curHeader, v.auraEngine.curStateDB)
-
-	opts := &bind.TransactOpts{
-		From: SYSTEM_ADDRESS,
-	}
-	tx, err := v.contract.FinalizeChange(opts)
+	_, err := v.FinalizeChange(chain, chainDb, config, header, stateDB)
 	if err != nil {
 		log.Error("Getting error from method calling", "err", err)
 		return nil, err
 	}
+	v.auraEngine.validatorList = v.pendingValidatorList
+	log.Debug("Now updated validator list", "curValidatorList", v.auraEngine.validatorList, "pending", v.pendingValidatorList)
+	return nil, nil
+}
+
+// System call - finalizeChange function
+func (v *ValidatorSetContract) FinalizeChange(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig, header *types.Header,
+	stateDB *state.StateDB) (*types.Transaction, error) {
+
+	simBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
+	contract, err := validatorset.NewValidatorSet(v.address, simBackend)
+	if err != nil {
+		log.Debug("Getting error when initialize validator set contract", "error", err)
+		return nil, err
+	}
+
+	//simBackend, ok := v.backend.(*backends.SimulatedBackend)
+	//if !ok {
+	//	log.Error("Getteing error in simulated backed")
+	//	return nil, nil
+	//}
+
+	//if v.auraEngine.curHeader == nil || v.auraEngine.curStateDB == nil {
+	//	log.Error("Current header and state is nil")
+	//	return nil, nil
+	//}
+	//log.Debug("in finalizeChange method", "curHeader", v.auraEngine.curHeader.Number)
+	simBackend.PrepareCurrentState(header, stateDB)
+
+	opts := &bind.TransactOpts{
+		From: SYSTEM_ADDRESS,
+	}
+	tx, err := contract.FinalizeChange(opts)
 	return tx, err
 }
 
 // Starting validator set contract
 func (v *ValidatorSetContract) StartWatchingEvent() {
 	// Activated validator set contract
-	v.FinalizeChange()
 	go v.watchingInitiateChangeLoop()
 }
 
@@ -126,12 +157,7 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 				continue
 			}
 			log.Debug("Getting pending validator list", "newValidatorSet", event.NewSet)
-			_, err := v.FinalizeChange()
-			if err == nil {
-				v.auraEngine.validatorList = event.NewSet
-				log.Debug("Getting validator list from finalizeMethod", "validatorList", v.auraEngine.validatorList)
-			}
-
+			v.pendingValidatorList = event.NewSet
 		case <-v.exitCh:
 			log.Debug("Going to shutdown watching")
 			return

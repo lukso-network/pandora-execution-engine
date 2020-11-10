@@ -610,6 +610,10 @@ func (b *Block) Hash() common.Hash {
 	return v
 }
 
+func (b *Block) GetBlockHeader() *Header {
+	return b.header
+}
+
 type Blocks []*Block
 
 type BlockBy func(b1, b2 *Block) bool

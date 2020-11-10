@@ -59,6 +59,21 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("Which consensus engine to use? (default = clique)")
 	fmt.Println(" 1. Ethash - proof-of-work")
 	fmt.Println(" 2. Clique - proof-of-authority")
+	fmt.Println(" 3. Aura   - proof-of-authority")
+
+	readSigners := func() (signers []common.Address) {
+		for {
+			if address := w.readAddress(); address != nil {
+				signers = append(signers, *address)
+				continue
+			}
+			if len(signers) > 0 {
+				break
+			}
+		}
+
+		return
+	}
 
 	choice := w.read()
 	switch {
@@ -83,15 +98,8 @@ func (w *wizard) makeGenesis() {
 		fmt.Println("Which accounts are allowed to seal? (mandatory at least one)")
 
 		var signers []common.Address
-		for {
-			if address := w.readAddress(); address != nil {
-				signers = append(signers, *address)
-				continue
-			}
-			if len(signers) > 0 {
-				break
-			}
-		}
+		signers = readSigners()
+
 		// Sort the signers and embed into the extra-data section
 		for i := 0; i < len(signers); i++ {
 			for j := i + 1; j < len(signers); j++ {
@@ -104,7 +112,27 @@ func (w *wizard) makeGenesis() {
 		for i, signer := range signers {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
+	case "3" == choice:
+		genesis.Difficulty = big.NewInt(1)
+		genesis.Config.Aura = &params.AuraConfig{
+			Period: 5,
+			Epoch:  30000,
+		}
+		fmt.Println()
+		fmt.Println("How many seconds should round take? (default = 5)")
+		genesis.Config.Aura.Period = uint64(w.readDefaultInt(5))
 
+		// We also need the initial list of signers
+		fmt.Println()
+		fmt.Println("Which accounts are allowed to seal? (mandatory at least one)")
+
+		signers := readSigners()
+		auraConfig := genesis.Config.Aura
+		auraConfig.Authorities = make([]common.Address, len(signers))
+
+		for i, signer := range signers {
+			genesis.Config.Aura.Authorities[i] = signer
+		}
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
 	}
