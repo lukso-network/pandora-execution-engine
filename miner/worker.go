@@ -593,7 +593,7 @@ func (w *worker) taskLoop() {
 			// Initiate validator set contract for aura engine
 			auraEngine, isAuraEngine := w.engine.(*aura.Aura)
 			if isAuraEngine {
-				auraEngine.SetCurHeaderAndState(w.chain, task.block, task.state)
+				auraEngine.CheckChange(w.chain, task.block, task.state)
 			}
 
 			if w.newTaskHook != nil {
@@ -684,7 +684,7 @@ func (w *worker) resultLoop() {
 			// Need to check the transition to validator set contract
 			auraEngine, isAuraEngine := w.engine.(*aura.Aura)
 			if isAuraEngine {
-				auraEngine.CheckingValidatorSetChange(w.chain, w.chainConfig)
+				auraEngine.TriggerValidatorMode(w.chain, w.chainConfig)
 			}
 
 			// Broadcast the block and announce chain insertion event
