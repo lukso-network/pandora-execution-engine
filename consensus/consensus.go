@@ -129,3 +129,16 @@ type PoW interface {
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
 }
+
+// Aura is
+type AuraEngine interface {
+	 Engine
+
+	 InitiateValidatorList(chain ChainHeaderReader) error
+
+	 TriggerValidatorMode(chain ChainHeaderReader) error
+
+	 CheckChange(chain ChainHeaderReader, header *types.Header, state *state.StateDB) (bool, error)
+
+	 MakeChange()
+}

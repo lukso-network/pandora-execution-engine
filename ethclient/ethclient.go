@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -35,6 +36,10 @@ import (
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
 	c *rpc.Client
+}
+
+func (ec *Client) PrepareCurrentState(header *types.Header, stateDB *state.StateDB) {
+	panic("implement me")
 }
 
 // Dial connects a client to the given URL.

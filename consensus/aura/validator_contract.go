@@ -1,18 +1,13 @@
 package aura
 
-//go:generate abigen --sol validatorset/ValidatorSet.sol --pkg validatorset --out validatorset/validatorsetcontract.go
+//go:generate abigen --sol validatorset/ValidatorSet.sol --pkg validatorset --out validatorset/validator_contract.go
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/aura/validatorset"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"reflect"
 )
 
@@ -31,12 +26,9 @@ type ValidatorSetContract struct {
 	successCall				bool
 }
 
-func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.BlockChain,
-	chainDb ethdb.Database, config *params.ChainConfig) (*ValidatorSetContract, error) {
-
+func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.ContractBackend) (*ValidatorSetContract, error) {
 	log.Info("Signal for switch to contract-based validator set")
-	simBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, config)
-	c, err := validatorset.NewValidatorSet(contractAddr, simBackend)
+	c, err := validatorset.NewValidatorSet(contractAddr, backend)
 
 	if err != nil {
 		log.Debug("Getting error when initialize validator set contract", "error", err)
@@ -46,7 +38,7 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, chain *core.Bloc
 	contract := &ValidatorSetContract{
 		address: contractAddr,
 		contract: c,
-		backend: simBackend,
+		backend: backend,
 		eventCh: make(chan *validatorset.ValidatorSetInitiateChange),
 		exitCh: make(chan struct{}),
 	}
@@ -76,27 +68,21 @@ func (v *ValidatorSetContract) GetValidators() []common.Address {
 
 // CheckAndFinalizeChange method will check and call FinalizeChange method so that pending list gets finalized
 // in validator set contract
-func (v *ValidatorSetContract) CheckAndFinalizeChange(header *types.Header, stateDB *state.StateDB) ([]common.Address, error) {
+func (v *ValidatorSetContract) CheckAndFinalizeChange() ([]common.Address, error) {
 	if len(v.pendingValidatorList) == 0 { return nil, nil }
 	if reflect.DeepEqual(v.pendingValidatorList, v.currentValidatorList) { return nil, nil }
-	_, err := v.FinalizeChange(header, stateDB)
+	_, err := v.FinalizeChange()
 	if err != nil {
 		log.Error("Getting error from method calling", "err", err)
 		return nil, err
 	}
-
+	v.pendingValidatorList = v.GetValidators()
 	log.Debug("Now updated validator list", "pending", v.pendingValidatorList)
 	return v.pendingValidatorList, nil
 }
 
 // System call - finalizeChange function
-func (v *ValidatorSetContract) FinalizeChange(header *types.Header, stateDB *state.StateDB) (*types.Transaction, error) {
-	simBackend, ok := v.backend.(*backends.SimulatedBackend)
-	if !ok {
-		log.Error("invalid simulated backed.", "invalidSimBackend", v.backend)
-		return nil, nil
-	}
-	simBackend.PrepareCurrentState(header, stateDB)
+func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
 	}

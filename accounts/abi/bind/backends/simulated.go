@@ -71,9 +71,9 @@ type SimulatedBackend struct {
 
 	events *filters.EventSystem // Event system for filtering log events live
 
-	config *params.ChainConfig
-	header *types.Header		// Current header
-	stateDB  *state.StateDB
+	config 		*params.ChainConfig
+	header 		*types.Header		// Current header
+	stateDB  	*state.StateDB
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
@@ -404,10 +404,19 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	// Checking from address. if it comes from system address
 	// then flow will be different and for system call, no gas has been deducted from account.
 	if call.From == SYSTEM_ADDRESS {
+		prevRoot := b.header.Root
+		log.Debug("before calling systemCallContract method", "prevStateRoot", b.header.Root, "block", b.header.Number)
 		res, err := b.systemCallContract(call, b.header, b.stateDB)
 		if err != nil {
 			return res.Return(), res.Err
 		}
+		b.header.Root = b.stateDB.IntermediateRoot(b.blockchain.Config().IsEIP158(b.header.Number))
+		log.Debug("successfully calling finalizeChange method",  "curStateRoot", b.header.Root)
+
+		if prevRoot == b.header.Root {
+			return res.Return(), errors.New("invalid state root!")
+		}
+
 		return res.Return(), res.Err
 	}
 	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)

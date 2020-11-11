@@ -19,6 +19,7 @@ package bind
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -50,6 +51,8 @@ type ContractCaller interface {
 	// ContractCall executes an Ethereum contract call with the specified data as the
 	// input.
 	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
+
+	PrepareCurrentState(header *types.Header, stateDB *state.StateDB)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.

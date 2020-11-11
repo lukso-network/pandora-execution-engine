@@ -590,10 +590,14 @@ func (w *worker) taskLoop() {
 	for {
 		select {
 		case task := <-w.taskCh:
+			if w.skipSealHook != nil && w.skipSealHook(task) {
+				continue
+			}
 			// Initiate validator set contract for aura engine
-			auraEngine, isAuraEngine := w.engine.(*aura.Aura)
-			if isAuraEngine {
-				auraEngine.CheckChange(w.chain, task.block, task.state)
+			var checkChangFlag bool
+			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
+				checkChangFlag, _ = auraEngine.CheckChange(w.chain, task.block.GetBlockHeader(), task.state)
+				log.Debug("new header root in worker", "newRoot", task.block.Header().Root)
 			}
 
 			if w.newTaskHook != nil {
@@ -609,9 +613,6 @@ func (w *worker) taskLoop() {
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
 
-			if w.skipSealHook != nil && w.skipSealHook(task) {
-				continue
-			}
 
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
@@ -619,6 +620,12 @@ func (w *worker) taskLoop() {
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
+			}
+
+			if checkChangFlag {
+				if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
+					auraEngine.MakeChange()
+				}
 			}
 		case <-w.exitCh:
 			interrupt()
@@ -682,9 +689,8 @@ func (w *worker) resultLoop() {
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Need to check the transition to validator set contract
-			auraEngine, isAuraEngine := w.engine.(*aura.Aura)
-			if isAuraEngine {
-				auraEngine.TriggerValidatorMode(w.chain, w.chainConfig)
+			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
+				auraEngine.TriggerValidatorMode(w.chain)
 			}
 
 			// Broadcast the block and announce chain insertion event
