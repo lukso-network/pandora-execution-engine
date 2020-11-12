@@ -594,16 +594,14 @@ func (w *worker) taskLoop() {
 				continue
 			}
 			// Initiate validator set contract for aura engine
-			var checkChangFlag bool
 			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
-				checkChangFlag, _ = auraEngine.CheckChange(w.chain, task.block.GetBlockHeader(), task.state)
+				auraEngine.CheckChange(w.chain, task.block.GetBlockHeader(), task.state)
 				log.Debug("new header root in worker", "newRoot", task.block.Header().Root)
 			}
 
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
-
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
@@ -613,7 +611,6 @@ func (w *worker) taskLoop() {
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
 
-
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
@@ -622,11 +619,10 @@ func (w *worker) taskLoop() {
 				log.Warn("Block sealing failed", "err", err)
 			}
 
-			if checkChangFlag {
-				if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
-					auraEngine.MakeChange()
-				}
+			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
+				auraEngine.MakeChange()
 			}
+
 		case <-w.exitCh:
 			interrupt()
 			return
@@ -732,7 +728,6 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	w.current = env
-
 	return nil
 }
 

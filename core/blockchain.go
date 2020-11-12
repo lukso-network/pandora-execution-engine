@@ -319,7 +319,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
-		log.Debug("initiate validator list for aura")
+		log.Debug(".....................initiate validator list for aura................")
 		auraEngine.InitiateValidatorList(bc)
 	}
 	// The first thing the node will do is reconstruct the verification data for
@@ -1461,15 +1461,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-
 	// Commit all cached state changes into underlying memory database.
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
 	triedb := bc.stateCache.TrieDB()
-
-	log.Debug("After commit statedb", "root", root)
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
@@ -1883,6 +1880,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
+
+			// Need to check state root mismatch reason: for system call for validator set contract,
+			// node need to do transact finalizeChange method call. For this transaction,
+			// state root will be changed. so check now, is this change for system call or not
+			if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
+				auraEngine.TriggerValidatorMode(bc)
+			}
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),

@@ -20,10 +20,7 @@ type ValidatorSetContract struct {
 	backend 				bind.ContractBackend // Smart contract backend
 	eventCh 				chan *validatorset.ValidatorSetInitiateChange
 	exitCh          		chan struct{}
-	isStarted				bool
 	pendingValidatorList	[]common.Address
-	currentValidatorList	[]common.Address
-	successCall				bool
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.ContractBackend) (*ValidatorSetContract, error) {
@@ -41,6 +38,7 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.Con
 		backend: backend,
 		eventCh: make(chan *validatorset.ValidatorSetInitiateChange),
 		exitCh: make(chan struct{}),
+		pendingValidatorList: nil,
 	}
 	go contract.watchingInitiateChangeLoop()
 	return contract, nil
@@ -68,15 +66,18 @@ func (v *ValidatorSetContract) GetValidators() []common.Address {
 
 // CheckAndFinalizeChange method will check and call FinalizeChange method so that pending list gets finalized
 // in validator set contract
-func (v *ValidatorSetContract) CheckAndFinalizeChange() ([]common.Address, error) {
-	if len(v.pendingValidatorList) == 0 { return nil, nil }
-	if reflect.DeepEqual(v.pendingValidatorList, v.currentValidatorList) { return nil, nil }
+func (v *ValidatorSetContract) CheckAndFinalizeChange(curValidatorList []common.Address, isFirstCall *bool) ([]common.Address, error) {
+	log.Debug("start to call finalizeChange method", "pendingValidator", v.pendingValidatorList, "curValidatorList", curValidatorList)
+	if reflect.DeepEqual(v.pendingValidatorList, curValidatorList) { return curValidatorList, nil }
 	_, err := v.FinalizeChange()
 	if err != nil {
 		log.Error("Getting error from method calling", "err", err)
-		return nil, err
+		return curValidatorList, err
 	}
-	v.pendingValidatorList = v.GetValidators()
+	if *isFirstCall {
+		v.pendingValidatorList = v.GetValidators()
+		*isFirstCall = false
+	}
 	log.Debug("Now updated validator list", "pending", v.pendingValidatorList)
 	return v.pendingValidatorList, nil
 }
