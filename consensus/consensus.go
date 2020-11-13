@@ -136,11 +136,7 @@ type AuraEngine interface {
 
 	 InitiateValidatorList(chain ChainHeaderReader) error
 
-	 TriggerValidatorMode(chain ChainHeaderReader) error
+	 CheckAndUpdateValidatorList(chain ChainHeaderReader) error
 
-	 CheckChange(chain ChainHeaderReader, header *types.Header, state *state.StateDB)
-
-	 MakeChange()
-
-	CallFinalizeChange(chain ChainHeaderReader, header *types.Header, state *state.StateDB) error
+	 CallFinalizeChange(chain ChainHeaderReader, header *types.Header, state *state.StateDB) error
 }

@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/aura/validatorset"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"reflect"
 )
 
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
@@ -21,6 +21,7 @@ type ValidatorSetContract struct {
 	eventCh 				chan *validatorset.ValidatorSetInitiateChange
 	exitCh          		chan struct{}
 	pendingValidatorList	[]common.Address
+	hasChange				bool
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.ContractBackend) (*ValidatorSetContract, error) {
@@ -39,6 +40,7 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.Con
 		eventCh: make(chan *validatorset.ValidatorSetInitiateChange),
 		exitCh: make(chan struct{}),
 		pendingValidatorList: nil,
+		hasChange: true,
 	}
 	go contract.watchingInitiateChangeLoop()
 	return contract, nil
@@ -61,39 +63,32 @@ func (v *ValidatorSetContract) GetValidators() []common.Address {
 		return nil
 	}
 	log.Debug("Calling validator list.", "validatorList", validatorList)
+
+	//todo - need to sort validatorList
 	return validatorList
 }
 
-// CheckAndFinalizeChange method will check and call FinalizeChange method so that pending list gets finalized
-// in validator set contract
-func (v *ValidatorSetContract) CheckAndFinalizeChange(curValidatorList []common.Address, isFirstCall *bool) ([]common.Address, error) {
-	log.Debug("start to call finalizeChange method", "pendingValidator", v.pendingValidatorList, "curValidatorList", curValidatorList)
-	if reflect.DeepEqual(v.pendingValidatorList, curValidatorList) { return curValidatorList, nil }
-	_, err := v.FinalizeChange()
-	if err != nil {
-		log.Error("Getting error from method calling", "err", err)
-		return curValidatorList, err
-	}
-	if *isFirstCall {
-		v.pendingValidatorList = v.GetValidators()
-		*isFirstCall = false
-	}
-	log.Debug("Now updated validator list", "pending", v.pendingValidatorList)
-	return v.pendingValidatorList, nil
-}
-
 // System call - finalizeChange function
-func (v *ValidatorSetContract) FinalizeChange() (*types.Transaction, error) {
+func (v *ValidatorSetContract) FinalizeChange(header *types.Header, state *state.StateDB) (*types.Transaction, error) {
+	if v.hasChange == false {
+		log.Debug("no validator list changes in this epoch!")
+		return nil, nil
+	}
+	v.backend.PrepareCurrentState(header, state)
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
 	}
 	tx, err := v.contract.FinalizeChange(opts)
-	return tx, err
+	if err != nil {
+		log.Error("getting error from method calling", "err", err)
+		return nil, err
+	}
+	v.hasChange = false
+	return tx, nil
 }
 
 // Starting validator set contract
 func (v *ValidatorSetContract) StartWatchingEvent() {
-	// Activated validator set contract
 	go v.watchingInitiateChangeLoop()
 }
 
@@ -123,6 +118,7 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 			}
 			log.Debug("Getting pending validator list", "newValidatorSet", event.NewSet)
 			v.pendingValidatorList = event.NewSet
+			v.hasChange = true
 		case <-v.exitCh:
 			log.Debug("Going to shutdown event watching")
 			return

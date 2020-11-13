@@ -1885,7 +1885,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			// node need to do transact finalizeChange method call. For this transaction,
 			// state root will be changed. so check now, is this change for system call or not
 			if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
-				auraEngine.TriggerValidatorMode(bc)
+				auraEngine.CheckAndUpdateValidatorList(bc)
 			}
 
 		case SideStatTy:

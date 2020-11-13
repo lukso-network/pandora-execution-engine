@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"io"
 	"math/big"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -208,7 +209,6 @@ type Aura struct {
 	multiSet				map[uint64]*MultiSet
 	isContractActivated		bool
 	ContractBackend			bind.ContractBackend // Smart contract backend
-	isFirstCall				bool
 }
 
 type MultiSet struct {
@@ -237,7 +237,6 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		proposals:  make(map[common.Address]bool),
 		Contract: 	nil,
 		multiSet: 	make(map[uint64]*MultiSet),
-		isFirstCall: true,
 	}
 
 	// parse authorities structure
@@ -456,10 +455,7 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	step := ts / a.config.Period
 	println(header.Number.Uint64())
 
-	if a.isContractActivated {
-		a.validatorList = a.Contract.GetValidators()
-		log.Debug("before calculating turn in verifySeal method", "validatorList", a.validatorList)
-	}
+	log.Debug("before calculating turn in verifySeal method", "validatorList", a.validatorList)
 
 	turn := step % uint64(len(a.validatorList))
 
@@ -789,7 +785,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // if lastTransition was contract then, stop the previous contract
 // Now, new transition is static then just update the validator list or new transition is new contract
 // then, initiate new contract and start running new contract to listen validator list
-func (a *Aura) TriggerValidatorMode(chain consensus.ChainHeaderReader) error {
+func (a *Aura) CheckAndUpdateValidatorList(chain consensus.ChainHeaderReader) error {
 	currentBlockNumber := chain.CurrentHeader().Number
 	lastTransition, nextTransition := a.transitionBlock(currentBlockNumber)
 	log.Debug("getting transition block number", "lastTransition", lastTransition, "nextTransition", nextTransition)
@@ -818,13 +814,19 @@ func (a *Aura) TriggerValidatorMode(chain consensus.ChainHeaderReader) error {
 
 		a.Contract = validatorContract
 		a.isContractActivated = true
-		a.isFirstCall = true
 
-		//todo - need to sort the validator list
 		a.validatorList = a.Contract.GetValidators()
-		log.Info("initial validator list from contract at certain block height", "blockNumber", currentBlockNumber, "initialValidatorList", a.Contract.GetValidators())
+		log.Info("initial validator list from contract at certain block height", "blockNumber", currentBlockNumber, "initialValidatorList", a.validatorList)
 		return nil
  	}
+
+	if a.isContractActivated {
+		curValidatorList := a.Contract.GetValidators()
+		if reflect.DeepEqual(curValidatorList, a.validatorList) == false {
+			a.validatorList = curValidatorList
+			log.Info("changing validator list",  "curValidatorList", a.validatorList)
+		}
+	}
  	return nil
 }
 
@@ -853,7 +855,6 @@ func (a *Aura) InitiateValidatorList(chain consensus.ChainHeaderReader) error {
 
 	a.Contract = validatorContract
 	a.isContractActivated = true
-	a.isFirstCall = true
 
 	//todo - need to sort the validator list
 	a.validatorList = a.Contract.GetValidators()
@@ -861,32 +862,10 @@ func (a *Aura) InitiateValidatorList(chain consensus.ChainHeaderReader) error {
 	return nil
 }
 
-// CheckChange method will check the validator set changes
-func (a *Aura) CheckChange(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) {
-	log.Debug("before calling PrepareCurrentState method", "chainHeader", chain.CurrentHeader().Number, "curHeader", header.Number)
-	if a.isContractActivated {
-		// todo- this code should be in a.Contract.FinalizeChange() method
-		a.ContractBackend.PrepareCurrentState(header, state)
-		pendingValidatorList, _ := a.Contract.CheckAndFinalizeChange(a.validatorList, &a.isFirstCall)
-		a.pendingValidatorList = pendingValidatorList
-	}
-}
-
-//
-func (a *Aura) MakeChange() {
-	if a.isContractActivated {
-		log.Info("changing validator list", "pendingValidatorList", a.pendingValidatorList, "curValidatorList", a.validatorList)
-		//todo - need to sort the validator list
-		a.validatorList = a.pendingValidatorList
-		a.pendingValidatorList = nil
-	}
-}
-
 func (a *Aura) CallFinalizeChange(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
 	log.Debug("before calling CallFinalizeChange method", "chainHeader", chain.CurrentHeader().Number, "curHeader", header.Number)
 	if a.isContractActivated {
-		a.ContractBackend.PrepareCurrentState(header, state)
-		_, err := a.Contract.FinalizeChange()
+		_, err := a.Contract.FinalizeChange(header, state)
 		if err != nil {
 			log.Error("Getting error from calling finalize change method", "err", err)
 			return  err
