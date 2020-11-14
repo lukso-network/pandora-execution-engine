@@ -134,9 +134,9 @@ type PoW interface {
 type AuraEngine interface {
 	 Engine
 
-	 InitiateValidatorList(chain ChainHeaderReader) error
+	InitValidatorSet(chain ChainHeaderReader) error
 
-	 CheckAndUpdateValidatorList(chain ChainHeaderReader) error
+	CheckAndUpdateValidatorSet(chain ChainHeaderReader, header *types.Header, state *state.StateDB) error
 
-	 CallFinalizeChange(chain ChainHeaderReader, header *types.Header, state *state.StateDB) error
+	 CallFinalizeChange(logs []*types.Log, header *types.Header, state *state.StateDB) error
 }

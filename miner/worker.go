@@ -593,14 +593,6 @@ func (w *worker) taskLoop() {
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
-			if w.skipSealHook != nil && w.skipSealHook(task) {
-				continue
-			}
-			// Initiate validator set contract for aura engine
-			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
-				auraEngine.CallFinalizeChange(w.chain, task.block.GetBlockHeader(), task.state)
-				log.Debug("new state root in header", "newRoot", task.block.Header().Root)
-			}
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
@@ -610,6 +602,9 @@ func (w *worker) taskLoop() {
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
 
+			if w.skipSealHook != nil && w.skipSealHook(task) {
+				continue
+			}
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
@@ -678,10 +673,6 @@ func (w *worker) resultLoop() {
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
-			// Need to check the transition to validator set contract
-			if auraEngine, ok := w.engine.(consensus.AuraEngine); ok {
-				auraEngine.CheckAndUpdateValidatorList(w.chain)
-			}
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 

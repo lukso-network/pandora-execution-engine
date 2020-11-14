@@ -132,9 +132,8 @@ var (
 	// turn of the signer.
 	errWrongDifficulty = errors.New("wrong difficulty")
 
-	// errInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
-	errInvalidTimestamp = errors.New("invalid timestamp")
+
+	errInvalidTimestamp = errors.New("timestamp older than parent")
 
 	// errInvalidVotingChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
@@ -209,6 +208,7 @@ type Aura struct {
 	multiSet				map[uint64]*MultiSet
 	isContractActivated		bool
 	ContractBackend			bind.ContractBackend // Smart contract backend
+	firstCall				bool
 }
 
 type MultiSet struct {
@@ -237,6 +237,7 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		proposals:  make(map[common.Address]bool),
 		Contract: 	nil,
 		multiSet: 	make(map[uint64]*MultiSet),
+		firstCall:  false,
 	}
 
 	// parse authorities structure
@@ -319,6 +320,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if number == 0 {
 		return nil
 	}
+
 	// Ensure that the block's timestamp isn't too close to its parent
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -326,15 +328,10 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+	if parent == nil || parent.Number.Uint64() != number-1 {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time > header.Time {
-		return errInvalidTimestamp
-	}
-
-	// All basic checks passed, verify the seal and return
-	return a.verifySeal(chain, header, parents)
+	return nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -449,16 +446,13 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	if err != nil {
 		return err
 	}
+
 	// Checking authorization
 	ts := header.Time
-
 	step := ts / a.config.Period
-	println(header.Number.Uint64())
-
-	log.Debug("before calculating turn in verifySeal method", "validatorList", a.validatorList)
-
 	turn := step % uint64(len(a.validatorList))
 
+	log.Debug("verify seal of current header", "chainHeader", chain.CurrentHeader().Number, "header", header.Number, "validator", a.validatorList[turn].Hex(), "signer", signer.Hex())
 	if signer != a.validatorList[turn] {
 		// not authorized to sign
 		return errUnauthorizedSigner
@@ -522,6 +516,8 @@ func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+
+	a.CheckAndUpdateValidatorSet(chain, header, state)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
@@ -530,6 +526,8 @@ func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+
+	a.CheckAndUpdateValidatorSet(chain, header, state)
 
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
@@ -707,8 +705,6 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
 	guardStepByUnixTime := func(unixTime int64) (allowed bool) {
 		step := uint64(unixTime) / a.config.Period
 		turn := step % uint64(len(a.validatorList))
-
-		log.Info("valid signer of this epoch", "validSignerAddr", a.validatorList[turn].Hex())
 		return a.signer == a.validatorList[turn]
 	}
 
@@ -785,53 +781,40 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // if lastTransition was contract then, stop the previous contract
 // Now, new transition is static then just update the validator list or new transition is new contract
 // then, initiate new contract and start running new contract to listen validator list
-func (a *Aura) CheckAndUpdateValidatorList(chain consensus.ChainHeaderReader) error {
+func (a *Aura) CheckAndUpdateValidatorSet(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
 	currentBlockNumber := chain.CurrentHeader().Number
 	lastTransition, nextTransition := a.transitionBlock(currentBlockNumber)
-	log.Debug("getting transition block number", "lastTransition", lastTransition, "nextTransition", nextTransition)
+	log.Debug("in CheckAndUpdateValidatorList method", "lastTransition", lastTransition, "nextTransition", nextTransition)
 
+	// before transition to validator set contract
 	if nextTransition != 0 && currentBlockNumber.Cmp(big.NewInt(int64(nextTransition - 1))) == 0 {
-		log.Debug("trigger initiates and changing in validator set read mode")
-		// stop the event watching loop
-		if a.isContractActivated {
-			a.Contract.StopWatchingEvent()
-		}
-
-		if !a.multiSet[nextTransition].hasContractAddr {
-			a.validatorList = a.multiSet[nextTransition].list
-			a.isContractActivated = false
-			log.Info("singling transition to new validator list from genesis", "newValidatorList", a.validatorList)
-			return nil
-		}
-
-		contractAddr := a.multiSet[nextTransition].contractAddr
-		log.Info("signaling transition to fresh validator set contract", "contractAddr", contractAddr)
-		validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, a.ContractBackend)
-		if err != nil {
-			log.Error("failed to initiate contract instance", "validatorSetContract", validatorContract)
+		if err := a.setupContract(chain.CurrentHeader().Number, nextTransition); err != nil {
+			log.Error("failed to initiate validator set contract", "error", err)
 			return err
 		}
-
-		a.Contract = validatorContract
-		a.isContractActivated = true
-
-		a.validatorList = a.Contract.GetValidators()
-		log.Info("initial validator list from contract at certain block height", "blockNumber", currentBlockNumber, "initialValidatorList", a.validatorList)
-		return nil
  	}
 
-	if a.isContractActivated {
-		curValidatorList := a.Contract.GetValidators()
-		if reflect.DeepEqual(curValidatorList, a.validatorList) == false {
-			a.validatorList = curValidatorList
-			log.Info("changing validator list",  "curValidatorList", a.validatorList)
+ 	// after transition to validator set contract
+	if a.isContractActivated && header.Number.Cmp(big.NewInt(int64(nextTransition))) == 0 {
+		log.Debug("calling FinalizeChange method for initial state change", "blockNumber", header.Number, "stateRoot", header.Root)
+		_, err := a.Contract.FinalizeChange(header, state)
+		if err != nil {
+			log.Error("got error from calling finalize change method", "err", err)
+			return err
 		}
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		log.Debug("changed header root for initial state state for contract", "blockNumber", header.Number, "stateRoot", header.Root)
 	}
+
+ 	//if a.isContractActivated {
+ 	//	a.validatorList = a.Contract.GetValidators(nil)
+	//}
  	return nil
 }
 
+
 // InitiateValidatorList initialize the validator list for initiating blockchain
-func (a *Aura) InitiateValidatorList(chain consensus.ChainHeaderReader) error {
+func (a *Aura) InitValidatorSet(chain consensus.ChainHeaderReader) error {
 	simBackend := backends.NewSimulatedBackendWithChain(chain.(*core.BlockChain), a.db, chain.Config())
 	a.ContractBackend = simBackend
 	curBlockNum := chain.CurrentHeader().Number
@@ -839,40 +822,70 @@ func (a *Aura) InitiateValidatorList(chain consensus.ChainHeaderReader) error {
 
 	log.Debug("in InitiateValidatorList method", "lastTransition", lastTransition, "nextTransition", nextTransition)
 
-	if !a.multiSet[lastTransition].hasContractAddr {
-		a.validatorList = a.multiSet[lastTransition].list
+	if err := a.setupContract(chain.CurrentHeader().Number, lastTransition); err != nil {
+		log.Error("failed to initiate validator set contract", "error", err)
+		return err
+	}
+	return nil
+}
+
+
+func (a *Aura) setupContract(blockNumber *big.Int, transitionBlockNum uint64) error {
+	log.Debug("trigger initiates and changing in validator set read mode")
+	if !a.multiSet[transitionBlockNum].hasContractAddr {
 		a.isContractActivated = false
-		log.Info("initiate new static validator list from genesis", "newValidatorList", a.validatorList)
+		a.validatorList = a.multiSet[transitionBlockNum].list
+		log.Info("singling transition to new validator list from genesis", "blockNumber", blockNumber, "initialValidatorList", a.validatorList)
 		return nil
 	}
 
-	contractAddr := a.multiSet[lastTransition].contractAddr
-	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, simBackend)
+	contractAddr := a.multiSet[transitionBlockNum].contractAddr
+	log.Info("signaling transition to validator set contract", "contractAddr", contractAddr)
+	validatorContract, err := NewValidatorSetWithSimBackend(contractAddr, a.ContractBackend)
 	if err != nil {
 		log.Error("failed to initiate contract instance", "validatorSetContract", validatorContract)
 		return err
 	}
-
 	a.Contract = validatorContract
 	a.isContractActivated = true
+	a.validatorList = a.Contract.GetValidators(nil)
 
-	//todo - need to sort the validator list
-	a.validatorList = a.Contract.GetValidators()
-	log.Info("initiate validator from validator set contract", "validatorList", a.validatorList)
+	log.Info("initial validator list from contract at certain block height", "blockNumber", blockNumber, "initialValidatorList", a.validatorList)
 	return nil
 }
 
-func (a *Aura) CallFinalizeChange(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
-	log.Debug("before calling CallFinalizeChange method", "chainHeader", chain.CurrentHeader().Number, "curHeader", header.Number)
+func (a *Aura) CallFinalizeChange(logs []*types.Log, header *types.Header, state *state.StateDB) error {
+	log.Debug("before calling CallFinalizeChange method","curHeader", header.Number)
 	if a.isContractActivated {
-		_, err := a.Contract.FinalizeChange(header, state)
-		if err != nil {
-			log.Error("Getting error from calling finalize change method", "err", err)
-			return  err
+		var newValidatorSet []common.Address
+
+		log.Debug("start parsing InitiateChangeEvent log")
+		for _, txlog := range logs {
+			if txlog.Address == a.Contract.address {
+				var logValue types.Log
+				logValue = *txlog
+				event, err := a.Contract.contract.ParseInitiateChange(logValue)
+				if err != nil {
+					log.Error("error in parsing tx log", "error", err)
+					return err
+				}
+				newValidatorSet = event.NewSet
+			}
+		}
+
+		log.Debug("got new validator set in CallFinalizeChange method", "curValidators", a.validatorList, "newValidatorSet", newValidatorSet, "firstCall", a.firstCall)
+		if reflect.DeepEqual(a.validatorList, newValidatorSet) == false{
+			_, err := a.Contract.FinalizeChange(header, state)
+			if err != nil {
+				log.Error("got error from calling finalize change method", "err", err)
+				return  err
+			}
+			a.validatorList = newValidatorSet
 		}
 	}
 	return nil
 }
+
 
 // todo - Need to implement according to recursive fashion
 // parseMulti retrieves validator list and makes a decision of using validator set contract

@@ -320,7 +320,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
 		log.Debug(".....................initiate validator list for aura................")
-		auraEngine.InitiateValidatorList(bc)
+		auraEngine.InitValidatorSet(bc)
 	}
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
@@ -1869,6 +1869,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
+		// Need to check state root mismatch reason: for system call for validator set contract,
+		// node need to do transact finalizeChange method call. For this transaction,
+		// state root will be changed. so check now, is this change for system call or not
+		if _, ok := bc.engine.(consensus.AuraEngine); ok {
+			if err := bc.engine.VerifySeal(bc, block.Header()); err != nil {
+				log.Error("unauthorized signer")
+				//bc.reportBlock(block, receipts, err)
+				//atomic.StoreUint32(&followupInterrupt, 1)
+				//return it.index, err
+			}
+		}
+
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1880,13 +1892,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
-
-			// Need to check state root mismatch reason: for system call for validator set contract,
-			// node need to do transact finalizeChange method call. For this transaction,
-			// state root will be changed. so check now, is this change for system call or not
-			if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
-				auraEngine.CheckAndUpdateValidatorList(bc)
-			}
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
@@ -1908,6 +1913,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		dirty, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, dirty)
 	}
+
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
 		if err := bc.addFutureBlock(block); err != nil {

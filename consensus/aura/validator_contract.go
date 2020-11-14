@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"math/big"
+	"sort"
 )
 
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
@@ -20,8 +22,6 @@ type ValidatorSetContract struct {
 	backend 				bind.ContractBackend // Smart contract backend
 	eventCh 				chan *validatorset.ValidatorSetInitiateChange
 	exitCh          		chan struct{}
-	pendingValidatorList	[]common.Address
-	hasChange				bool
 }
 
 func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.ContractBackend) (*ValidatorSetContract, error) {
@@ -33,17 +33,13 @@ func NewValidatorSetWithSimBackend(contractAddr common.Address, backend bind.Con
 		return nil, err
 	}
 
-	contract := &ValidatorSetContract{
+	return &ValidatorSetContract{
 		address: contractAddr,
 		contract: c,
 		backend: backend,
 		eventCh: make(chan *validatorset.ValidatorSetInitiateChange),
 		exitCh: make(chan struct{}),
-		pendingValidatorList: nil,
-		hasChange: true,
-	}
-	go contract.watchingInitiateChangeLoop()
-	return contract, nil
+	}, nil
 }
 
 // ContractAddr returns the address of contract.
@@ -57,23 +53,27 @@ func (v *ValidatorSetContract) Contract() *validatorset.ValidatorSet {
 }
 
 // Contract returns all the validator list.
-func (v *ValidatorSetContract) GetValidators() []common.Address {
-	validatorList, err := v.contract.ValidatorSetCaller.GetValidators(nil)
+func (v *ValidatorSetContract) GetValidators(blockNumber *big.Int ) []common.Address {
+	var opts *bind.CallOpts
+	if blockNumber != nil {
+		opts = &bind.CallOpts{
+			BlockNumber: blockNumber,
+		}
+	}
+	validatorList, err := v.contract.ValidatorSetCaller.GetValidators(opts)
 	if err != nil {
 		return nil
 	}
 	log.Debug("Calling validator list.", "validatorList", validatorList)
 
-	//todo - need to sort validatorList
+	sort.Slice(validatorList, func(i, j int) bool {
+		return validatorList[i].Hex() < validatorList[j].Hex()
+	})
 	return validatorList
 }
 
 // System call - finalizeChange function
 func (v *ValidatorSetContract) FinalizeChange(header *types.Header, state *state.StateDB) (*types.Transaction, error) {
-	if v.hasChange == false {
-		log.Debug("no validator list changes in this epoch!")
-		return nil, nil
-	}
 	v.backend.PrepareCurrentState(header, state)
 	opts := &bind.TransactOpts{
 		From: SYSTEM_ADDRESS,
@@ -83,7 +83,6 @@ func (v *ValidatorSetContract) FinalizeChange(header *types.Header, state *state
 		log.Error("getting error from method calling", "err", err)
 		return nil, err
 	}
-	v.hasChange = false
 	return tx, nil
 }
 
@@ -106,7 +105,6 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 		log.Error("Getting error when start watching on event", "err", err)
 		return
 	}
-
 	for {
 		log.Debug("Watching on initiateChange event : 0x55252fa6eee4741b4e24a74a70e9c11fd2c2281df8d6ea13126ff845f7825c89" )
 		select {
@@ -116,9 +114,7 @@ func (v *ValidatorSetContract) watchingInitiateChangeLoop() {
 			if event == nil {
 				continue
 			}
-			log.Debug("Getting pending validator list", "newValidatorSet", event.NewSet)
-			v.pendingValidatorList = event.NewSet
-			v.hasChange = true
+			log.Debug("getting new validator", "newValidatorSet", event.NewSet, "parentHash", event.ParentHash, "blockNumber", event.Raw.BlockNumber)
 		case <-v.exitCh:
 			log.Debug("Going to shutdown event watching")
 			return

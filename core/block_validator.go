@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -98,18 +97,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-
-		// Need to check state root mis-match reason: for system call for validator set contract,
-		// node need to do transact finalizeChange method call. For this transaction,
-		// state root will be changed. so check now, is this change for system call or not
-		if auraEngine, ok := v.engine.(consensus.AuraEngine); ok {
-			auraEngine.CallFinalizeChange(v.bc, block.Header(), statedb)
-			rootForSysCall := statedb.IntermediateRoot(v.config.IsEIP158(header.Number))
-			if rootForSysCall == header.Root {
-				log.Debug("no error when validating state root", "blockNumber", header.Number, "rootForSysCall", rootForSysCall, "root", header.Root)
-				return nil
-			}
-		}
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -124,6 +125,15 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	receipt.BlockHash = statedb.BlockHash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+
+	// Checking this transaction calls to validator set contract
+	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
+		if err := auraEngine.CallFinalizeChange(receipt.Logs, header, statedb); err == nil {
+			log.Info("Signal for transition within contract.", "blockNumber", header.Number, "stateRoot")
+			statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+			log.Debug("successfully called finalizeChanged method", "blockNumber", header.Number)
+		}
+	}
 
 	return receipt, err
 }
