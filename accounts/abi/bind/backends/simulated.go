@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// For calling validato set contract
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 // This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
@@ -93,6 +94,8 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	return backend
 }
 
+// NewSimulatedBackendWithChain creates a new binding backend based on the given chain
+// and uses a simulated blockchain for interacting with validator set smart cotract.
 func NewSimulatedBackendWithChain(chain *core.BlockChain, chainDb ethdb.Database, config *params.ChainConfig) *SimulatedBackend {
 	backend := &SimulatedBackend{
 		database:   chainDb,
@@ -401,8 +404,8 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	// Checking from address. if it comes from system address
-	// then flow will be different and for system call, no gas has been deducted from account.
+	// Checking the address from which the validator set contract calls. Validator set contract
+	// must be called from SYSTEM_ADDRESS
 	if call.From == SYSTEM_ADDRESS {
 		res, err := b.systemCallContract(call, b.header, b.stateDB)
 		if err != nil {
@@ -552,14 +555,14 @@ func (b *SimulatedBackend) PrepareCurrentState(header *types.Header, stateDB *st
 	b.stateDB = stateDB
 }
 
-// systemCallContract implements system contract method call
+// systemCallContract implements for instantiating evm context and evm for calling validator set contract
 func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, curHeader *types.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
 	}
 	if call.Gas == 0 {
-		call.Gas = 90000000
+		call.Gas = 300000000
 	}
 	if call.Value == nil {
 		call.Value = new(big.Int)

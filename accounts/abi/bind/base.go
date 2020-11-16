@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// For calling validato set contract
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -173,8 +174,7 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 	if err != nil {
 		return nil, err
 	}
-	// Checking from address. if it comes from system address
-	// then it does not create any transaction. It calls contract's method internally
+	// If the transaction comes from SYSTEM_ADDRESS, then it will call to validator set contract
 	if opts.From == SYSTEM_ADDRESS {
 		var (
 			msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}

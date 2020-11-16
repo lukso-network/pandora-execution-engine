@@ -52,6 +52,8 @@ type ContractCaller interface {
 	// input.
 	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
 
+	// PrepareCurrentState set the current stateDB for calling finalizeChange method of
+	// validator set contract.
 	PrepareCurrentState(header *types.Header, stateDB *state.StateDB)
 }
 

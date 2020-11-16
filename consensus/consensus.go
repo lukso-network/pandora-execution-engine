@@ -134,9 +134,9 @@ type PoW interface {
 type AuraEngine interface {
 	 Engine
 
-	InitValidatorSet(chain ChainHeaderReader) error
+	 // InitValidatorSet initialize validator set when blockchain will be configured
+	 InitValidatorSet(chain ChainHeaderReader) error
 
-	CheckAndUpdateValidatorSet(chain ChainHeaderReader, header *types.Header, state *state.StateDB) error
-
+	 // CallFinalizeChange calls finalizeChange method of the validator set contract
 	 CallFinalizeChange(logs []*types.Log, header *types.Header, state *state.StateDB) error
 }

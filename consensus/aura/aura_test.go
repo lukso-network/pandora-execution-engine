@@ -187,7 +187,7 @@ func TestAura_WaitForNextSealerTurn(t *testing.T) {
 		specificEngine := New(&params.AuraConfig{
 			Period:      0,
 			Epoch:       0,
-			Authorities: nil,
+			Authorities: params.ValidatorSet{},
 			Difficulty:  nil,
 			Signatures:  nil,
 		}, db)

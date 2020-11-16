@@ -275,7 +275,7 @@ func (evm *EVM) SystemCallCode(caller ContractRef, addr common.Address, input []
 	addrCopy := addr
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, AccountRef(addrCopy), value, 300000000)
+	contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 	contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 	ret, err = run(evm, contract, input, false)
 

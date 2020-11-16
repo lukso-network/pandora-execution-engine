@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -126,13 +127,15 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 
-	// Checking this transaction calls to validator set contract
+	// For validator set contract based AuRa consensus, need to accept change in validator list.
+	// When any validator set change tx comes, node needs to accept this change and update a flag in
+	// validator set contract. This flag value changes the storage trie of the contract.
 	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
-		if err := auraEngine.CallFinalizeChange(receipt.Logs, header, statedb); err == nil {
-			log.Info("Signal for transition within contract.", "blockNumber", header.Number, "stateRoot")
-			statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
-			log.Debug("successfully called finalizeChanged method", "blockNumber", header.Number)
+		if err := auraEngine.CallFinalizeChange(receipt.Logs, header, statedb); err != nil {
+			log.Error(fmt.Sprintf("Failed to call FinalizeChange method: %v", err))
+			return receipt, err
 		}
+		statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
 
 	return receipt, err

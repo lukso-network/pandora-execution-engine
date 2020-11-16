@@ -227,7 +227,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
-
 	return eth, nil
 }
 

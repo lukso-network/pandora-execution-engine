@@ -318,8 +318,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 	}
 
+	// initiate validator set contract at start up of the node
 	if auraEngine, ok := bc.engine.(consensus.AuraEngine); ok {
-		log.Debug(".....................initiate validator list for aura................")
 		auraEngine.InitValidatorSet(bc)
 	}
 	// The first thing the node will do is reconstruct the verification data for
@@ -1869,15 +1869,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		// Need to check state root mismatch reason: for system call for validator set contract,
-		// node need to do transact finalizeChange method call. For this transaction,
-		// state root will be changed. so check now, is this change for system call or not
+		// Calling VerifySeal after changing state. This flow is different than other consensus engine like
+		// PoW or Clique. For Aura, validator set can be changed through validator set contract
+		// and get updated validator list for list block, need to setup state of the contract and then gets
+		// validator list from contract to verify seal.
 		if _, ok := bc.engine.(consensus.AuraEngine); ok {
 			if err := bc.engine.VerifySeal(bc, block.Header()); err != nil {
-				log.Error("unauthorized signer")
-				//bc.reportBlock(block, receipts, err)
-				//atomic.StoreUint32(&followupInterrupt, 1)
-				//return it.index, err
+				bc.reportBlock(block, receipts, err)
+				atomic.StoreUint32(&followupInterrupt, 1)
+				return it.index, err
 			}
 		}
 
@@ -1913,7 +1913,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		dirty, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, dirty)
 	}
-
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
 		if err := bc.addFutureBlock(block); err != nil {

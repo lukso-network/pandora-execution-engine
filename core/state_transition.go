@@ -269,8 +269,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}, nil
 }
 
-// TransitionDBForSystemCall will transact when calling from system address to call for state change of
-// system contract
+// TransitionDBForSystemCall will transact when node calls to validator set contract from
+// SYSTEM_ADDRESS. This transition does not need any gas.
 func (st *StateTransition) TransitionDBForSystemCall() (*ExecutionResult, error) {
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
