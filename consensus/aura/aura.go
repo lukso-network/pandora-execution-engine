@@ -298,7 +298,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+	if parent == nil || parent.Number.Uint64() != number-1 {
 		return consensus.ErrUnknownAncestor
 	}
 	if parent.Time > header.Time {
