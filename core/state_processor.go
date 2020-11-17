@@ -135,7 +135,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 			log.Error(fmt.Sprintf("Failed to call FinalizeChange method: %v", err))
 			return receipt, err
 		}
-		statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
 
 	return receipt, err

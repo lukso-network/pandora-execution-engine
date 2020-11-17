@@ -1869,24 +1869,24 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		// Calling VerifySeal after changing state. This flow is different than other consensus engine like
-		// PoW or Clique. For Aura, validator set can be changed through validator set contract
-		// and get updated validator list for list block, need to setup state of the contract and then gets
-		// validator list from contract to verify seal.
-		if _, ok := bc.engine.(consensus.AuraEngine); ok {
-			if err := bc.engine.VerifySeal(bc, block.Header()); err != nil {
-				bc.reportBlock(block, receipts, err)
-				atomic.StoreUint32(&followupInterrupt, 1)
-				return it.index, err
-			}
-		}
-
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
+
+			// Calling VerifySeal after changing state. This flow is different than other consensus engine like
+			// PoW or Clique. For Aura, validator set can be changed through validator set contract
+			// and get updated validator list for list block, need to setup state of the contract and then gets
+			// validator list from contract to verify seal.
+			if _, ok := bc.engine.(consensus.AuraEngine); ok {
+				if err := bc.engine.VerifySeal(bc, block.Header()); err != nil {
+					bc.reportBlock(block, receipts, err)
+					atomic.StoreUint32(&followupInterrupt, 1)
+					return it.index, err
+				}
+			}
 
 			lastCanon = block
 

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"io"
 	"math/big"
-	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -709,6 +708,9 @@ func (a *Aura) CheckStep(unixTimeToCheck int64, timeTolerance int64) (
 ) {
 	guardStepByUnixTime := func(unixTime int64) (allowed bool) {
 		step := uint64(unixTime) / a.config.Period
+		if len(a.validatorList) == 0 {
+			return false
+		}
 		turn := step % uint64(len(a.validatorList))
 		return a.signer == a.validatorList[turn]
 	}
@@ -882,14 +884,14 @@ func (a *Aura) CallFinalizeChange(logs []*types.Log, header *types.Header, state
 		}
 
 		// calling finalizeChange method when new validator list is different than current validator list
-		if reflect.DeepEqual(a.validatorList, newValidatorSet) == false {
-			_, err := a.contract.FinalizeChange(header, state)
-			if err != nil {
-				return  err
-			}
-			a.validatorList = newValidatorSet
-			log.Info("Signal to change validator set in contract.", "current validators: ", a.validatorList)
+		//if reflect.DeepEqual(a.validatorList, newValidatorSet) == false {
+		_, err := a.contract.FinalizeChange(header, state)
+		if err != nil {
+			return  err
 		}
+		a.validatorList = newValidatorSet
+		log.Info("Signal to change validator set in contract.", "current validators: ", a.validatorList)
+		//}
 	}
 	return nil
 }
