@@ -791,14 +791,13 @@ func (a *Aura) checkAndUpdateValidatorSet(chain consensus.ChainHeaderReader, hea
 		log.Error(fmt.Sprintf("Invalid chain"))
 		return nil
 	}
-	currentBlockNumber := chain.CurrentHeader().Number
 
 	// lastTransition is a block number defines previous validator set retrieval mode and next will for next mode
-	_, nextTransition := a.transitionBlock(currentBlockNumber)
+	_, nextTransition := a.transitionBlock(header.Number)
 
 	// if current block of the chain is immediate previous block of the next transition then this condition
 	// will be true
-	if nextTransition != 0 && currentBlockNumber.Cmp(big.NewInt(int64(nextTransition - 1))) == 0 {
+	if header.Number.Cmp(big.NewInt(int64(nextTransition - 1))) == 0 {
 		if err := a.setupContract(chain, nextTransition); err != nil {
 			log.Error(fmt.Sprintf("Invalid validator set contract: %v", err))
 		}
