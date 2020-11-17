@@ -785,6 +785,10 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // the retrieval mode. Validator set retrieval mode depends on genesis configuration. Mode selection
 // confirms at the previous block of the certain block height which will be defined in genesis file.
 func (a *Aura) checkAndUpdateValidatorSet(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) error {
+	if chain.CurrentHeader() == nil {
+		log.Error(fmt.Sprintf("Invalid chain"))
+		return nil
+	}
 	currentBlockNumber := chain.CurrentHeader().Number
 
 	// lastTransition is a block number defines previous validator set retrieval mode and next will for next mode
