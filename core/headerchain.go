@@ -427,15 +427,41 @@ func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		typesHeader := header.(*types.Header)
+
+		// Lets fix the hash? It MUST be proper, no way to hashes not matching.
+		// If it is found, it should be valid.
+		if hash.String() == typesHeader.Hash().String() {
+			return typesHeader
+		}
+
+		log.Warn(
+			"Invalid header hash from cache, trying from db",
+			"expected",
+			hash.String(),
+			"got",
+			typesHeader.Hash().String(),
+		)
 	}
 	header := rawdb.ReadHeader(hc.chainDb, hash, number)
 	if header == nil {
 		return nil
 	}
+
 	// Cache the found header for next time and return
-	hc.headerCache.Add(hash, header)
-	return header
+	if hash.String() == header.Hash().String() {
+		hc.headerCache.Add(hash, header)
+		return header
+	}
+
+	log.Warn(
+		"Invalid header hash from database, returning nil",
+		"expected",
+		hash.String(),
+		"got",
+		header.Hash().String(),
+	)
+	return nil
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
