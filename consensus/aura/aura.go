@@ -743,7 +743,7 @@ func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
 	closestSealTurnStop int64,
 	err error,
 ) {
-	for _, _ = range a.validatorList {
+	for range a.validatorList {
 		allowed, turnTimestamp, nextTurnTimestamp := a.CheckStep(unixTimeToCheck, timeTolerance)
 
 		if allowed {

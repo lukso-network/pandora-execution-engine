@@ -45,7 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// For calling validato set contract
+// For calling validator set contract
 var SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 // This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
@@ -407,10 +407,11 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	// Checking the address from which the validator set contract calls. Validator set contract
 	// must be called from SYSTEM_ADDRESS
 	if call.From == SYSTEM_ADDRESS {
-		res, err := b.systemCallContract(call, b.header, b.stateDB)
-		if err != nil {
+		if b.header == nil && b.stateDB == nil {
+			res, _ := b.systemCallContract(call, b.blockchain.CurrentHeader(), stateDB)
 			return res.Return(), res.Err
 		}
+		res, _ := b.systemCallContract(call, b.header, b.stateDB)
 		return res.Return(), res.Err
 	}
 	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
