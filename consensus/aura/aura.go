@@ -23,7 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/p2p"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"sync"
 	"time"
@@ -718,6 +720,45 @@ func (a *Aura) CountClosestTurn(unixTimeToCheck int64, timeTolerance int64) (
 	}
 
 	err = errInvalidSigner
+
+	return
+}
+
+// This allows you to safely decode p2p message into desired headers
+// It is created, because multiple clients can have various rlp encoding/decoding mechanisms
+// For MixDigest and Nonce will produce error in decoding from parity,
+// so it would be great to have one place to decode those
+// It leaves no error, just simply empty headers set
+func HeadersFromP2PMessage(msg p2p.Msg) (headers []*types.Header) {
+	var (
+		bufferCopy  bytes.Buffer
+		auraHeaders []*types.AuraHeader
+		tempBytes   []byte
+	)
+	tee := io.TeeReader(msg.Payload, &bufferCopy)
+	readBytes, err := ioutil.ReadAll(tee)
+	err = rlp.Decode(bytes.NewReader(readBytes), &headers)
+
+	// Now run read of whole message, to do not have any leftovers
+	_, _ = msg.Payload.Read(tempBytes)
+
+	// Early return, we have read all the headers
+	if nil == err {
+		return
+	}
+
+	log.Warn("Encountered error in aura incoming header", "err", err)
+	// Remove invalid headers
+	headers = make([]*types.Header, 0)
+
+	// Fallback as auraHeaders
+	err = rlp.Decode(bytes.NewReader(readBytes), &auraHeaders)
+
+	for _, header := range auraHeaders {
+		if nil == err && nil != header {
+			headers = append(headers, header.TranslateIntoHeader())
+		}
+	}
 
 	return
 }
