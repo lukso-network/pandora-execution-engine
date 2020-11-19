@@ -273,8 +273,6 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return errInvalidUncleHash
 	}
 
-	log.Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
-
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
