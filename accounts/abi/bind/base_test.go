@@ -18,6 +18,7 @@ package bind_test
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 	"reflect"
 	"strings"
@@ -39,6 +40,8 @@ type mockCaller struct {
 	pendingCodeAtCalled       bool
 	pendingCallContractCalled bool
 }
+
+func (mc *mockCaller) PrepareCurrentState(header *types.Header, stateDB *state.StateDB) { }
 
 func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
 	mc.codeAtBlockNumber = blockNumber

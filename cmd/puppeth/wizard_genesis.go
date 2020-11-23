@@ -128,10 +128,10 @@ func (w *wizard) makeGenesis() {
 
 		signers := readSigners()
 		auraConfig := genesis.Config.Aura
-		auraConfig.Authorities = make([]common.Address, len(signers))
+		auraConfig.Authorities.List = make([]common.Address, len(signers))
 
 		for i, signer := range signers {
-			genesis.Config.Aura.Authorities[i] = signer
+			genesis.Config.Aura.Authorities.List[i] = signer
 		}
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)

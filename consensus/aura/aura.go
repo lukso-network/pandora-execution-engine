@@ -797,20 +797,30 @@ func (a *Aura) checkAndUpdateValidatorSet(chain consensus.ChainHeaderReader, hea
 
 	// if current block of the chain is immediate previous block of the next transition then this condition
 	// will be true
-	if header.Number.Cmp(big.NewInt(int64(nextTransition - 1))) == 0 {
+	//if header.Number.Cmp(big.NewInt(int64(nextTransition - 1))) == 0 {
+	//	if err := a.setupContract(chain, nextTransition); err != nil {
+	//		log.Error(fmt.Sprintf("Invalid validator set contract: %v", err))
+	//	}
+ 	//}
+
+	// if current block is same as the next transition then this condition will be true and prepare contract or
+	// prepare static validator list from configuration
+	if header.Number.Cmp(big.NewInt(int64(nextTransition))) == 0 {
+
 		if err := a.setupContract(chain, nextTransition); err != nil {
 			log.Error(fmt.Sprintf("Invalid validator set contract: %v", err))
+			return err
 		}
- 	}
 
- 	// calling finalizeChange method to set the initial set of the validator list in validator set contract
-	if a.isContractActivated && header.Number.Cmp(big.NewInt(int64(nextTransition))) == 0 {
-		_, err := a.contract.FinalizeChange(header, state)
-		if err != nil {
-			log.Error(fmt.Sprintf("Invalid state in validator set contract: %v", err))
+		if a.isContractActivated {
+			_, err := a.contract.FinalizeChange(header, state)
+			if err != nil {
+				log.Error(fmt.Sprintf("Invalid state in validator set contract: %v", err))
+				return err
+			}
+			// storage trie of validator set contract will be changed
+			header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 		}
-		// storage trie of validator set contract will be changed
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	}
  	return nil
 }

@@ -147,7 +147,7 @@ func NewParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	if nil != genesis.Config.Aura {
 		spec.Engine.AuthorityRound = &AuthorityRound{}
 		authorityRoundEngine := spec.Engine.AuthorityRound
-		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities
+		authorityRoundEngine.Params.Validators.List = genesis.Config.Aura.Authorities.List
 		authorityRoundEngine.Params.StepDuration = strconv.FormatUint(genesis.Config.Aura.Period, 10)
 	}
 
