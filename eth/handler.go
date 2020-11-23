@@ -17,12 +17,10 @@
 package eth
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus/aura"
-	"io"
 	"math"
 	"math/big"
 	"sync"
@@ -499,24 +497,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return err
 		}
 
+		// This fallback is done, because of how rlp is implemented in go-ethereum
+		// AuraEngine on other clients does not have MixDigest and Nonce, so encoding leads to error
+		// ideally there could be a switch with fallbacks for each consensus engine that will be implemented
 		if isAura {
-			var bufferCopy bytes.Buffer
-			tee := io.TeeReader(msg.Payload, &bufferCopy)
-			err = rlp.Decode(tee, &headers)
-
-			if nil != err {
-				log.Warn("Encountered error in aura incoming header", "err", err)
-			}
-
-			// Fallback as auraHeaders
-			var auraHeaders []*types.AuraHeader
-			err = msg.Decode(&auraHeaders)
-
-			for _, header := range auraHeaders {
-				if header != nil && err != nil {
-					headers = append(headers, header.TranslateIntoHeader())
-				}
-			}
+			headers = aura.HeadersFromP2PMessage(msg)
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that
 		if len(headers) == 0 && p.syncDrop != nil {
