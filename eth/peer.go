@@ -503,7 +503,25 @@ func (p *peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
+// SendBlockHeaders sends a batch of block headers to the remote peer.
 func (p *peer) SendBlockHeaders(headers []*types.Header) error {
+	if len(headers) > 0 && len(headers[0].Seal) > 0 {
+		auraHeaders := make([]*types.AuraHeader, 0)
+
+		for _, header := range headers {
+			auraHeader := types.AuraHeader{}
+			err := auraHeader.FromHeader(header)
+
+			if nil != err {
+				panic(err)
+			}
+
+			auraHeaders = append(auraHeaders, &auraHeader)
+		}
+
+		return p2p.Send(p.rw, BlockHeadersMsg, auraHeaders)
+	}
+
 	return p2p.Send(p.rw, BlockHeadersMsg, headers)
 }
 
