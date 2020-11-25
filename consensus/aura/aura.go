@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/validatorset"
 	"github.com/ethereum/go-ethereum/core"
 	"io"
 	"math/big"
@@ -208,6 +209,10 @@ type Aura struct {
 	multiSet				map[uint64]*MultiSet	// Maps block number to validator list or validator set smart contract
 	isContractActivated		bool					// Flag is used for dec
 	contractBackend			bind.ContractBackend 	// Smart contract backend
+
+	// New approach
+	validators 				validatorset.ValidatorSet
+	transition 				Transition
 }
 
 // MultiSet stores static validator list as well as contract address of certain
@@ -217,6 +222,12 @@ type MultiSet struct {
 	list 			[]common.Address
 	contractAddr 	common.Address
 	hasContractAddr	bool
+}
+
+type Transition struct {
+	blockHash 		common.Hash
+	blockNumber		*big.Int
+	force			bool
 }
 
 // New creates a AuthorityRound proof-of-authority consensus engine with the initial
@@ -239,6 +250,7 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		proposals:  make(map[common.Address]bool),
 		contract: 	nil,
 		multiSet: 	make(map[uint64]*MultiSet),
+		validators: validatorset.NewValidatorSet(),
 	}
 
 	// parse authorities from genesis to multi
