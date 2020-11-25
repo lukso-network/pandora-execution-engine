@@ -2,8 +2,11 @@ package validatorset
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
+	"math/big"
 	"testing"
 )
 
@@ -20,8 +23,8 @@ func TestNewValidatorSet(t *testing.T)  {
 	}
 
 	multiMap := make(map[uint64]ValidatorSet)
-	NewValidatorSet(multiMap, &authority, nil, nil, nil)
-	//multi := authority.Multi[20]
-	//contractAddr := multi.Contract
-	//assert.Equal(t, contractAddr, common.HexToAddress("0xc6d9d2cd449a754c494264e1809c50e34d64562b"))
+	validators := NewValidatorSet(multiMap, &authority)
+	validatorSet := validators.GetValidatorsByCaller(big.NewInt(11))
+
+	assert.Equal(t, validatorSet[0], common.HexToAddress("0xd6d9d2cd449a754c494264e1809c50e34d64562b"))
 }

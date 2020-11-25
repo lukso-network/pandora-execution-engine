@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -25,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -131,8 +129,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	// When any validator set change tx comes, node needs to accept this change and update a flag in
 	// validator set contract. This flag value changes the storage trie of the contract.
 	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
-		if err := auraEngine.CallFinalizeChange(receipt.Logs, header, statedb); err != nil {
-			log.Error(fmt.Sprintf("Failed to call FinalizeChange method: %v", err))
+		if err := auraEngine.SignalToChange(receipt.Logs, header); err != nil {
 			return receipt, err
 		}
 	}

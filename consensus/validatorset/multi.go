@@ -2,8 +2,10 @@ package validatorset
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"reflect"
@@ -21,17 +23,22 @@ func NewMulti(setMap map[uint64]ValidatorSet) *Multi {
 }
 
 func (multi *Multi) correctSet(parentBlockNum *big.Int) (ValidatorSet, uint64) {
+	prevBlockNumber := uint64(0)
+	prevValidator := multi.sets[0]
+
 	for key, value := range multi.sets {
 		if big.NewInt(int64(key)).Cmp(parentBlockNum) >= 0 {
 			log.Trace("Multi ValidatorSet retrieved for block", "blockHeight", key)
-			return value, key
+			break
 		}
+		prevBlockNumber = key
+		prevValidator = value
 	}
 	log.Error("constructor validation ensures that there is at least one validator set for block 0; block 0 is less than any uint;")
-	return nil, 0
+	return prevValidator, prevBlockNumber
 }
 
-func (multi *Multi) SignalToChange(first bool, logs []*types.Log, header *types.Header) bool {
+func (multi *Multi) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
 	validator, setBlockNumber := multi.correctSet(header.Number)
 	log.Debug("getting a validator set", "type", reflect.TypeOf(validator))
 
@@ -41,18 +48,20 @@ func (multi *Multi) SignalToChange(first bool, logs []*types.Log, header *types.
 
 func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) error {
 	validator, _ := multi.correctSet(header.Number)
-	log.Debug("getting a validator set", "type", reflect.TypeOf(validator))
-
 	return validator.FinalizeChange(header, state)
 }
 
-func (multi *Multi) GetValidatorsByCaller(header *types.Header) []common.Address {
-	validator, _ := multi.correctSet(header.Number)
-	log.Debug("getting a validator set", "type", reflect.TypeOf(validator))
-
-	return validator.GetValidatorsByCaller(header)
+func (multi *Multi) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
+	validator, _ := multi.correctSet(blockNumber)
+	log.Debug("validator set", "type", reflect.TypeOf(validator))
+	return validator.GetValidatorsByCaller(blockNumber)
 }
 
-func (multi *Multi) CountValidators() {
+func (multi *Multi) CountValidators() int {
 	panic("implement me")
+}
+
+func (multi *Multi) PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error {
+	validator, _ := multi.correctSet(header.Number)
+	return validator.PrepareBackend(header, chain, chainDb)
 }

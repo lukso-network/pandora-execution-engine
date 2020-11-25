@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
+	"math/big"
 )
 
 //go:generate abigen --sol res/ValidatorSet.sol --pkg validatorset --out res/validator_contract.go
@@ -24,21 +24,13 @@ type ValidatorSafeContract struct {
 	contract 			*validatorset.ValidatorSet
 }
 
-func NewValidatorSafeContract(contractAddr common.Address, chain *core.BlockChain,
-	chainDb ethdb.Database, chainConfig *params.ChainConfig) *ValidatorSafeContract {
-
-	simulatedBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, chainConfig)
-	c, err := validatorset.NewValidatorSet(contractAddr, simulatedBackend)
-	if err != nil {
-		return nil
-	}
+func NewValidatorSafeContract(contractAddr common.Address) *ValidatorSafeContract {
 	validators, _ := lru.NewARC(1024)
-
 	return &ValidatorSafeContract{
 		contractAddress: contractAddr,
 		validators: 	 validators,
-		backend: 		 simulatedBackend,
-		contract: 		 c,
+		backend: 		 nil,
+		contract: 		 nil,
 	}
 }
 
@@ -60,13 +52,18 @@ func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(logs []*types.Log) ([
 	return nil, false
 }
 
-func (vsc *ValidatorSafeContract) SignalToChange(first bool, logs []*types.Log, header *types.Header) bool {
+func (vsc *ValidatorSafeContract) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
 	if first {
 		log.Info("signalling transition to fresh contract.")
-		return true
+		validators := vsc.GetValidatorsByCaller(header.Number)
+
+		log.Info("Signal for switch to contract-based validator set.")
+		log.Trace("Initial contract validators", "validatorSet", validators)
+
+		return validators, true
 	}
-	_, hasSignal := vsc.parseInitiateChangeEvent(logs)
-	return hasSignal
+	validators, hasSignal := vsc.parseInitiateChangeEvent(logs)
+	return validators, hasSignal
 }
 
 func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *state.StateDB) error {
@@ -82,19 +79,36 @@ func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *st
 	return nil
 }
 
-func (vsc *ValidatorSafeContract) GetValidatorsByCaller(header *types.Header) []common.Address {
-	if validators, ok := vsc.validators.Get(header.ParentHash); ok {
+func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
+	if validators, ok := vsc.validators.Get(blockNumber); ok {
 		log.Trace("Set of validators obtained", "validators", validators)
 		return validators.([]common.Address)
 	}
 	if validators, err := vsc.contract.GetValidators(nil); err != nil {
 		log.Trace("Set of validators obtained", "validators", validators)
-		vsc.validators.Add(header.ParentHash, validators)
+		vsc.validators.Add(blockNumber, validators)
 		return validators
 	}
 	return nil
 }
 
-func (vsc *ValidatorSafeContract) CountValidators() {
+func (vsc *ValidatorSafeContract) CountValidators() int {
 	panic("implement me")
+}
+
+func (vsc *ValidatorSafeContract) PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error {
+	if vsc.backend == nil {
+		log.Trace("Preparing simulated backend for contract", "blockNumber", header.Number)
+
+		simulatedBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, chain.Config())
+		contract, err := validatorset.NewValidatorSet(vsc.contractAddress, simulatedBackend)
+
+		if err != nil {
+			return err
+		}
+
+		vsc.contract = contract
+		vsc.backend = simulatedBackend
+	}
+	return nil
 }
