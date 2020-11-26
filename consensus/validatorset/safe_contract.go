@@ -34,36 +34,43 @@ func NewValidatorSafeContract(contractAddr common.Address) *ValidatorSafeContrac
 	}
 }
 
-func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(logs []*types.Log) ([]common.Address, bool) {
-	for _, txlog := range logs {
-		// checks the transaction's from address
-		if txlog.Address == vsc.contractAddress {
-			log.Trace("detected epoch change event bloom")
+func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(receipts types.Receipts) ([]common.Address, bool) {
+	for _, receipt := range receipts {
+		for _, txlog := range receipt.Logs {
+			// checks the transaction's from address
+			if txlog.Address == vsc.contractAddress {
+				log.Debug("detected epoch change event bloom")
 
-			var logValue types.Log
-			logValue = *txlog
-			event, err := vsc.contract.ParseInitiateChange(logValue)
-			if err != nil { return nil, false }
+				var logValue types.Log
+				logValue = *txlog
+				event, err := vsc.contract.ParseInitiateChange(logValue)
+				if err != nil { return nil, false }
 
-			log.Info("Signal for transition within contract", "New List", event.NewSet)
-			return event.NewSet, true
+				log.Info("Signal for transition within contract", "New List", event.NewSet)
+				return event.NewSet, true
+			}
 		}
 	}
+
 	return nil, false
 }
 
-func (vsc *ValidatorSafeContract) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
+func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
 	if first {
-		log.Info("signalling transition to fresh contract.")
+		log.Debug("signalling transition to fresh contract.")
+		if err := vsc.PrepareBackend(header, chain, chainDb); err != nil {
+			log.Error("error when preparing backend for contract", "error", err)
+			return nil, false, true
+		}
 		validators := vsc.GetValidatorsByCaller(header.Number)
 
 		log.Info("Signal for switch to contract-based validator set.")
-		log.Trace("Initial contract validators", "validatorSet", validators)
+		log.Debug("Initial contract validators", "validatorSet", validators)
 
-		return validators, true
+		return validators, true, true
 	}
-	validators, hasSignal := vsc.parseInitiateChangeEvent(logs)
-	return validators, hasSignal
+	validators, hasSignal := vsc.parseInitiateChangeEvent(receipts)
+	return validators, hasSignal, false
 }
 
 func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *state.StateDB) error {
@@ -81,11 +88,12 @@ func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *st
 
 func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
 	if validators, ok := vsc.validators.Get(blockNumber); ok {
-		log.Trace("Set of validators obtained", "validators", validators)
+		log.Debug("Set of validators obtained", "validators", validators)
 		return validators.([]common.Address)
 	}
-	if validators, err := vsc.contract.GetValidators(nil); err != nil {
-		log.Trace("Set of validators obtained", "validators", validators)
+	validators, err := vsc.contract.GetValidators(nil)
+	if err == nil {
+		log.Debug("Set of validators obtained", "validators", validators)
 		vsc.validators.Add(blockNumber, validators)
 		return validators
 	}
@@ -98,7 +106,7 @@ func (vsc *ValidatorSafeContract) CountValidators() int {
 
 func (vsc *ValidatorSafeContract) PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error {
 	if vsc.backend == nil {
-		log.Trace("Preparing simulated backend for contract", "blockNumber", header.Number)
+		log.Debug("Preparing simulated backend for contract", "blockNumber", header.Number)
 
 		simulatedBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, chain.Config())
 		contract, err := validatorset.NewValidatorSet(vsc.contractAddress, simulatedBackend)

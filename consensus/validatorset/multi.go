@@ -8,42 +8,51 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
-	"reflect"
+	"sort"
 )
 
 type Multi struct {
-	sets map[uint64]ValidatorSet
+	sets map[int]ValidatorSet
 }
 
 
-func NewMulti(setMap map[uint64]ValidatorSet) *Multi {
+func NewMulti(setMap map[int]ValidatorSet) *Multi {
 	return &Multi{
 		sets: setMap,
 	}
 }
 
-func (multi *Multi) correctSet(parentBlockNum *big.Int) (ValidatorSet, uint64) {
-	prevBlockNumber := uint64(0)
-	prevValidator := multi.sets[0]
+func (multi *Multi) correctSet(blockNumber *big.Int) (ValidatorSet, int64) {
+	if len(multi.sets) == 0 {
+		log.Error("constructor validation ensures that there is at least one validator set for block 0; block 0 is less than any uint;")
+		panic("constructor validation ensures that there is at least one validator set for block 0")
+	}
 
-	for key, value := range multi.sets {
-		if big.NewInt(int64(key)).Cmp(parentBlockNum) >= 0 {
-			log.Trace("Multi ValidatorSet retrieved for block", "blockHeight", key)
+	setNumbers := make([]int, 0)
+	for key, _ := range multi.sets {
+		setNumbers = append(setNumbers, key)
+	}
+	sort.Slice(setNumbers, func(i, j int) bool {
+		return setNumbers[i] > setNumbers[j]
+	})
+
+	setNum := 0
+	for _, setNumber := range setNumbers {
+		if blockNumber.Cmp(big.NewInt(int64(setNumber))) >= 0 {
+			setNum = setNumber
 			break
 		}
-		prevBlockNumber = key
-		prevValidator = value
 	}
-	log.Error("constructor validation ensures that there is at least one validator set for block 0; block 0 is less than any uint;")
-	return prevValidator, prevBlockNumber
+	log.Debug("Multi ValidatorSet retrieved for block", "blockHeight", setNum)
+	return multi.sets[setNum], int64(setNum)
 }
 
-func (multi *Multi) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
+func (multi *Multi) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
 	validator, setBlockNumber := multi.correctSet(header.Number)
-	log.Debug("getting a validator set", "type", reflect.TypeOf(validator))
+	first = big.NewInt(setBlockNumber).Cmp(header.Number) == 0
 
-	first = big.NewInt(int64(setBlockNumber)).Cmp(header.Number) == 0
-	return validator.SignalToChange(first, logs, header)
+	log.Debug("signal to change", "current validator", validator, "blockNum", header.Number)
+	return validator.SignalToChange(first, receipts, header, chain, chainDb)
 }
 
 func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) error {
@@ -53,7 +62,7 @@ func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) e
 
 func (multi *Multi) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
 	validator, _ := multi.correctSet(blockNumber)
-	log.Debug("validator set", "type", reflect.TypeOf(validator))
+	log.Info("Current validator set ", "set", validator, "blockNumber", blockNumber)
 	return validator.GetValidatorsByCaller(blockNumber)
 }
 

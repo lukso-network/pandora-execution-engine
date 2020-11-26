@@ -204,10 +204,10 @@ type Aura struct {
 }
 
 type Transition struct {
-	blockHash 	common.Hash
-	blockNumber *big.Int
-	force 		bool
-	hasChanged	bool
+	blockHash 		common.Hash
+	blockNumber 	*big.Int
+	finalizeBlock 	*big.Int
+	hasChanged		bool
 }
 
 // New creates a AuthorityRound proof-of-authority consensus engine with the initial
@@ -228,10 +228,10 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		recents:    recents,
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
-		validators: validatorset.NewValidatorSet(make(map[uint64]validatorset.ValidatorSet), &config.Authorities),
+		validators: validatorset.NewValidatorSet(make(map[int]validatorset.ValidatorSet), &config.Authorities),
 		transition: &Transition{
 			blockNumber: 	big.NewInt(0),
-			force: 			false,
+			finalizeBlock: 	big.NewInt(0),
 			hasChanged: 	false,
 		},
 	}
@@ -444,7 +444,7 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	step := ts / a.config.Period
 	// println(header.Number.Uint64())
 
-	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number)
+	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
 	turn := step % uint64(len(a.validatorSet))
 
 	if signer != a.validatorSet[turn] {
@@ -521,6 +521,7 @@ func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
+	a.SignalToChange(receipts, header, chain)
 	a.FinalizeChange(header, chain, state)
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
@@ -580,7 +581,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number)
+	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
 
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
@@ -810,47 +811,41 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
-func (a *Aura) SignalToChange(logs []*types.Log, header *types.Header) error {
+func (a *Aura) SignalToChange(receipts types.Receipts, header *types.Header, chain consensus.ChainHeaderReader) error {
 	first := header.Number.Cmp(big.NewInt(0)) == 0
+	prevBlockNum := header.Number.Sub(header.Number, big.NewInt(1))
 
-	if newSet, hasChanged := a.validators.SignalToChange(first, logs, header); hasChanged {
-		curValidatorSet := a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
+	if newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, header, chain.(*core.BlockChain), a.db); hasChanged {
+		curValidatorSet := a.validators.GetValidatorsByCaller(prevBlockNum)
 
 		a.transition.blockNumber = header.Number
 		a.transition.hasChanged = true
+		a.transition.finalizeBlock = header.Number.Add(header.Number, big.NewInt(1))
 
-		if len(newSet) >= len(curValidatorSet) {
-			log.Trace("Added new validator in validator set", "newSet", newSet, "currentSet", curValidatorSet)
-			a.transition.force = true
+		if !isFirst && len(newSet) < len(curValidatorSet) {
+			a.transition.finalizeBlock = header.Number.Add(header.Number, big.NewInt(2))
 		}
+		log.Info("Extracted epoch validator set at block: ", "blockNumber", a.transition.blockNumber, "finalizeBlockNum", a.transition.finalizeBlock, "new", len(newSet), "cur", len(curValidatorSet))
 	}
 	return nil
 }
 
 func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderReader, state *state.StateDB) error {
-
 	if !a.transition.hasChanged {
 		return nil
 	}
 
-	if err := a.validators.PrepareBackend(header, chain.(*core.BlockChain), a.db); err != nil {
-		log.Error("error when prepared backend for contract", "error", err)
-		return err
-	}
-
-	if a.transition.force && a.transition.blockNumber.Cmp(header.Number.Sub(header.Number, big.NewInt(1))) == 0 {
+	if a.transition.blockNumber.Cmp(a.transition.finalizeBlock) == 0 {
 		if err := a.validators.FinalizeChange(header, state); err != nil {
 			log.Error("got error when called finalized change method", "error", err)
 		}
 	}
 
-	if a.transition.blockNumber.Cmp(header.Number.Sub(header.Number, big.NewInt(2))) == 0 {
-		if err := a.validators.FinalizeChange(header, state); err != nil {
-			log.Error("got error when called finalized change method", "error", err)
-		}
-	}
 	a.transition.hasChanged = false
-	a.transition.force = false
-
 	return nil
+}
+
+func (a *Aura) PrepareBackend(chain consensus.ChainHeaderReader) {
+	a.validators.PrepareBackend(chain.CurrentHeader(), chain.(*core.BlockChain), a.db)
+	a.validatorSet = a.validators.GetValidatorsByCaller(chain.CurrentHeader().Number)
 }

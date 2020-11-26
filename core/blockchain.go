@@ -317,6 +317,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
+
+	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
+		auraEngine.PrepareBackend(bc)
+	}
+
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.

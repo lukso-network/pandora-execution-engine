@@ -22,9 +22,10 @@ func TestNewValidatorSet(t *testing.T)  {
 		t.Errorf("could not get code at test addr: %v", err)
 	}
 
-	multiMap := make(map[uint64]ValidatorSet)
+	multiMap := make(map[int]ValidatorSet)
 	validators := NewValidatorSet(multiMap, &authority)
-	validatorSet := validators.GetValidatorsByCaller(big.NewInt(11))
+	validatorSet := validators.GetValidatorsByCaller(big.NewInt(20))
 
 	assert.Equal(t, validatorSet[0], common.HexToAddress("0xd6d9d2cd449a754c494264e1809c50e34d64562b"))
 }
+

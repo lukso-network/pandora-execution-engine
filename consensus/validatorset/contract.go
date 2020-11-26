@@ -22,16 +22,16 @@ func NewContract(contractAddr common.Address) *Contract {
 	}
 }
 
-func (c *Contract) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
-	return c.validators.SignalToChange(first, logs, header)
+func (c *Contract) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
+	return c.validators.SignalToChange(first, receipts, header, chain, chainDb)
 }
 
 func (c *Contract) FinalizeChange(header *types.Header, state *state.StateDB) error {
 	return c.validators.FinalizeChange(header, state)
 }
 
-func (c *Contract) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
-	return c.validators.GetValidatorsByCaller(blockNumber)
+func (c *Contract) GetValidatorsByCaller(chainHeader *big.Int) []common.Address {
+	return c.validators.GetValidatorsByCaller(chainHeader)
 }
 
 func (c *Contract) CountValidators() int {

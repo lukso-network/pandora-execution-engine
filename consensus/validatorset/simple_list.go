@@ -20,8 +20,8 @@ func NewSimpleList(validators []common.Address) *SimpleList {
 	}
 }
 
-func (simpleList *SimpleList) SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool) {
-	return simpleList.validators, false
+func (simpleList *SimpleList) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
+	return simpleList.validators, false, false
 }
 
 func (simpleList *SimpleList) FinalizeChange(header *types.Header, state *state.StateDB) error {

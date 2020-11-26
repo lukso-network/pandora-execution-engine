@@ -15,7 +15,7 @@ var (
 	SYSTEM_ADDRESS = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 )
 
-func NewValidatorSet(multiMap map[uint64]ValidatorSet, validatorSpec *params.ValidatorSet) ValidatorSet {
+func NewValidatorSet(multiMap map[int]ValidatorSet, validatorSpec *params.ValidatorSet) ValidatorSet {
 
 	if validatorSpec.List != nil { return NewSimpleList(validatorSpec.List)
 	} else if validatorSpec.SafeContract != EmptyAddress {
@@ -24,7 +24,7 @@ func NewValidatorSet(multiMap map[uint64]ValidatorSet, validatorSpec *params.Val
 		return NewContract(validatorSpec.Contract)
 	} else {
 		for key, value := range validatorSpec.Multi {
-			multiMap[key] = NewValidatorSet(multiMap, &value)
+			multiMap[int(key)] = NewValidatorSet(multiMap, &value)
 		}
 		return NewMulti(multiMap)
 	}
@@ -32,7 +32,7 @@ func NewValidatorSet(multiMap map[uint64]ValidatorSet, validatorSpec *params.Val
 
 
 type ValidatorSet interface {
-	SignalToChange(first bool, logs []*types.Log, header *types.Header) ([]common.Address, bool)
+	SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool)
 
 	FinalizeChange(header *types.Header, state *state.StateDB) error
 
