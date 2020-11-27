@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/validatorset"
 	"github.com/ethereum/go-ethereum/core"
@@ -198,9 +200,10 @@ type Aura struct {
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 
-	validators 		validatorset.ValidatorSet
-	transition		*Transition
-	validatorSet 	[]common.Address
+	validators 			validatorset.ValidatorSet
+	transition			*Transition
+	validatorSet 		[]common.Address
+	simulatedBackend 	bind.ContractBackend
 }
 
 type Transition struct {
@@ -234,6 +237,7 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 			finalizeBlock: 	big.NewInt(0),
 			hasChanged: 	false,
 		},
+		simulatedBackend: nil,
 	}
 }
 
@@ -444,7 +448,7 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	step := ts / a.config.Period
 	// println(header.Number.Uint64())
 
-	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
+	//a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
 	turn := step % uint64(len(a.validatorSet))
 
 	if signer != a.validatorSet[turn] {
@@ -511,7 +515,7 @@ func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
-	a.FinalizeChange(header, chain, state)
+	//a.FinalizeChange(header, chain, state)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
@@ -521,8 +525,8 @@ func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
-	a.SignalToChange(receipts, header, chain)
-	a.FinalizeChange(header, chain, state)
+	//a.SignalToChange(receipts, header, chain)
+	//a.FinalizeChange(header, chain, state)
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
@@ -581,7 +585,7 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
+	//a.validatorSet = a.validators.GetValidatorsByCaller(header.Number.Sub(header.Number, big.NewInt(1)))
 
 	// check if sealer will be ever able to sign
 	timeNow := time.Now().Unix()
@@ -815,7 +819,7 @@ func (a *Aura) SignalToChange(receipts types.Receipts, header *types.Header, cha
 	first := header.Number.Cmp(big.NewInt(0)) == 0
 	prevBlockNum := header.Number.Sub(header.Number, big.NewInt(1))
 
-	if newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, header, chain.(*core.BlockChain), a.db); hasChanged {
+	if newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, header, a.simulatedBackend); hasChanged {
 		curValidatorSet := a.validators.GetValidatorsByCaller(prevBlockNum)
 
 		a.transition.blockNumber = header.Number
@@ -846,6 +850,8 @@ func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderR
 }
 
 func (a *Aura) PrepareBackend(chain consensus.ChainHeaderReader) {
-	a.validators.PrepareBackend(chain.CurrentHeader(), chain.(*core.BlockChain), a.db)
+	a.simulatedBackend = backends.NewSimulatedBackendWithChain(chain.(*core.BlockChain), a.db, chain.Config())
+	a.validators.PrepareBackend(chain.CurrentHeader(), a.simulatedBackend)
 	a.validatorSet = a.validators.GetValidatorsByCaller(chain.CurrentHeader().Number)
+	log.Debug("got validator set in prepareBackend", "validatorSet", a.validatorSet)
 }

@@ -1,11 +1,10 @@
 package validatorset
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -32,7 +31,7 @@ func NewValidatorSet(multiMap map[int]ValidatorSet, validatorSpec *params.Valida
 
 
 type ValidatorSet interface {
-	SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool)
+	SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool)
 
 	FinalizeChange(header *types.Header, state *state.StateDB) error
 
@@ -40,5 +39,5 @@ type ValidatorSet interface {
 
 	CountValidators() int
 
-	PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error
+	PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error
 }

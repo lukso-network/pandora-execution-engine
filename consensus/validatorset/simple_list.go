@@ -1,11 +1,10 @@
 package validatorset
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 )
@@ -20,7 +19,7 @@ func NewSimpleList(validators []common.Address) *SimpleList {
 	}
 }
 
-func (simpleList *SimpleList) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
+func (simpleList *SimpleList) SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
 	return simpleList.validators, false, false
 }
 
@@ -37,7 +36,7 @@ func (simpleList *SimpleList) CountValidators() int {
 	return len(simpleList.validators)
 }
 
-func (simpleList *SimpleList) PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error {
+func (simpleList *SimpleList) PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error {
 	return nil
 }
 

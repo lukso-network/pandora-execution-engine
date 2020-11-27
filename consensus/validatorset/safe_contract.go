@@ -2,13 +2,10 @@ package validatorset
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	validatorset "github.com/ethereum/go-ethereum/consensus/validatorset/res"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 	"math/big"
@@ -55,10 +52,10 @@ func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(receipts types.Receip
 	return nil, false
 }
 
-func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Receipts, header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) ([]common.Address, bool, bool) {
+func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
 	if first {
 		log.Debug("signalling transition to fresh contract.")
-		if err := vsc.PrepareBackend(header, chain, chainDb); err != nil {
+		if err := vsc.PrepareBackend(header, simulatedBackend); err != nil {
 			log.Error("error when preparing backend for contract", "error", err)
 			return nil, false, true
 		}
@@ -104,11 +101,9 @@ func (vsc *ValidatorSafeContract) CountValidators() int {
 	panic("implement me")
 }
 
-func (vsc *ValidatorSafeContract) PrepareBackend(header *types.Header, chain *core.BlockChain, chainDb ethdb.Database) error {
+func (vsc *ValidatorSafeContract) PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error {
 	if vsc.backend == nil {
 		log.Debug("Preparing simulated backend for contract", "blockNumber", header.Number)
-
-		simulatedBackend := backends.NewSimulatedBackendWithChain(chain, chainDb, chain.Config())
 		contract, err := validatorset.NewValidatorSet(vsc.contractAddress, simulatedBackend)
 
 		if err != nil {
