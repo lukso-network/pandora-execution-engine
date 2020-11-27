@@ -459,6 +459,11 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 		maxBig128 := maxInt.Sqrt(math.MaxBig256)
 		diff = big.NewInt(int64(parentStep - step + emptyStepsLen))
 		diff = diff.Add(maxBig128, diff)
+
+		if diff.Cmp(maxBig128) == 1 {
+			diff = maxBig128
+		}
+
 		return
 	}
 

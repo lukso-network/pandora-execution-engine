@@ -337,10 +337,20 @@ func (auraHeader *AuraHeader) FromHeader(header *Header) (err error) {
 		return
 	}
 
-	if len(header.Seal[0]) != 8 {
+	sealStepCheck := func()bool { return len(header.Seal[0]) == 8 }
+	genesisBlockCheck := header.Number.Uint64() == 0
+
+	if genesisBlockCheck && !sealStepCheck() {
+		stepBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(stepBytes, 0)
+		header.Seal[0] = stepBytes
+	}
+
+	if !sealStepCheck() {
 		err = fmt.Errorf("expected 8 bytes in step")
 		return
 	}
+
 
 	auraHeader.ParentHash = header.ParentHash
 	auraHeader.UncleHash = header.UncleHash
