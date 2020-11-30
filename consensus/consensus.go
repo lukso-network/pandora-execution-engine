@@ -135,7 +135,7 @@ type AuraEngine interface {
 	 Engine
 
 	 // InitValidatorSet initialize validator set when blockchain will be configured
-	 SignalToChange(receipts types.Receipts, header *types.Header, chain ChainHeaderReader) error
+	 SignalToChange(receipts types.Receipts, blockNumber *big.Int, chain ChainHeaderReader) error
 
 	 // CallFinalizeChange calls finalizeChange method of the validator set contract
 	 FinalizeChange(header *types.Header, chain ChainHeaderReader, state *state.StateDB) error

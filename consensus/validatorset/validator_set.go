@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 var (
@@ -31,13 +30,13 @@ func NewValidatorSet(multiMap map[int]ValidatorSet, validatorSpec *params.Valida
 
 
 type ValidatorSet interface {
-	SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool)
+	SignalToChange(first bool, receipts types.Receipts, blockNumber int64, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool)
 
 	FinalizeChange(header *types.Header, state *state.StateDB) error
 
-	GetValidatorsByCaller(blockNumber *big.Int) []common.Address
+	GetValidatorsByCaller(blockNumber int64) []common.Address
 
 	CountValidators() int
 
-	PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error
+	PrepareBackend(blockNumber int64, simulatedBackend bind.ContractBackend) error
 }

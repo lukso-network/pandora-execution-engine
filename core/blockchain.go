@@ -1895,6 +1895,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
+
+		if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
+			if err := auraEngine.SignalToChange(receipts, block.Number(), bc); err != nil {
+				log.Error("downloading error on calling signalToChange method", "error", err)
+			}
+		}
+
 		stats.processed++
 		stats.usedGas += usedGas
 

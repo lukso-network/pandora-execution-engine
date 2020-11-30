@@ -47,12 +47,12 @@ func (multi *Multi) correctSet(blockNumber *big.Int) (ValidatorSet, int64) {
 	return multi.sets[setNum], int64(setNum)
 }
 
-func (multi *Multi) SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
-	validator, setBlockNumber := multi.correctSet(header.Number)
-	first = big.NewInt(setBlockNumber).Cmp(header.Number) == 0
+func (multi *Multi) SignalToChange(first bool, receipts types.Receipts, blockNumber int64, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
+	validator, setBlockNumber := multi.correctSet(big.NewInt(blockNumber))
+	first = big.NewInt(setBlockNumber).Cmp(big.NewInt(blockNumber)) == 0
 
-	log.Debug("signal to change", "current validator", validator, "blockNum", header.Number)
-	return validator.SignalToChange(first, receipts, header, simulatedBackend)
+	log.Debug("signal to change", "current validator", validator, "blockNum", blockNumber)
+	return validator.SignalToChange(first, receipts, blockNumber, simulatedBackend)
 }
 
 func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) error {
@@ -60,8 +60,8 @@ func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) e
 	return validator.FinalizeChange(header, state)
 }
 
-func (multi *Multi) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
-	validator, _ := multi.correctSet(blockNumber)
+func (multi *Multi) GetValidatorsByCaller(blockNumber int64) []common.Address {
+	validator, _ := multi.correctSet(big.NewInt(blockNumber))
 	log.Info("Current validator set ", "set", validator, "blockNumber", blockNumber)
 	return validator.GetValidatorsByCaller(blockNumber)
 }
@@ -70,7 +70,7 @@ func (multi *Multi) CountValidators() int {
 	panic("implement me")
 }
 
-func (multi *Multi) PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error {
-	validator, _ := multi.correctSet(header.Number)
-	return validator.PrepareBackend(header, simulatedBackend)
+func (multi *Multi) PrepareBackend(blockNumber int64, simulatedBackend bind.ContractBackend) error {
+	validator, _ := multi.correctSet(big.NewInt(blockNumber))
+	return validator.PrepareBackend(blockNumber, simulatedBackend)
 }

@@ -673,6 +673,12 @@ func (w *worker) resultLoop() {
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
+			if auraEngine, ok := w.chain.Engine().(consensus.AuraEngine); ok {
+				if err := auraEngine.SignalToChange(receipts, block.Number(), w.chain); err != nil {
+					log.Error("getting error on calling signalToChange method", "error", err)
+				}
+			}
+
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
@@ -1035,6 +1041,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+
 	if w.isRunning() {
 		if interval != nil {
 			interval()

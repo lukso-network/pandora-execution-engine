@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
-	"math/big"
 )
 
 //go:generate abigen --sol res/ValidatorSet.sol --pkg validatorset --out res/validator_contract.go
@@ -52,14 +51,14 @@ func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(receipts types.Receip
 	return nil, false
 }
 
-func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Receipts, header *types.Header, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
+func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Receipts, blockNumber int64, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
 	if first {
 		log.Debug("signalling transition to fresh contract.")
-		if err := vsc.PrepareBackend(header, simulatedBackend); err != nil {
+		if err := vsc.PrepareBackend(blockNumber, simulatedBackend); err != nil {
 			log.Error("error when preparing backend for contract", "error", err)
 			return nil, false, true
 		}
-		validators := vsc.GetValidatorsByCaller(header.Number)
+		validators := vsc.GetValidatorsByCaller(blockNumber)
 
 		log.Info("Signal for switch to contract-based validator set.")
 		log.Debug("Initial contract validators", "validatorSet", validators)
@@ -83,7 +82,7 @@ func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *st
 	return nil
 }
 
-func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber *big.Int) []common.Address {
+func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber int64) []common.Address {
 	if validators, ok := vsc.validators.Get(blockNumber); ok {
 		log.Debug("Set of validators obtained", "validators", validators)
 		return validators.([]common.Address)
@@ -101,9 +100,9 @@ func (vsc *ValidatorSafeContract) CountValidators() int {
 	panic("implement me")
 }
 
-func (vsc *ValidatorSafeContract) PrepareBackend(header *types.Header, simulatedBackend bind.ContractBackend) error {
+func (vsc *ValidatorSafeContract) PrepareBackend(blockNumber int64, simulatedBackend bind.ContractBackend) error {
 	if vsc.backend == nil {
-		log.Debug("Preparing simulated backend for contract", "blockNumber", header.Number)
+		log.Debug("Preparing simulated backend for contract", "blockNumber", blockNumber)
 		contract, err := validatorset.NewValidatorSet(vsc.contractAddress, simulatedBackend)
 
 		if err != nil {

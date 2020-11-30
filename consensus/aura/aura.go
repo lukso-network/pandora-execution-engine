@@ -208,8 +208,8 @@ type Aura struct {
 
 type Transition struct {
 	blockHash 		common.Hash
-	blockNumber 	*big.Int
-	finalizeBlock 	*big.Int
+	blockNumber 	int64
+	finalizeBlock 	int64
 	hasChanged		bool
 }
 
@@ -233,8 +233,8 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		proposals:  make(map[common.Address]bool),
 		validators: validatorset.NewValidatorSet(make(map[int]validatorset.ValidatorSet), &config.Authorities),
 		transition: &Transition{
-			blockNumber: 	big.NewInt(0),
-			finalizeBlock: 	big.NewInt(0),
+			blockNumber: 	0,
+			finalizeBlock: 	0,
 			hasChanged: 	false,
 		},
 		simulatedBackend: nil,
@@ -514,19 +514,21 @@ func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
-
-	//a.FinalizeChange(header, chain, state)
+	log.Debug("after calling finalizeChange", "root", header.Root)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	log.Debug("before calling finalizeChange", "root", header.Root)
+	if err := a.FinalizeChange(header, chain, state); err != nil {
+		log.Debug("got error when calling finalizeChange method", "error", err)
+	}
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+	log.Debug("after calling finalizeChange", "root", header.Root)
 
-	//a.SignalToChange(receipts, header, chain)
-	//a.FinalizeChange(header, chain, state)
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
@@ -815,19 +817,19 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
-func (a *Aura) SignalToChange(receipts types.Receipts, header *types.Header, chain consensus.ChainHeaderReader) error {
-	first := header.Number.Cmp(big.NewInt(0)) == 0
-	prevBlockNum := header.Number.Sub(header.Number, big.NewInt(1))
+func (a *Aura) SignalToChange(receipts types.Receipts, blockNumber *big.Int, chain consensus.ChainHeaderReader) error {
+	first := blockNumber.Cmp(big.NewInt(0)) == 0
+	newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, blockNumber.Int64(), a.simulatedBackend)
+	log.Debug("debugging for signalToChange method", "hasChanged", hasChanged, "blocNumber", blockNumber)
 
-	if newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, header, a.simulatedBackend); hasChanged {
-		curValidatorSet := a.validators.GetValidatorsByCaller(prevBlockNum)
-
-		a.transition.blockNumber = header.Number
+	if hasChanged {
+		curValidatorSet := a.validators.GetValidatorsByCaller(blockNumber.Int64() - 1 )
+		a.transition.blockNumber = blockNumber.Int64()
 		a.transition.hasChanged = true
-		a.transition.finalizeBlock = header.Number.Add(header.Number, big.NewInt(1))
+		a.transition.finalizeBlock = blockNumber.Int64() + 1
 
 		if !isFirst && len(newSet) < len(curValidatorSet) {
-			a.transition.finalizeBlock = header.Number.Add(header.Number, big.NewInt(2))
+			a.transition.finalizeBlock = blockNumber.Int64() + 2
 		}
 		log.Info("Extracted epoch validator set at block: ", "blockNumber", a.transition.blockNumber, "finalizeBlockNum", a.transition.finalizeBlock, "new", len(newSet), "cur", len(curValidatorSet))
 	}
@@ -839,7 +841,8 @@ func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderR
 		return nil
 	}
 
-	if a.transition.blockNumber.Cmp(a.transition.finalizeBlock) == 0 {
+	log.Debug("Calling finalizeChange method", "currentBlockNumber", header.Number, "finalizeBlockNumber", a.transition.finalizeBlock)
+	if header.Number.Cmp(big.NewInt(a.transition.finalizeBlock)) == 0 {
 		if err := a.validators.FinalizeChange(header, state); err != nil {
 			log.Error("got error when called finalized change method", "error", err)
 		}
@@ -851,7 +854,7 @@ func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderR
 
 func (a *Aura) PrepareBackend(chain consensus.ChainHeaderReader) {
 	a.simulatedBackend = backends.NewSimulatedBackendWithChain(chain.(*core.BlockChain), a.db, chain.Config())
-	a.validators.PrepareBackend(chain.CurrentHeader(), a.simulatedBackend)
-	a.validatorSet = a.validators.GetValidatorsByCaller(chain.CurrentHeader().Number)
+	a.validators.PrepareBackend(chain.CurrentHeader().Number.Int64(), a.simulatedBackend)
+	a.validatorSet = a.validators.GetValidatorsByCaller(chain.CurrentHeader().Number.Int64())
 	log.Debug("got validator set in prepareBackend", "validatorSet", a.validatorSet)
 }
