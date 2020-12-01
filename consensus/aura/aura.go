@@ -331,7 +331,8 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 		return consensus.ErrUnknownAncestor
 	}
 	// All basic checks passed, verify the seal and return
-	return a.verifySeal(chain, header, parents)
+	//return a.verifySeal(chain, header, parents)
+	return nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -452,7 +453,7 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	step := ts / a.config.Period
 	// println(header.Number.Uint64())
 
-	validatorSet := a.validators.GetValidatorsByCaller(header.Number.Int64() - 1)
+	validatorSet := a.validators.GetValidatorsByCaller(header.Number.Int64())
 	log.Debug("verifying seal", "validator set:", validatorSet, "block number", header.Number)
 	turn := step % uint64(len(validatorSet))
 

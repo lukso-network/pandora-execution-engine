@@ -1824,6 +1824,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
+
+		if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
+			if err := auraEngine.SignalToChange(receipts, block.Number(), bc); err != nil {
+				log.Error("downloading error on calling signalToChange method", "error", err)
+			}
+		}
+
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
 		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
@@ -1876,6 +1883,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
 
+			// Calling VerifySeal after changing state. This flow is different than other consensus engine like
+			// PoW or Clique. For Aura, validator set can be changed through validator set contract
+			// and get updated validator list for list block, need to setup state of the contract and then gets
+			// validator list from contract to verify seal.
+			if _, ok := bc.engine.(consensus.AuraEngine); ok {
+				if err := bc.engine.VerifySeal(bc, block.Header()); err != nil {
+					bc.reportBlock(block, receipts, err)
+					atomic.StoreUint32(&followupInterrupt, 1)
+					return it.index, err
+				}
+			}
+
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
@@ -1894,12 +1913,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
-		}
-
-		if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
-			if err := auraEngine.SignalToChange(receipts, block.Number(), bc); err != nil {
-				log.Error("downloading error on calling signalToChange method", "error", err)
-			}
 		}
 
 		stats.processed++

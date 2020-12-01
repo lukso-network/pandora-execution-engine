@@ -61,7 +61,13 @@ func (multi *Multi) FinalizeChange(header *types.Header, state *state.StateDB) e
 }
 
 func (multi *Multi) GetValidatorsByCaller(blockNumber int64) []common.Address {
-	validator, _ := multi.correctSet(big.NewInt(blockNumber))
+	validator, setBlockNumber := multi.correctSet(big.NewInt(blockNumber))
+	first := big.NewInt(setBlockNumber).Cmp(big.NewInt(blockNumber)) == 0
+
+	if first {
+		log.Debug("validator list from validator set contract for first time", "set", validator, "blockNumber", blockNumber)
+		return validator.GetValidatorsByCaller(blockNumber - 1)
+	}
 	log.Info("Current validator set ", "set", validator, "blockNumber", blockNumber)
 	return validator.GetValidatorsByCaller(blockNumber)
 }

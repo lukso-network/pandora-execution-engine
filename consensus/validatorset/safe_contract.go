@@ -93,10 +93,10 @@ func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *st
 }
 
 func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber int64) []common.Address {
-	if validators, ok := vsc.validators.Get(blockNumber); ok {
-		log.Debug("Set of validators obtained from lru cache", "validators", vsc.validators)
-		return validators.([]common.Address)
-	}
+	//if validators, ok := vsc.validators.Get(blockNumber); ok {
+	//	log.Debug("Set of validators obtained from lru cache", "validators", vsc.validators)
+	//	return validators.([]common.Address)
+	//}
 	validators, err := vsc.contract.GetValidators(nil)
 	if err == nil {
 		log.Debug("Set of validators obtained from contract", "validators", validators)
