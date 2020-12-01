@@ -300,8 +300,6 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return errInvalidUncleHash
 	}
 
-	//log.Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
-
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -487,6 +485,11 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 		maxBig128 := maxInt.Sqrt(math.MaxBig256)
 		diff = big.NewInt(int64(parentStep - step + emptyStepsLen))
 		diff = diff.Add(maxBig128, diff)
+
+		if diff.Cmp(maxBig128) == 1 {
+			diff = maxBig128
+		}
+
 		return
 	}
 
