@@ -1041,7 +1041,6 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-
 	if w.isRunning() {
 		if interval != nil {
 			interval()

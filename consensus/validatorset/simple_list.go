@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"sort"
 )
 
 type SimpleList struct {
@@ -13,6 +14,10 @@ type SimpleList struct {
 }
 
 func NewSimpleList(validators []common.Address) *SimpleList {
+	sort.Slice(validators, func(i, j int) bool {
+		return validators[i].Hex() < validators[j].Hex()
+	})
+
 	return &SimpleList{
 		validators: validators,
 	}

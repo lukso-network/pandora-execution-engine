@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
+	"sort"
 )
 
 //go:generate abigen --sol res/ValidatorSet.sol --pkg validatorset --out res/validator_contract.go
@@ -59,13 +60,22 @@ func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Rece
 			return nil, false, true
 		}
 		validators := vsc.GetValidatorsByCaller(blockNumber)
+		// sort when get the validator list so that aura engine can select validator list deterministically
+		sort.Slice(validators, func(i, j int) bool {
+			return validators[i].Hex() < validators[j].Hex()
+		})
 
 		log.Info("Signal for switch to contract-based validator set.")
 		log.Debug("Initial contract validators", "validatorSet", validators)
 
 		return validators, true, true
 	}
+
 	validators, hasSignal := vsc.parseInitiateChangeEvent(receipts)
+	// sort when get the validator list so that aura engine can select validator list deterministically
+	sort.Slice(validators, func(i, j int) bool {
+		return validators[i].Hex() < validators[j].Hex()
+	})
 	return validators, hasSignal, false
 }
 
@@ -84,12 +94,16 @@ func (vsc *ValidatorSafeContract) FinalizeChange(header *types.Header, state *st
 
 func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber int64) []common.Address {
 	if validators, ok := vsc.validators.Get(blockNumber); ok {
-		log.Debug("Set of validators obtained", "validators", validators)
+		log.Debug("Set of validators obtained from lru cache", "validators", vsc.validators)
 		return validators.([]common.Address)
 	}
 	validators, err := vsc.contract.GetValidators(nil)
 	if err == nil {
-		log.Debug("Set of validators obtained", "validators", validators)
+		log.Debug("Set of validators obtained from contract", "validators", validators)
+		// sort when get the validator list so that aura engine can select validator list deterministically
+		sort.Slice(validators, func(i, j int) bool {
+			return validators[i].Hex() < validators[j].Hex()
+		})
 		vsc.validators.Add(blockNumber, validators)
 		return validators
 	}
