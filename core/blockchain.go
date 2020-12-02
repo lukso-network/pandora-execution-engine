@@ -318,8 +318,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 	}
 
+	// If engine is AuRa then need to prepare validator set contract backend
 	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
 		auraEngine.PrepareBackend(bc)
+		// TODO-Need to configure transition for current block
 	}
 
 	// The first thing the node will do is reconstruct the verification data for
@@ -1825,10 +1827,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			return it.index, err
 		}
 
+		// Whether the given block signals the changes in validator set contract for aura engine.
 		if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
-			if err := auraEngine.SignalToChange(receipts, block.Number(), bc); err != nil {
-				log.Error("downloading error on calling signalToChange method", "error", err)
-			}
+			auraEngine.SignalToChange(receipts, block.Number())
 		}
 
 		// Update the metrics touched during block processing

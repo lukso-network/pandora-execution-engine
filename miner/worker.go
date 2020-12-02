@@ -664,6 +664,12 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
+
+			// Whether the given block signals the changes in validator set contract for aura engine.
+			if auraEngine, ok := w.chain.Engine().(consensus.AuraEngine); ok {
+				auraEngine.SignalToChange(receipts, block.Number())
+			}
+
 			// Commit block and state to database.
 			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
 			if err != nil {
@@ -672,12 +678,6 @@ func (w *worker) resultLoop() {
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-
-			if auraEngine, ok := w.chain.Engine().(consensus.AuraEngine); ok {
-				if err := auraEngine.SignalToChange(receipts, block.Number(), w.chain); err != nil {
-					log.Error("getting error on calling signalToChange method", "error", err)
-				}
-			}
 
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})

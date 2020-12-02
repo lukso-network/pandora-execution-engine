@@ -328,8 +328,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent == nil || parent.Number.Uint64() != number-1 {
 		return consensus.ErrUnknownAncestor
 	}
-	// All basic checks passed, verify the seal and return
-	//return a.verifySeal(chain, header, parents)
+
 	return nil
 }
 
@@ -449,10 +448,11 @@ func (a *Aura) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	ts := header.Time
 
 	step := ts / a.config.Period
-	// println(header.Number.Uint64())
 
+	// getting validator set from validators
 	validatorSet := a.validators.GetValidatorsByCaller(header.Number.Int64())
 	log.Debug("verifying seal", "validator set:", validatorSet, "block number", header.Number)
+
 	turn := step % uint64(len(validatorSet))
 
 	if signer != validatorSet[turn] {
@@ -828,45 +828,59 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
-func (a *Aura) SignalToChange(receipts types.Receipts, blockNumber *big.Int, chain consensus.ChainHeaderReader) error {
+// Signals for any changes in validator set contract
+func (a *Aura) SignalToChange(receipts types.Receipts, blockNumber *big.Int) {
+
 	first := blockNumber.Cmp(big.NewInt(0)) == 0
 	newSet, hasChanged, isFirst := a.validators.SignalToChange(first, receipts, blockNumber.Int64(), a.simulatedBackend)
-	log.Debug("debugging for signalToChange method", "hasChanged", hasChanged, "blocNumber", blockNumber)
 
+	// if changes in validator set, it gives true and set transition struct for finality
 	if hasChanged {
-		curValidatorSet := a.validatorSet
-		a.transition.blockNumber = blockNumber.Int64()
-		a.transition.pendingValidatorSet = newSet
-		a.transition.finalizeBlock = blockNumber.Int64() + 1
+		a.transition.blockNumber = blockNumber.Int64() 	// signal block
+		a.transition.pendingValidatorSet = newSet	// pending validator set for setting next validator set
+		a.transition.finalizeBlock = blockNumber.Int64() + 1	// in which block the finalizeChange method will call
 
-		if !isFirst && len(newSet) < len(curValidatorSet) {
+		// finalizeChange method calls after 2 block later when removes any validator from
+		// validator set contract.
+		if !isFirst && len(newSet) < len(a.validatorSet) {
 			a.transition.finalizeBlock = blockNumber.Int64() + 2
 		}
-		log.Info("Extracted epoch validator set at block: ", "blockNumber", a.transition.blockNumber, "finalizeBlockNum", a.transition.finalizeBlock, "new", len(newSet), "cur", len(curValidatorSet))
+
+		log.Info("Extracted epoch validator set. ", "number=", a.transition.blockNumber,
+			"finalizeNumber=", a.transition.finalizeBlock, "newSet=", newSet, "curSet=", a.validatorSet)
 	}
-	return nil
 }
 
+// FinalizeChange calls when any validator list changing transaction comes to the node. It calls
+// to contract for finality
 func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderReader, state *state.StateDB) error {
 
+	// if current block is same as finalizeBlock then calls finalizeChange method
 	if header.Number.Cmp(big.NewInt(a.transition.finalizeBlock)) == 0 {
-		log.Debug("Calling finalizeChange method", "currentBlockNumber", header.Number, "finalizeBlockNumber", a.transition.finalizeBlock)
 		if err := a.validators.FinalizeChange(header, state); err != nil {
-			log.Error("got error when called finalized change method", "error", err)
+			log.Warn("Encountered error in calling finalizeChange method", "err", err)
 			return err
 		}
+
+		// update the current root hash of the state trie because FinalizeChange method update the state of
+		// validator set contract
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		// update validator set for sealing with updated validator set from the current block
 		a.validatorSet = a.transition.pendingValidatorSet
-		log.Debug("Updating finality checker with new validator set extracted from epoch", "epochBlock", a.transition.blockNumber, "newSet", a.validatorSet)
+		log.Debug("Updating finality checker with new validator set extracted from epoch", "epochBlock=", a.transition.blockNumber, "newSet=", a.validatorSet)
 	}
 
 	return nil
 }
 
+// PrepareBackend prepares validator set contract caller and set initial validator set
 func (a *Aura) PrepareBackend(chain consensus.ChainHeaderReader) {
+	// creates new instance for simulated backend
 	a.simulatedBackend = backends.NewSimulatedBackendWithChain(chain.(*core.BlockChain), a.db, chain.Config())
+
+	// calling PrepareBackend of validator set
 	a.validators.PrepareBackend(chain.CurrentHeader().Number.Int64(), a.simulatedBackend)
 
 	a.validatorSet = a.validators.GetValidatorsByCaller(chain.CurrentHeader().Number.Int64())
-	log.Debug("initial validator set", "curSet", a.validatorSet)
+	log.Info("Initial validator set", "curSet", a.validatorSet)
 }

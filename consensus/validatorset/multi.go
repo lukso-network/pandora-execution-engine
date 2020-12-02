@@ -31,9 +31,10 @@ func NewMulti(setMap map[int]ValidatorSet) *Multi {
 	}
 }
 
+// get correct set by block number, along with block number at which
+// this set was activated.
 func (multi *Multi) correctSet(blockNumber *big.Int) (ValidatorSet, int64) {
 	if len(multi.sets) == 0 {
-		log.Error("constructor validation ensures that there is at least one validator set for block 0; block 0 is less than any uint;")
 		panic("constructor validation ensures that there is at least one validator set for block 0")
 	}
 	setNum := 0
@@ -49,9 +50,10 @@ func (multi *Multi) correctSet(blockNumber *big.Int) (ValidatorSet, int64) {
 
 func (multi *Multi) SignalToChange(first bool, receipts types.Receipts, blockNumber int64, simulatedBackend bind.ContractBackend) ([]common.Address, bool, bool) {
 	validator, setBlockNumber := multi.correctSet(big.NewInt(blockNumber))
+
+	// block number is same as set block height in which transition happens
 	first = big.NewInt(setBlockNumber).Cmp(big.NewInt(blockNumber)) == 0
 
-	log.Debug("signal to change", "current validator", validator, "blockNum", blockNumber)
 	return validator.SignalToChange(first, receipts, blockNumber, simulatedBackend)
 }
 
@@ -65,15 +67,12 @@ func (multi *Multi) GetValidatorsByCaller(blockNumber int64) []common.Address {
 	first := big.NewInt(setBlockNumber).Cmp(big.NewInt(blockNumber)) == 0
 
 	if first {
-		log.Debug("validator list from validator set contract for first time", "set", validator, "blockNumber", blockNumber)
-		return validator.GetValidatorsByCaller(blockNumber - 1)
+		log.Debug("Getting validator list at transition height", "set", validator, "blockNumber", blockNumber)
+		validator, _ := multi.correctSet(big.NewInt(blockNumber - 1))
+		return validator.GetValidatorsByCaller(blockNumber)
 	}
-	log.Info("Current validator set ", "set", validator, "blockNumber", blockNumber)
-	return validator.GetValidatorsByCaller(blockNumber)
-}
 
-func (multi *Multi) CountValidators() int {
-	panic("implement me")
+	return validator.GetValidatorsByCaller(blockNumber)
 }
 
 func (multi *Multi) PrepareBackend(blockNumber int64, simulatedBackend bind.ContractBackend) error {

@@ -134,11 +134,12 @@ type PoW interface {
 type AuraEngine interface {
 	 Engine
 
-	 // InitValidatorSet initialize validator set when blockchain will be configured
-	 SignalToChange(receipts types.Receipts, blockNumber *big.Int, chain ChainHeaderReader) error
+	 // Signals for any changes in validator set contract
+	 SignalToChange(receipts types.Receipts, blockNumber *big.Int)
 
 	 // CallFinalizeChange calls finalizeChange method of the validator set contract
 	 FinalizeChange(header *types.Header, chain ChainHeaderReader, state *state.StateDB) error
 
+	 // Prepare contract backend for interacting with validator set contract
 	 PrepareBackend(chain ChainHeaderReader)
 }

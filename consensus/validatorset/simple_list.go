@@ -6,18 +6,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"sort"
 )
 
+// SimpleList represents the static validator set
 type SimpleList struct {
 	validators []common.Address
 }
 
+// Creates instance of SimpleList
 func NewSimpleList(validators []common.Address) *SimpleList {
-	sort.Slice(validators, func(i, j int) bool {
-		return validators[i].Hex() < validators[j].Hex()
-	})
-
 	return &SimpleList{
 		validators: validators,
 	}
@@ -28,16 +25,12 @@ func (simpleList *SimpleList) SignalToChange(first bool, receipts types.Receipts
 }
 
 func (simpleList *SimpleList) FinalizeChange(header *types.Header, state *state.StateDB) error {
-	panic("implement me")
+	return nil
 }
 
 func (simpleList *SimpleList) GetValidatorsByCaller(blockNumber int64) []common.Address {
-	log.Trace("Set of validators obtained from simpleList", "validators", simpleList.validators)
+	log.Debug("Set of validators obtained from simpleList", "validators", simpleList.validators)
 	return simpleList.validators
-}
-
-func (simpleList *SimpleList) CountValidators() int {
-	return len(simpleList.validators)
 }
 
 func (simpleList *SimpleList) PrepareBackend(blockNumber int64, simulatedBackend bind.ContractBackend) error {
