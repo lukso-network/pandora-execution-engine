@@ -207,11 +207,8 @@ type Aura struct {
 }
 
 type Transition struct {
-	blockHash 		common.Hash
 	blockNumber 	int64
 	finalizeBlock 	int64
-	hasChanged		bool
-	shouldUpdate	bool
 	pendingValidatorSet []common.Address
 }
 
@@ -237,8 +234,6 @@ func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 		transition: &Transition{
 			blockNumber: 	0,
 			finalizeBlock: 	0,
-			hasChanged: 	false,
-			shouldUpdate:   false,
 			pendingValidatorSet: nil,
 		},
 		simulatedBackend: nil,

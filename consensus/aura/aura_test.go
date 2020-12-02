@@ -48,6 +48,7 @@ func init() {
 
 	db := rawdb.NewMemoryDatabase()
 	auraEngine = New(auraChainConfig, db)
+	auraEngine.validatorSet = []common.Address{crypto.PubkeyToAddress(authority1.PublicKey), crypto.PubkeyToAddress(authority2.PublicKey)}
 
 	signerFunc := func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), testBankKey)

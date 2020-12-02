@@ -91,10 +91,12 @@ func init() {
 	auraChainConfig.Aura = &params.AuraConfig{
 		Period: 5,
 		Epoch:  500,
-		Authorities: []common.Address{
-			testBankAddress,
-			crypto.PubkeyToAddress(authority1.PublicKey),
-			crypto.PubkeyToAddress(authority2.PublicKey),
+		Authorities: params.ValidatorSet {
+			List: []common.Address {
+				testBankAddress,
+				crypto.PubkeyToAddress(authority1.PublicKey),
+				crypto.PubkeyToAddress(authority2.PublicKey),
+			},
 		},
 		Difficulty: big.NewInt(int64(131072)),
 		Signatures: nil,
@@ -238,9 +240,11 @@ func TestGenerateBlockAndImportAura(t *testing.T) {
 		// For some reason period 1 fails. Maybe it is due to user-defined resubmit? Or maybe execution is too slow?
 		Period: 2,
 		Epoch:  500,
-		Authorities: []common.Address{
-			testBankAddress,
-			crypto.PubkeyToAddress(authority1.PublicKey),
+		Authorities: params.ValidatorSet {
+			List: []common.Address {
+				testBankAddress,
+				crypto.PubkeyToAddress(authority1.PublicKey),
+			},
 		},
 		Difficulty: big.NewInt(int64(1)),
 		Signatures: nil,
@@ -285,7 +289,7 @@ func testGenerateBlockAndImport(
 
 	if isAuraEngine {
 		// Wait twice the size of duration
-		timeout = time.Duration(int(chainConfig.Aura.Period) * len(chainConfig.Aura.Authorities) * 2)
+		timeout = time.Duration(int(chainConfig.Aura.Period) * len(chainConfig.Aura.Authorities.List) * 2)
 	}
 
 	for i := 0; i < 5; i++ {
