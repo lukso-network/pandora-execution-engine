@@ -274,7 +274,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 func (st *StateTransition) TransitionDBForSystemCall() (*ExecutionResult, error) {
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	ret, vmerr := st.evm.SystemCallCode(sender, st.to(), st.data, st.value, st.gas)
+	ret, _, vmerr := st.evm.Call(sender, st.to(), st.data, math.MaxUint64, st.value)
 	return &ExecutionResult{
 		UsedGas:    0,
 		Err:        vmerr,

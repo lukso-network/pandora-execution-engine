@@ -563,7 +563,7 @@ func (b *SimulatedBackend) systemCallContract(call ethereum.CallMsg, curHeader *
 		call.GasPrice = big.NewInt(1)
 	}
 	if call.Gas == 0 {
-		call.Gas = 300000000
+		call.Gas = math.MaxUint64
 	}
 	if call.Value == nil {
 		call.Value = new(big.Int)

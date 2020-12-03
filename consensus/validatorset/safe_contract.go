@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
-	"sort"
 )
 
 //go:generate abigen --sol res/ValidatorSet.sol --pkg validatorset --out res/validator_contract.go
@@ -62,7 +61,6 @@ func (vsc *ValidatorSafeContract) parseInitiateChangeEvent(receipts types.Receip
 			}
 		}
 	}
-
 	return nil, false
 }
 
@@ -72,15 +70,11 @@ func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Rece
 		log.Debug("signalling transition to fresh contract.")
 		if err := vsc.PrepareBackend(blockNumber, simulatedBackend); err != nil {
 			// this will not happen unless simulatedBackend is wrong
-			panic(err)
+			log.Warn("Encountered error in preparing backend", "err", err)
+			return nil, first, false
 		}
 		// getting initial validators from contract
 		validators, _ := vsc.contract.GetValidators(nil)
-
-		// sort when get the validator list so that aura engine can select validator list deterministically
-		sort.Slice(validators, func(i, j int) bool {
-			return validators[i].Hex() < validators[j].Hex()
-		})
 
 		log.Info("Signal for switch to contract-based validator set.")
 		log.Debug("Initial contract validators", "validatorSet", validators)
@@ -92,11 +86,6 @@ func (vsc *ValidatorSafeContract) SignalToChange(first bool, receipts types.Rece
 	// check receipts for log event. bloom should be `expected_bloom` for the
 	// header the receipts correspond to.
 	validators, hasSignal := vsc.parseInitiateChangeEvent(receipts)
-
-	// sort when get the validator list so that aura engine can select validator list deterministically
-	sort.Slice(validators, func(i, j int) bool {
-		return validators[i].Hex() < validators[j].Hex()
-	})
 
 	return validators, hasSignal, false
 }
@@ -133,10 +122,7 @@ func (vsc *ValidatorSafeContract) GetValidatorsByCaller(blockNumber int64) []com
 	}
 
 	log.Debug("Set of validators obtained from contract", "validators", validators)
-	// sort when get the validator list so that aura engine can select validator list deterministically
-	sort.Slice(validators, func(i, j int) bool {
-		return validators[i].Hex() < validators[j].Hex()
-	})
+
 	// added to cache for reducing db call to get validator set
 	vsc.validators.Add(blockNumber, validators)
 

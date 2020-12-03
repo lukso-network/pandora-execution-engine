@@ -831,6 +831,11 @@ func (a *Aura) SignalToChange(receipts types.Receipts, blockNumber *big.Int) {
 
 	// if changes in validator set, it gives true and set transition struct for finality
 	if hasChanged {
+		// Aura can not operate without any validator set
+		if len(newSet) == 0 {
+			panic("Cannot operate with an empty validator set.")
+		}
+
 		a.transition.blockNumber = blockNumber.Int64() 	// signal block
 		a.transition.pendingValidatorSet = newSet	// pending validator set for setting next validator set
 		a.transition.finalizeBlock = blockNumber.Int64() + 1	// in which block the finalizeChange method will call
@@ -841,8 +846,8 @@ func (a *Aura) SignalToChange(receipts types.Receipts, blockNumber *big.Int) {
 			a.transition.finalizeBlock = blockNumber.Int64() + 2
 		}
 
-		log.Info("Extracted epoch validator set. ", "number=", a.transition.blockNumber,
-			"finalizeNumber=", a.transition.finalizeBlock, "newSet=", newSet, "curSet=", a.validatorSet)
+		log.Info("Extracted epoch validator set. ", "number", a.transition.blockNumber,
+			"finalizeNumber", a.transition.finalizeBlock, "newSet", newSet, "curSet", a.validatorSet)
 	}
 }
 
@@ -862,7 +867,9 @@ func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderR
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 		// update validator set for sealing with updated validator set from the current block
 		a.validatorSet = a.transition.pendingValidatorSet
-		log.Debug("Updating finality checker with new validator set extracted from epoch", "epochBlock=", a.transition.blockNumber, "newSet=", a.validatorSet)
+		log.Debug("Updating finality checker with new validator set extracted from epoch",
+			"epochBlock", a.transition.blockNumber,
+			"finalizeBlock", a.transition.finalizeBlock, "newSet", a.validatorSet)
 	}
 
 	return nil
