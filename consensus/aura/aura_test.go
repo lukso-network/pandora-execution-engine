@@ -110,9 +110,15 @@ func TestAura_Finalize(t *testing.T) {
 	stateDbDatabase := state.NewDatabase(db)
 	stateDb, err := state.New(common.Hash{}, stateDbDatabase, nil)
 	assert.Nil(t, err)
+	headerRootString := header.Root.String()
+	remoteMerkleRoot := "0xcacf4ddf8416347cfd1b2c6e4b0cbaf45e400a89e6282d579e83a1ae561c9bf0"
+	assert.Equal(t, remoteMerkleRoot, headerRootString)
 
 	specificEngine.Finalize(consensusChain, header, stateDb, nil, nil)
 	assert.NotNil(t, header)
+
+	headerRootString = header.Root.String()
+	assert.Equal(t, remoteMerkleRoot, headerRootString)
 }
 
 func TestAura_CheckStep(t *testing.T) {
