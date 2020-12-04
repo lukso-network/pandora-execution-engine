@@ -9,7 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -35,8 +37,8 @@ func init() {
 	auraChainConfig = &params.AuraConfig{
 		Period: 5,
 		Epoch:  500,
-		Authorities: params.ValidatorSet {
-			List: []common.Address {
+		Authorities: params.ValidatorSet{
+			List: []common.Address{
 				testBankAddress,
 				crypto.PubkeyToAddress(authority1.PublicKey),
 				crypto.PubkeyToAddress(authority2.PublicKey),
@@ -54,6 +56,63 @@ func init() {
 		return crypto.Sign(crypto.Keccak256(data), testBankKey)
 	}
 	auraEngine.Authorize(testBankAddress, signerFunc)
+}
+
+func TestAura_Finalize(t *testing.T) {
+	//gethHeaderWithTransition := "f9026ea0a52747663faa49ea84f1c177f981492b45fcb62d71353a288cb9374ae86381c5a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794dfa5b73a85f758b0a53992c968ac1a0e0f51ce83a037f2e8ec3a5827d2a65ace4eccfb78d264dae5c9a413bc1e483a675be956c64aa056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090fffffffffffffffffffffffffffffffd1f83232e6580845fca55a39cdb830300018c4f70656e457468657265756d86312e34332e31826c69a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f84c888777281300000000b841ef723ea77bd06dc7153e243636668e35cec750a1b5a63ddbc3dab2d594249f3d4de14c70428031fab1649edd526b61109a60fdf930a198acd291b2267d4eb18f00"
+	gethHeaderWithTransition := "f9026ea01b8f7e78fd786ce49f5ab95a69c49a8dc9cfb45c05f3c04f69210114956a04c7a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794dfa5b73a85f758b0a53992c968ac1a0e0f51ce83a0cacf4ddf8416347cfd1b2c6e4b0cbaf45e400a89e6282d579e83a1ae561c9bf0a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090fffffffffffffffffffffffffffffffe1f83232e6580845fca601b9cdb830300018c4f70656e457468657265756d86312e34332e31826c69a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f84c889f79281300000000b841353f1e6c9a981a1247d31e9647314621ae401d0dd8dbc7f53b880dfb86c75072366176e11eaff127345228773297dbd29cf7b60d4ce433b4462affb15a2334a201"
+	//withoutStateMutation := "f9026ea01b8f7e78fd786ce49f5ab95a69c49a8dc9cfb45c05f3c04f69210114956a04c7a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794dfa5b73a85f758b0a53992c968ac1a0e0f51ce83a0cacf4ddf8416347cfd1b2c6e4b0cbaf45e400a89e6282d579e83a1ae561c9bf0a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090fffffffffffffffffffffffffffffffe1f83232e6580845fca601b9cdb830300018c4f70656e457468657265756d86312e34332e31826c69a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f84c889f79281300000000b841353f1e6c9a981a1247d31e9647314621ae401d0dd8dbc7f53b880dfb86c75072366176e11eaff127345228773297dbd29cf7b60d4ce433b4462affb15a2334a201"
+	input, err := hex.DecodeString(gethHeaderWithTransition)
+	assert.Nil(t, err)
+	var header *types.Header
+	err = rlp.Decode(bytes.NewReader(input), &header)
+	assert.Nil(t, err)
+
+	db := rawdb.NewMemoryDatabase()
+	genspec := &core.Genesis{}
+	genspec.MustCommit(db)
+
+	specificEngine := New(auraChainConfig, db)
+
+	// With EIP
+	consensusChain, err := core.NewBlockChain(
+		specificEngine.db,
+		nil,
+		&params.ChainConfig{
+			ChainID:             big.NewInt(5684),
+			HomesteadBlock:      big.NewInt(0),
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      false,
+			EIP150Block:         big.NewInt(0),
+			EIP150Hash:          common.Hash{},
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			YoloV1Block:         nil,
+			EWASMBlock:          nil,
+			Ethash:              nil,
+			Clique:              nil,
+			Aura:                auraChainConfig,
+		},
+		specificEngine,
+		vm.Config{},
+		func(block *types.Block) bool {
+			return false
+		},
+		nil,
+	)
+	assert.Nil(t, err)
+
+	stateDbDatabase := state.NewDatabase(db)
+	stateDb, err := state.New(common.Hash{}, stateDbDatabase, nil)
+	assert.Nil(t, err)
+
+	specificEngine.Finalize(consensusChain, header, stateDb, nil, nil)
+	assert.NotNil(t, header)
 }
 
 func TestAura_CheckStep(t *testing.T) {
@@ -111,10 +170,10 @@ func TestAura_CountClosestTurn(t *testing.T) {
 		auraChainConfig = &params.AuraConfig{
 			Period: 5,
 			Epoch:  500,
-			Authorities: params.ValidatorSet {
-					List: []common.Address {
-						crypto.PubkeyToAddress(randomValidatorKey.PublicKey),
-					},
+			Authorities: params.ValidatorSet{
+				List: []common.Address{
+					crypto.PubkeyToAddress(randomValidatorKey.PublicKey),
+				},
 			},
 			Difficulty: big.NewInt(int64(131072)),
 			Signatures: nil,
@@ -333,10 +392,10 @@ func TestAura_VerifySeal(t *testing.T) {
 	var aura Aura
 	auraConfig := &params.AuraConfig{
 		Period: uint64(5),
-		Authorities: params.ValidatorSet {
-			List: []common.Address {
-					common.HexToAddress("0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf"),
-					common.HexToAddress("0xafe443af9d1504de4c2d486356c421c160fdd7b1"),
+		Authorities: params.ValidatorSet{
+			List: []common.Address{
+				common.HexToAddress("0x70ad1a5fba52e27173d23ad87ad97c9bbe249abf"),
+				common.HexToAddress("0xafe443af9d1504de4c2d486356c421c160fdd7b1"),
 			},
 		},
 	}
