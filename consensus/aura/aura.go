@@ -516,7 +516,9 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 // rewards given.
 func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	//header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if nil != txs {
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	}
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	if err := a.FinalizeChange(header, chain, state); err != nil {
@@ -528,7 +530,9 @@ func (a *Aura) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 // nor block rewards given, and returns the final block.
 func (a *Aura) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	//header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if nil != txs {
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	}
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	if err := a.FinalizeChange(header, chain, state); err != nil {
@@ -864,7 +868,7 @@ func (a *Aura) FinalizeChange(header *types.Header, chain consensus.ChainHeaderR
 
 		// update the current root hash of the state trie because FinalizeChange method update the state of
 		// validator set contract
-		//header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 		// update validator set for sealing with updated validator set from the current block
 		a.validatorSet = a.transition.pendingValidatorSet
 		log.Debug("Updating finality checker with new validator set extracted from epoch",
