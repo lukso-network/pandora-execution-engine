@@ -321,7 +321,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// If engine is AuRa then need to prepare validator set contract backend
 	if auraEngine, ok := bc.Engine().(consensus.AuraEngine); ok {
 		auraEngine.PrepareBackend(bc)
-		// TODO-Need to configure transition for current block
+		receipts := bc.GetReceiptsByHash(bc.CurrentBlock().Hash())
+		auraEngine.SignalToChange(receipts, bc.CurrentBlock().Number())
 	}
 
 	// The first thing the node will do is reconstruct the verification data for
