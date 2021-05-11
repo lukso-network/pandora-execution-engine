@@ -223,7 +223,6 @@ func TestPendingBlockHash(t *testing.T) {
 	fromHeaderNumber := rawdb.ReadHeaderNumber(pendingHeaderDb, headers[0].Hash())
 	lastHeaderNumber := rawdb.ReadHeaderNumber(pendingHeaderDb, rawdb.ReadHeadHeaderHash(pendingHeaderDb))
 
-
 	for i := *fromHeaderNumber; i <= *lastHeaderNumber; i++ {
 
 		hashes := rawdb.ReadAllHashes(pendingHeaderDb, i)

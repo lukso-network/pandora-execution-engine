@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -32,10 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
-)
-
-const (
-	PendingHeaderChannelSize = 10 	// size of the pending header channel
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -236,14 +234,15 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 		// accept PendingHeaderChannelSize concurrent pending headers and send them
 		// If anything goes wrong remove it.
-		headers := make(chan *types.Header, PendingHeaderChannelSize)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
 
 		for {
 			select {
 			case h := <-headers:
 				notifier.Notify(rpcSub.ID, h)
-			case <-rpcSub.Err():
+			case rpcErr := <-rpcSub.Err():
+				log.Debug("error found in rpc subscription", rpcErr)
 				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
@@ -263,9 +262,6 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
-
-	// for loop GetPendingHeadersSince(from)
-	// send (rpcsub.ID)
 
 	rpcSub := notifier.CreateSubscription()
 
