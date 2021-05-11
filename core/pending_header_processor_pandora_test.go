@@ -7,8 +7,9 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 )
 
 func TestInsertHeaderChainWithPendingHeaders(t *testing.T) {

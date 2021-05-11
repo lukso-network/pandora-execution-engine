@@ -8,6 +8,9 @@ package filters
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -18,8 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"testing"
-	"time"
 )
 
 type pandoraTestBackend struct {
