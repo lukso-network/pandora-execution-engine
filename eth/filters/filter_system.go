@@ -100,13 +100,13 @@ type EventSystem struct {
 	pendingHeadSub event.Subscription // Subscription for pending header event
 
 	// Channels
-	install       chan *subscription         // install filter for event notification
-	uninstall     chan *subscription         // remove filter for event notification
-	txsCh         chan core.NewTxsEvent      // Channel to receive new transactions event
-	logsCh        chan []*types.Log          // Channel to receive new log event
-	pendingLogsCh chan []*types.Log          // Channel to receive new log event
-	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
-	chainCh       chan core.ChainEvent       // Channel to receive new chain event
+	install       chan *subscription           // install filter for event notification
+	uninstall     chan *subscription           // remove filter for event notification
+	txsCh         chan core.NewTxsEvent        // Channel to receive new transactions event
+	logsCh        chan []*types.Log            // Channel to receive new log event
+	pendingLogsCh chan []*types.Log            // Channel to receive new log event
+	rmLogsCh      chan core.RemovedLogsEvent   // Channel to receive removed log event
+	chainCh       chan core.ChainEvent         // Channel to receive new chain event
 	pendingHeadCh chan core.PendingHeaderEvent // channel to receive new pending header event
 }
 
@@ -390,7 +390,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	}
 }
 
-func (es *EventSystem) handlePendingHeaderEvent (index filterIndex, ev core.PendingHeaderEvent) {
+func (es *EventSystem) handlePendingHeaderEvent(index filterIndex, ev core.PendingHeaderEvent) {
 	for _, f := range index[PendingHeadsSubscription] {
 		for _, header := range ev.Headers {
 			f.headers <- header

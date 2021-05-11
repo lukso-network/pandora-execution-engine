@@ -28,7 +28,7 @@ type pandoraTestBackend struct {
 }
 
 // GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
-func (b *testBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
+func (b *testBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
 	return nil
 }
 
@@ -38,7 +38,7 @@ func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEv
 }
 
 // GetPendingHeadsSince returns pending headers from blockchain container
-func (b *pandoraTestBackend) GetPendingHeadsSince (ctx context.Context, from common.Hash) []*types.Header {
+func (b *pandoraTestBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
 	return b.bc.GetTempHeadersSince(from)
 }
 
@@ -54,11 +54,11 @@ func TestPendingHeaderSubscription(t *testing.T) {
 
 	// Initialize the backend
 	var (
-		db          = rawdb.NewMemoryDatabase()
-		backend     = &testBackend{db: db}
-		api         = NewPublicFilterAPI(backend, false, deadline)
-		genesis     = new(core.Genesis).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+		db                  = rawdb.NewMemoryDatabase()
+		backend             = &testBackend{db: db}
+		api                 = NewPublicFilterAPI(backend, false, deadline)
+		genesis             = new(core.Genesis).MustCommit(db)
+		chain, _            = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
 	)
 
@@ -110,7 +110,6 @@ func TestPendingHeaderSubscription(t *testing.T) {
 	<-sub1.Err()
 }
 
-
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *core.BlockGen) {
@@ -147,12 +146,11 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		blockchain, _       = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
-		headers 			= makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
+		headers             = makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
 	)
 
 	backend.db = db
 	var api = NewPublicFilterAPI(backend, false, deadline)
-
 
 	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
 
@@ -195,10 +193,10 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	<-sub1.Err()
 
 	time.Sleep(5 * time.Second)
-	headers = makeHeaderChain(headers[len(headers) - 1], 10, ethash.NewFaker(), db, 1)
+	headers = makeHeaderChain(headers[len(headers)-1], 10, ethash.NewFaker(), db, 1)
 	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
 
-	chan2:= make(chan *types.Header)
+	chan2 := make(chan *types.Header)
 	sub2 := api.events.SubscribePendingHeads(chan2)
 
 	go func() { // simulate client
