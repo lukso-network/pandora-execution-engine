@@ -75,7 +75,10 @@ func (b *LesApiBackend) GetPendingHeadsSince(ctx context.Context, from common.Ha
 // SubscribePendingHeaderEvent is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
 func (b *LesApiBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
 	//panic(fmt.Errorf("invalid function call. it is only for dummy purpose"))
-	return nil
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
 }
 
 func (b *LesApiBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
