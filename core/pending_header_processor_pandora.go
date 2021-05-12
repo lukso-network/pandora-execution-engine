@@ -32,6 +32,7 @@ func NewPandoraPendingHeaderContainer() *PandoraPendingHeaderContainer {
 
 // WriteHeaderBatch dumps a batch of header into header container
 func (container *PandoraPendingHeaderContainer) WriteHeaderBatch(headers []*types.Header) {
+	log.Debug("WriteHeaderBatch", "entered", headers)
 	for _, header := range headers {
 		container.WriteHeader(header)
 	}

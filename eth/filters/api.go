@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
