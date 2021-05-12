@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -47,8 +48,12 @@ func (container *PandoraPendingHeaderContainer) WriteHeader(header *types.Header
 
 // ReadHeaderSince will receive a from header hash and return a batch of headers from that header.
 func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash) []*types.Header {
+	log.Debug("ReadHeaderSince: received ", "from hash", from)
 	fromHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, from)
+	log.Debug("ReadHeaderSince: fromHeader ", "from header", fromHeaderNumber)
+
 	lastHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, rawdb.ReadHeadHeaderHash(container.headerContainer))
+	log.Debug("ReadHeaderSince: lastHeaderNumber ", "last header", lastHeaderNumber)
 
 	var headers []*types.Header
 	if fromHeaderNumber == nil {
@@ -86,6 +91,8 @@ func (container *PandoraPendingHeaderContainer) readHeader(headerNumber uint64) 
 
 // readAllHeaders reads all the headers from the memory
 func (container *PandoraPendingHeaderContainer) readAllHeaders() []*types.Header {
+	log.Debug("readAllHeaders: ", "entered", "into readAllHeaders")
+
 	// first retrieve the hashes of the headers
 	it := container.headerContainer.NewIterator([]byte("h"), nil)
 	var headers []*types.Header
@@ -95,9 +102,13 @@ func (container *PandoraPendingHeaderContainer) readAllHeaders() []*types.Header
 		if headerNumber == nil {
 			// if we get headerHash from the database then there must be the headernumber.
 			// if we don't get header number then return error.
+			log.Debug("readAllHeaders: ", "headerNumber is nil", "into readAllHeaders")
+
 			return headers
 		}
 		headers = append(headers, rawdb.ReadHeader(container.headerContainer, headerHash, *headerNumber))
 	}
+	log.Debug("readAllHeaders: ", "exiting with header length", len(headers))
+
 	return headers
 }

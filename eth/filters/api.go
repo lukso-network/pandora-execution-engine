@@ -36,9 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const (
-	PendingHeaderChannelSize = 10 // size of the pending header channel
-)
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
@@ -230,6 +227,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 	rpcSub := notifier.CreateSubscription()
 	go func() {
+		log.Debug("NewPendingBlockHeaders", "entered", "GetPendingHeaderSince")
 		// first send all available pending headers from the pending queue
 		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
 		for _, pendingHeader := range pendingHeaders {
@@ -238,7 +236,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 		// accept PendingHeaderChannelSize concurrent pending headers and send them
 		// If anything goes wrong remove it.
-		headers := make(chan *types.Header, PendingHeaderChannelSize)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
 
 		for {
