@@ -1735,6 +1735,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
 
+	//save chain in the in-memory database
+	bc.pendingHeaderContainer.WriteHeaderBatch(headers)
+
+	// send chain to the subscribed orchestrator.
+	bc.pendingHeaderContainer.pndHeaderFeed.Send(PendingHeaderEvent{Headers: headers})
+	// TODO: in future we will halt execution here to get confirmation from orchestrator.
+
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
 
@@ -2430,12 +2437,12 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
 	}
-	// save chain in the in-memory database
-	bc.pendingHeaderContainer.WriteHeaderBatch(chain)
-
-	// send chain to the subscribed orchestrator.
-	bc.pendingHeaderContainer.pndHeaderFeed.Send(PendingHeaderEvent{Headers: chain})
-	// TODO: in future we will halt execution here to get confirmation from orchestrator.
+	//// save chain in the in-memory database
+	//bc.pendingHeaderContainer.WriteHeaderBatch(chain)
+	//
+	//// send chain to the subscribed orchestrator.
+	//bc.pendingHeaderContainer.pndHeaderFeed.Send(PendingHeaderEvent{Headers: chain})
+	//// TODO: in future we will halt execution here to get confirmation from orchestrator.
 
 	// Make sure only one thread manipulates the chain at once
 	bc.chainmu.Lock()
