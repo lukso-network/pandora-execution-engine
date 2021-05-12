@@ -21,10 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
