@@ -78,22 +78,22 @@ func TestPendingHeaderSubscription(t *testing.T) {
 	sub1 := api.events.SubscribePendingHeads(chan1)
 
 	go func() { // simulate client
-		i1, i2 := 0, 0
+		sub0Iterator, sub1Iterator := 0, 0
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
-		for i1 != len(pendingHeaderEvents[0].Headers) || i2 != len(pendingHeaderEvents[0].Headers) {
+		for sub0Iterator != len(pendingHeaderEvents[0].Headers) || sub1Iterator != len(pendingHeaderEvents[0].Headers) {
 			select {
 			// here we will receive a single header from the batch and will process it
 			case header := <-chan0:
-				if pendingHeaderEvents[0].Headers[i1].Hash() != header.Hash() {
-					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[0].Headers[i1].Hash(), header.Hash())
+				if pendingHeaderEvents[0].Headers[sub0Iterator].Hash() != header.Hash() {
+					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", sub0Iterator, pendingHeaderEvents[0].Headers[sub0Iterator].Hash(), header.Hash())
 				}
-				i1++
+				sub0Iterator++
 			case header := <-chan1:
-				if pendingHeaderEvents[0].Headers[i2].Hash() != header.Hash() {
-					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", i2, pendingHeaderEvents[0].Headers[i2].Hash(), header.Hash())
+				if pendingHeaderEvents[0].Headers[sub1Iterator].Hash() != header.Hash() {
+					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", sub1Iterator, pendingHeaderEvents[0].Headers[sub1Iterator].Hash(), header.Hash())
 				}
-				i2++
+				sub1Iterator++
 			}
 		}
 
@@ -162,22 +162,22 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	sub1 := api.events.SubscribePendingHeads(chan1)
 
 	go func() { // simulate client
-		i1, i2 := 0, 0
+		sub0Iterator, sub1Iterator := 0, 0
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
-		for i1 != len(pendingHeaderEvents[0].Headers) || i2 != len(pendingHeaderEvents[0].Headers) {
+		for sub0Iterator != len(pendingHeaderEvents[0].Headers) || sub1Iterator != len(pendingHeaderEvents[0].Headers) {
 			select {
 			// here we will receive a single header from the batch and will process it
 			case header := <-chan0:
-				if pendingHeaderEvents[0].Headers[i1].Hash() != header.Hash() {
-					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[0].Headers[i1].Hash(), header.Hash())
+				if pendingHeaderEvents[0].Headers[sub0Iterator].Hash() != header.Hash() {
+					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", sub0Iterator, pendingHeaderEvents[0].Headers[sub0Iterator].Hash(), header.Hash())
 				}
-				i1++
+				sub0Iterator++
 			case header := <-chan1:
-				if pendingHeaderEvents[0].Headers[i2].Hash() != header.Hash() {
-					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", i2, pendingHeaderEvents[0].Headers[i2].Hash(), header.Hash())
+				if pendingHeaderEvents[0].Headers[sub1Iterator].Hash() != header.Hash() {
+					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", sub1Iterator, pendingHeaderEvents[0].Headers[sub1Iterator].Hash(), header.Hash())
 				}
-				i2++
+				sub1Iterator++
 			}
 		}
 
@@ -185,6 +185,8 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		sub1.Unsubscribe()
 	}()
 
+	// This waiting is only for dummy purpose. We are pretending that after clients are prepared we are inserting headers.
+	// We can omit this sleep.
 	time.Sleep(1 * time.Second)
 	if _, err := blockchain.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("insert header chain failed due to %v", err)
@@ -193,6 +195,7 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	<-sub0.Err()
 	<-sub1.Err()
 
+	// Give a few seconds to spin up another client
 	time.Sleep(5 * time.Second)
 	headers = makeHeaderChain(headers[len(headers)-1], 10, ethash.NewFaker(), db, 1)
 	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
@@ -214,16 +217,16 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 				headerIndex++
 			}
 		}
-		i1 := 0
+		sub2Iterator := 0
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
-		for i1 != len(pendingHeaderEvents[1].Headers) {
+		for sub2Iterator != len(pendingHeaderEvents[1].Headers) {
 			// here we will receive a single header from the batch and will process it
 			header := <-chan2
-			if pendingHeaderEvents[1].Headers[i1].Hash() != header.Hash() {
-				t.Errorf("sub2 received invalid hash on index %d, want %x, got %x", i1, pendingHeaderEvents[1].Headers[i1].Hash(), header.Hash())
+			if pendingHeaderEvents[1].Headers[sub2Iterator].Hash() != header.Hash() {
+				t.Errorf("sub2 received invalid hash on index %d, want %x, got %x", sub2Iterator, pendingHeaderEvents[1].Headers[sub2Iterator].Hash(), header.Hash())
 			}
-			i1++
+			sub2Iterator++
 		}
 
 		sub2.Unsubscribe()

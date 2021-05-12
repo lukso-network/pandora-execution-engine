@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"sync"
 	"time"
@@ -243,7 +244,8 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 			select {
 			case h := <-headers:
 				notifier.Notify(rpcSub.ID, h)
-			case <-rpcSub.Err():
+			case rpcErr := <-rpcSub.Err():
+				log.Debug("error found in rpc subscription", rpcErr)
 				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():

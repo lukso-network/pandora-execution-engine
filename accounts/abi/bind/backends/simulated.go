@@ -730,13 +730,11 @@ type filterBackend struct {
 
 // SubscribePendingHeaderEvent is implemented due to bad design of Backend interface. Don't use it here.
 func (b *filterBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeaderEvent) event.Subscription {
-	//panic(fmt.Errorf("called dummy purpose function. this call is invalid"))
 	return nullSubscription()
 }
 
 // GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
 func (b *filterBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
-	//panic(fmt.Errorf("called dummy purpose function. this call is invalid"))
 	return nil
 }
 

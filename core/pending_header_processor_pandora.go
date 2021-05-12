@@ -52,7 +52,6 @@ func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash
 
 	var headers []*types.Header
 	for i := *fromHeaderNumber; i <= *lastHeaderNumber; i++ {
-
 		header := container.readHeader(i)
 		headers = append(headers, header)
 	}
@@ -62,5 +61,9 @@ func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash
 // readHeader reads a single header which is given as the header number
 func (container *PandoraPendingHeaderContainer) readHeader(headerNumber uint64) *types.Header {
 	hashes := rawdb.ReadAllHashes(container.headerContainer, headerNumber)
+	if len(hashes) == 0 {
+		// hash not found. so we can't read the header.
+		return &types.Header{}
+	}
 	return rawdb.ReadHeader(container.headerContainer, hashes[0], headerNumber)
 }

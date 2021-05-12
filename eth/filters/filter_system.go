@@ -391,9 +391,9 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 }
 
 func (es *EventSystem) handlePendingHeaderEvent(index filterIndex, ev core.PendingHeaderEvent) {
-	for _, f := range index[PendingHeadsSubscription] {
+	for _, pendingSubscriptionFilter := range index[PendingHeadsSubscription] {
 		for _, header := range ev.Headers {
-			f.headers <- header
+			pendingSubscriptionFilter.headers <- header
 		}
 	}
 }
