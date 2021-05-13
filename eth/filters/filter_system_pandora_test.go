@@ -147,8 +147,15 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		blockchain, _       = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
-		headers             = makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
+		chain				= makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
+		//headers             = makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
 	)
+
+	var headers []*types.Header
+
+	for _, block := range chain {
+		headers = append(headers, block.Header())
+	}
 
 	backend.db = db
 	var api = NewPublicFilterAPI(backend, false, deadline)
@@ -188,8 +195,8 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	// This waiting is only for dummy purpose. We are pretending that after clients are prepared we are inserting headers.
 	// We can omit this sleep.
 	time.Sleep(1 * time.Second)
-	if _, err := blockchain.InsertHeaderChain(headers, 1); err != nil {
-		t.Fatalf("insert header chain failed due to %v", err)
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("insert block chain failed due to %v", err)
 	}
 
 	<-sub0.Err()
@@ -197,7 +204,14 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 
 	// Give a few seconds to spin up another client
 	time.Sleep(5 * time.Second)
-	headers = makeHeaderChain(headers[len(headers)-1], 10, ethash.NewFaker(), db, 1)
+	chain = makeBlockChain(chain[len(chain) - 1], 10, ethash.NewFaker(), db, 1)
+
+	headers = []*types.Header{}
+	for _, block := range chain {
+		headers = append(headers, block.Header())
+	}
+
+	//headers = makeHeaderChain(headers[len(headers)-1], 10, ethash.NewFaker(), db, 1)
 	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
 
 	chan2 := make(chan *types.Header)
@@ -232,8 +246,8 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		sub2.Unsubscribe()
 	}()
 
-	if _, err := blockchain.InsertHeaderChain(headers, 1); err != nil {
-		t.Fatalf("found error while inserting headers into blockhain %v", err)
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("found error while inserting blocks into blockhain %v", err)
 	}
 	<-sub2.Err()
 }
