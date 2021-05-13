@@ -119,21 +119,11 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	return blocks
 }
 
-// makeHeaderChain creates a deterministic chain of headers rooted at parent.
-//func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
-//	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
-//	headers := make([]*types.Header, len(blocks))
-//	for i, block := range blocks {
-//		headers[i] = block.Header()
-//	}
-//	return headers
-//}
-
 // TestPendingBlockHeaderFullPath tests backend to API subscription level testing of pandora pending event subscription container.
 // The testing procedure is discussed here:
-// 1. create header chain and a blockchain backend
+// 1. create block chain and a blockchain backend
 // 2. Two clients subscribe with the pending header container
-// 3. After inserting chain headers an event is triggered.
+// 3. After inserting chain blocks an event is triggered.
 // 4. If two clients can get similar headers then test success.
 // 5. Add another client and sync it with the pending header container
 // 6. Run the same test for the new client.
@@ -148,7 +138,6 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
 		chain               = makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
-		//headers             = makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
 	)
 
 	var headers []*types.Header
@@ -211,7 +200,6 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		headers = append(headers, block.Header())
 	}
 
-	//headers = makeHeaderChain(headers[len(headers)-1], 10, ethash.NewFaker(), db, 1)
 	pendingHeaderEvents = append(pendingHeaderEvents, core.PendingHeaderEvent{Headers: headers})
 
 	chan2 := make(chan *types.Header)

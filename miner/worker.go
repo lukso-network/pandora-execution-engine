@@ -770,9 +770,11 @@ func (w *worker) resultLoop() {
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
-			// notify about the pending headers to the orchestrator
-			log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
-			w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
+			if w.isPandora() {
+				// notify about the pending headers to the orchestrator
+				log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
+				w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
+			}
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
@@ -780,6 +782,12 @@ func (w *worker) resultLoop() {
 			return
 		}
 	}
+}
+
+// isPandora returns if we are running pandora engine
+func (w *worker) isPandora () bool {
+	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
+	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 }
 
 // makeCurrent creates a new environment for the current cycle.
