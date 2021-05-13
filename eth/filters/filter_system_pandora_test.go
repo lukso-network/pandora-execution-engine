@@ -120,14 +120,14 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 }
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
-	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	return headers
-}
+//func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
+//	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
+//	headers := make([]*types.Header, len(blocks))
+//	for i, block := range blocks {
+//		headers[i] = block.Header()
+//	}
+//	return headers
+//}
 
 // TestPendingBlockHeaderFullPath tests backend to API subscription level testing of pandora pending event subscription container.
 // The testing procedure is discussed here:
@@ -147,7 +147,7 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		blockchain, _       = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
-		chain				= makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
+		chain               = makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
 		//headers             = makeHeaderChain(genesis.Header(), 10, ethash.NewFaker(), db, 1)
 	)
 
@@ -204,7 +204,7 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 
 	// Give a few seconds to spin up another client
 	time.Sleep(5 * time.Second)
-	chain = makeBlockChain(chain[len(chain) - 1], 10, ethash.NewFaker(), db, 1)
+	chain = makeBlockChain(chain[len(chain)-1], 10, ethash.NewFaker(), db, 1)
 
 	headers = []*types.Header{}
 	for _, block := range chain {

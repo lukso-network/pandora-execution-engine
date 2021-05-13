@@ -771,6 +771,7 @@ func (w *worker) resultLoop() {
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
 			// notify about the pending headers to the orchestrator
+			log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
 			w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())

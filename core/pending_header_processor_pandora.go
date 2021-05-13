@@ -26,9 +26,11 @@ type PandoraPendingHeaderContainer struct {
 // WriteAndNotifyHeader writes header in database and also notify to the subscribers
 func (container *PandoraPendingHeaderContainer) WriteAndNotifyHeader(header *types.Header) {
 	// first write into database
+	log.Debug("WriteAndNotifyHeader is called", "header hash", header.Hash())
 	container.WriteHeader(header)
 
 	// now send notification
+	log.Debug("sending feed", "header hash", header.Hash())
 	container.pndHeaderFeed.Send(PendingHeaderEvent{Headers: []*types.Header{header}})
 }
 
