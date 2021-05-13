@@ -23,6 +23,15 @@ type PandoraPendingHeaderContainer struct {
 	pndHeaderFeed   event.Feed     // announce new arrival of pending header
 }
 
+// WriteAndNotifyHeader writes header in database and also notify to the subscribers
+func (container *PandoraPendingHeaderContainer) WriteAndNotifyHeader(header *types.Header) {
+	// first write into database
+	container.WriteHeader(header)
+
+	// now send notification
+	container.pndHeaderFeed.Send(PendingHeaderEvent{Headers: []*types.Header{header}})
+}
+
 // NewPandoraPendingHeaderContainer will return a fully initiated in-memory header container
 func NewPandoraPendingHeaderContainer() *PandoraPendingHeaderContainer {
 	return &PandoraPendingHeaderContainer{

@@ -2537,6 +2537,11 @@ func (bc *BlockChain) GetTempHeadersSince(from common.Hash) []*types.Header {
 	return bc.pendingHeaderContainer.ReadHeaderSince(from)
 }
 
+// GetPendingHeaderContainer exposes pending header container to the miner. So that newly mined block can be added
+func (bc *BlockChain) GetPendingHeaderContainer() *PandoraPendingHeaderContainer {
+	return bc.pendingHeaderContainer
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
