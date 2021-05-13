@@ -785,7 +785,7 @@ func (w *worker) resultLoop() {
 }
 
 // isPandora returns if we are running pandora engine
-func (w *worker) isPandora () bool {
+func (w *worker) isPandora() bool {
 	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
 	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 }
