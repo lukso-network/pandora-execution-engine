@@ -226,7 +226,6 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 	rpcSub := notifier.CreateSubscription()
 	go func() {
-		log.Debug("NewPendingBlockHeaders", "entered", "GetPendingHeaderSince")
 		// first send all available pending headers from the pending queue
 		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
 		for _, pendingHeader := range pendingHeaders {

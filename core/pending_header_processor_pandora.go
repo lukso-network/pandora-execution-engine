@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -26,11 +25,9 @@ type PandoraPendingHeaderContainer struct {
 // WriteAndNotifyHeader writes header in database and also notify to the subscribers
 func (container *PandoraPendingHeaderContainer) WriteAndNotifyHeader(header *types.Header) {
 	// first write into database
-	log.Debug("WriteAndNotifyHeader is called", "header hash", header.Hash())
 	container.WriteHeader(header)
 
 	// now send notification
-	log.Debug("sending feed", "header hash", header.Hash())
 	container.pndHeaderFeed.Send(PendingHeaderEvent{Headers: []*types.Header{header}})
 }
 
@@ -43,7 +40,6 @@ func NewPandoraPendingHeaderContainer() *PandoraPendingHeaderContainer {
 
 // WriteHeaderBatch dumps a batch of header into header container
 func (container *PandoraPendingHeaderContainer) WriteHeaderBatch(headers []*types.Header) {
-	log.Debug("WriteHeaderBatch", "entered", headers)
 	for _, header := range headers {
 		container.WriteHeader(header)
 	}
@@ -60,12 +56,9 @@ func (container *PandoraPendingHeaderContainer) WriteHeader(header *types.Header
 
 // ReadHeaderSince will receive a from header hash and return a batch of headers from that header.
 func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash) []*types.Header {
-	log.Debug("ReadHeaderSince: received ", "from hash", from)
 	fromHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, from)
-	log.Debug("ReadHeaderSince: fromHeader ", "from header", fromHeaderNumber)
 
 	lastHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, rawdb.ReadHeadHeaderHash(container.headerContainer))
-	log.Debug("ReadHeaderSince: lastHeaderNumber ", "last header", lastHeaderNumber)
 
 	var headers []*types.Header
 	if fromHeaderNumber == nil {
@@ -103,7 +96,6 @@ func (container *PandoraPendingHeaderContainer) readHeader(headerNumber uint64) 
 
 // readAllHeaders reads all the headers from the memory
 func (container *PandoraPendingHeaderContainer) readAllHeaders() []*types.Header {
-	log.Debug("readAllHeaders: ", "entered", "into readAllHeaders")
 
 	// first retrieve the hashes of the headers
 	it := container.headerContainer.NewIterator([]byte("h"), nil)
@@ -114,13 +106,11 @@ func (container *PandoraPendingHeaderContainer) readAllHeaders() []*types.Header
 		if headerNumber == nil {
 			// if we get headerHash from the database then there must be the headernumber.
 			// if we don't get header number then return error.
-			log.Debug("readAllHeaders: ", "headerNumber is nil", "into readAllHeaders")
 
 			return headers
 		}
 		headers = append(headers, rawdb.ReadHeader(container.headerContainer, headerHash, *headerNumber))
 	}
-	log.Debug("readAllHeaders: ", "exiting with header length", len(headers))
 
 	return headers
 }
