@@ -27,7 +27,7 @@ const (
 )
 
 // Orchestrator link
-var orchestrator_link = "http://127.0.0.1:8545"
+//var orchestrator_link = "http://127.0.0.1:8545"
 
 // In process rpc server related test
 
