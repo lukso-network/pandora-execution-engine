@@ -53,35 +53,36 @@ func DialInProcRPCClient() *OrcClient {
 	return NewOrcClient(rpcClient)
 }
 
+// GIT WON'T ALLOW TO PASS THIS TEST. DO NOT UN COMMENT IT. IT IS JUST FOR TEST IN LOCAL ENVIRONMENT.
 // TestOrcClient_GetConfirmedPanBlockHashesWithHTTP Calls real orchestrator client and fetch mocked hash
-func TestOrcClient_GetConfirmedPanBlockHashesWithHTTP(t *testing.T) {
-	// connect with a remote server and create an orchestrator client
-	orcClient, err := Dial(orchestrator_link)
-	if err != nil {
-		t.Fatalf("error found while dialing orchestrator. error %s", err)
-	}
-
-	var request []*BlockHash
-	request = append(request, &BlockHash{Hash: common.HexToHash(MockedHashInvalid), Slot: 1}, &BlockHash{Hash: common.HexToHash(MockedHashPending), Slot: 2})
-	response, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
-	if err != nil {
-		t.Fatalf("error found while getting confirmed pending block hashes")
-	}
-	t.Log("received block confirmations from orchestrator")
-	for _, hash := range response {
-		t.Logf("received %v", hash)
-	}
-
-}
+//func TestOrcClient_GetConfirmedPanBlockHashesWithHTTP(t *testing.T) {
+//	// connect with a remote server and create an orchestrator client
+//	orcClient, err := Dial(orchestrator_link)
+//	if err != nil {
+//		t.Fatalf("error found while dialing orchestrator. error %s", err)
+//	}
+//
+//	var request []*BlockHash
+//	request = append(request, &BlockHash{Hash: common.HexToHash(MockedHashInvalid), Slot: 1}, &BlockHash{Hash: common.HexToHash(MockedHashPending), Slot: 2})
+//	response, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
+//	if err != nil {
+//		t.Fatalf("error found while getting confirmed pending block hashes")
+//	}
+//	t.Log("received block confirmations from orchestrator")
+//	for _, hash := range response {
+//		t.Logf("received %v", hash)
+//	}
+//
+//}
 
 // TestDial dials real orchestrator to create a client
-func TestDial(t *testing.T) {
-	orcClient, err := Dial(orchestrator_link)
-	if err != nil {
-		t.Fatalf("error found while dialing orchestrator. error %s", err)
-	}
-	t.Logf("orchestrator created %v", orcClient)
-}
+//func TestDial(t *testing.T) {
+//	orcClient, err := Dial(orchestrator_link)
+//	if err != nil {
+//		t.Fatalf("error found while dialing orchestrator. error %s", err)
+//	}
+//	t.Logf("orchestrator created %v", orcClient)
+//}
 
 // testing mock orchestrator service
 type mockOrchestratorService struct{}
