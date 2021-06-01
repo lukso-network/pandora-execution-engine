@@ -4,7 +4,7 @@
 * This file is generated to support Lukso pandora module.
 * Purpose: All orchestrator client related codes reside here. Pandora use this client to talk with orchestraotr.
  */
-package orcclient_pandora
+package pandora_orcclient
 
 import (
 	"context"

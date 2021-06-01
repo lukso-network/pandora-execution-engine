@@ -5,7 +5,7 @@
 * Purpose: orchestrator API needs request of some types and also replies response on some types. All the types of
 	orchestraotr is mentioned here.
 */
-package orcclient_pandora
+package pandora_orcclient
 
 import "github.com/ethereum/go-ethereum/common"
 
