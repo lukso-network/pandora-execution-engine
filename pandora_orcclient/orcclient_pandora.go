@@ -1,5 +1,4 @@
 /*
-* Developed by: Md. Muhaimin Shah Pahalovi
 * Generated: 5/31/21
 * This file is generated to support Lukso pandora module.
 * Purpose: All orchestrator client related codes reside here. Pandora use this client to talk with orchestraotr.

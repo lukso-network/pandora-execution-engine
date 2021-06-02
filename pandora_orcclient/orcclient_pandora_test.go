@@ -1,5 +1,4 @@
 /*
-* Developed by: Md. Muhaimin Shah Pahalovi
 * Generated: 5/31/21
 * This file is generated to support Lukso pandora module.
 * Purpose:
