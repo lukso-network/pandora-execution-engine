@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -79,6 +81,11 @@ const (
 	staleThreshold = 7
 )
 
+const (
+	// orchestratorConfirmationRetrievalLimit is the maximum limit of orchestrator client confirmation retrieval
+	orchestratorConfirmationRetrievalLimit = 5
+)
+
 // environment is the worker's current environment and holds all of the current state information.
 type environment struct {
 	signer types.Signer
@@ -129,7 +136,7 @@ type worker struct {
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
-	eth         Backend
+	eth         PandoraBackend
 	chain       *core.BlockChain
 
 	// Feeds
@@ -183,6 +190,10 @@ type worker struct {
 	// External functions
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
+	// pandora-orchestrator data passing
+	orcClientSubscriber event.Subscription
+	blockConfirmationCh chan []*pandora_orcclient.BlockStatus
+
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
@@ -190,35 +201,39 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth PandoraBackend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		mux:                mux,
-		chain:              eth.BlockChain(),
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		config:              config,
+		chainConfig:         chainConfig,
+		engine:              engine,
+		eth:                 eth,
+		mux:                 mux,
+		chain:               eth.BlockChain(),
+		isLocalBlock:        isLocalBlock,
+		localUncles:         make(map[common.Hash]*types.Block),
+		remoteUncles:        make(map[common.Hash]*types.Block),
+		unconfirmed:         newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		pendingTasks:        make(map[common.Hash]*task),
+		txsCh:               make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:         make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:           make(chan *newWorkReq),
+		taskCh:              make(chan *task),
+		resultCh:            make(chan *types.Block, resultQueueSize),
+		exitCh:              make(chan struct{}),
+		startCh:             make(chan struct{}, 1),
+		resubmitIntervalCh:  make(chan time.Duration),
+		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
+		blockConfirmationCh: make(chan []*pandora_orcclient.BlockStatus),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+
+	// Subscribe events for orchestrator client
+	worker.orcClientSubscriber = eth.SubscribeConfirmedBlockHashFetcher(worker.blockConfirmationCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -758,6 +773,33 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
+
+			// verification is done. Now if pandora mode is running then push it into the queue
+			// After that, wait for response of the orchestrator client.
+			if w.isPandora() {
+				// notify about the pending headers to the orchestrator
+				log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
+				w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
+
+				retryLimit := orchestratorConfirmationRetrievalLimit
+				status := pandora_orcclient.Status(0)
+				for retryLimit > 0 && status == 0 {
+					// halt and get orchestrator confirmation
+					confirmedBlocks := <-w.blockConfirmationCh
+					for _, confirmedBlock := range confirmedBlocks {
+						if confirmedBlock.Hash == block.Hash() {
+							status = confirmedBlock.Status
+						}
+					}
+					retryLimit--
+				}
+				// if status is pending or invalid then just continue default work
+				if status == pandora_orcclient.Status(0) || status == pandora_orcclient.Status(2) {
+					log.Warn("failed to write block into the chain. block hash %v", block.Hash())
+					continue
+				}
+				// if status is approved then write block in canonical chain.
+			}
 			// Commit block and state to database.
 			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
 			if err != nil {
@@ -770,11 +812,6 @@ func (w *worker) resultLoop() {
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
-			if w.isPandora() {
-				// notify about the pending headers to the orchestrator
-				log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
-				w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
-			}
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
 

@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
@@ -37,6 +39,10 @@ import (
 type mockBackend struct {
 	bc     *core.BlockChain
 	txPool *core.TxPool
+}
+
+func (m *mockBackend) SubscribeConfirmedBlockHashFetcher(ch chan<- []*pandora_orcclient.BlockStatus) event.Subscription {
+	return nil
 }
 
 func NewMockBackend(bc *core.BlockChain, txPool *core.TxPool) *mockBackend {

@@ -66,7 +66,7 @@ func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash
 		// 1. When requesting for empty hash. That is when orchestrator bootup it sends empty hash to the pandora. It is not present in the memory container
 		// 2. When orchestrator requesting a from hash, which is already confirmed and removed from the memory container.
 		// In both cases we are sending all available headers to the subscriber.
-		return container.readAllHeaders()
+		return container.ReadAllHeaders()
 	}
 
 	if lastHeaderNumber == nil {
@@ -94,8 +94,8 @@ func (container *PandoraPendingHeaderContainer) readHeader(headerNumber uint64) 
 	return rawdb.ReadHeader(container.headerContainer, hashes[0], headerNumber)
 }
 
-// readAllHeaders reads all the headers from the memory
-func (container *PandoraPendingHeaderContainer) readAllHeaders() []*types.Header {
+// ReadAllHeaders reads all the headers from the memory
+func (container *PandoraPendingHeaderContainer) ReadAllHeaders() []*types.Header {
 
 	// first retrieve the hashes of the headers
 	it := container.headerContainer.NewIterator([]byte("h"), nil)
