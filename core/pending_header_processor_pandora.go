@@ -54,6 +54,11 @@ func (container *PandoraPendingHeaderContainer) WriteHeader(header *types.Header
 	rawdb.WriteHeadHeaderHash(container.headerContainer, header.Hash())
 }
 
+// DeleteHeader deletes a single header from the container
+func (container *PandoraPendingHeaderContainer) DeleteHeader(header *types.Header) {
+	rawdb.DeleteHeader(container.headerContainer, header.Hash(), header.Number.Uint64())
+}
+
 // ReadHeaderSince will receive a from header hash and return a batch of headers from that header.
 func (container *PandoraPendingHeaderContainer) ReadHeaderSince(from common.Hash) []*types.Header {
 	fromHeaderNumber := rawdb.ReadHeaderNumber(container.headerContainer, from)

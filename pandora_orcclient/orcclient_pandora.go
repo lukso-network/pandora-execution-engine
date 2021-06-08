@@ -42,6 +42,10 @@ func (oc *OrcClient) Close() {
 // GetConfirmedPanBlockHashes gets confirmation of pandora block hashes
 func (oc *OrcClient) GetConfirmedPanBlockHashes(ctx context.Context, request []*BlockHash) ([]*BlockStatus, error) {
 	var blockStatus []*BlockStatus
+	if len(request) < 1 {
+		// no request. dont do anything
+		return blockStatus, nil
+	}
 	err := oc.rpcClient.CallContext(ctx, &blockStatus, "orc_confirmPanBlockHashes", request)
 	return blockStatus, err
 }

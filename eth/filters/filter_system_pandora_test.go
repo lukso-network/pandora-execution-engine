@@ -8,8 +8,19 @@ package filters
 
 import (
 	"context"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
+	common2 "github.com/silesiacoin/bls/common"
+	"github.com/silesiacoin/bls/herumi"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"net"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -130,19 +141,53 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 func TestPendingBlockHeaderFullPath(t *testing.T) {
 	t.Parallel()
 
+	consensusChannel := make(chan *params.MinimalEpochConsensusInfo)
+	listener, server, location := makeOrchestratorServer(t, consensusChannel)
+	defer func() {
+		if recovery := recover(); recovery != nil {
+			t.Log("Recovered in server stop", recovery)
+		}
+		server.Stop()
+	}()
+	require.Equal(t, location, listener.Addr().String())
+
+	//// Open a pandora engine
+	validatorPublicList := [32]common2.PublicKey{}
+	for index := range validatorPublicList {
+		privKey, err := herumi.RandKey()
+		assert.Nil(t, err)
+		pubKey := privKey.PublicKey()
+		validatorPublicList[index] = pubKey
+	}
+	urls := []string{location}
+	var (
+		consensusInfo []*params.MinimalEpochConsensusInfo
+	)
+	genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0, ValidatorList: validatorPublicList}
+	consensusInfo = append(consensusInfo, genesisEpoch)
+
+	config := ethash.Config{
+		PowMode: ethash.ModePandora,
+		Log:     log.Root(),
+	}
+	ethashEngine := ethash.NewPandora(config, urls, true, consensusInfo, false)
+
+	//t.Fatal(fmt.Sprintf("THIS IS ETHASH ENGINE %v", ethashEngine))
+
 	// Initialize the backend
 	var (
 		db                  = rawdb.NewMemoryDatabase()
 		genesis             = new(core.Genesis).MustCommit(db)
-		blockchain, _       = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
+		blockchain, _       = core.NewBlockChain(db, &core.CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.AllEthashProtocolChanges, ethashEngine, vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
-		chain               = makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
+		chain               = makeBlockChain(genesis, 10, ethashEngine, db, 1)
 	)
 
 	var headers []*types.Header
 
 	for _, block := range chain {
+		fmt.Printf("full block %+v\n", *block)
 		headers = append(headers, block.Header())
 	}
 
@@ -158,6 +203,8 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	sub1 := api.events.SubscribePendingHeads(chan1)
 
 	go func() { // simulate client
+		t.Logf("exiting go routine %d", len(pendingHeaderEvents[0].Headers))
+
 		sub0Iterator, sub1Iterator := 0, 0
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
@@ -184,15 +231,17 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	// This waiting is only for dummy purpose. We are pretending that after clients are prepared we are inserting headers.
 	// We can omit this sleep.
 	time.Sleep(1 * time.Second)
+	t.Logf("before inserting chain")
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("insert block chain failed due to %v", err)
 	}
+	t.Logf("after inserting chain")
 
 	<-sub0.Err()
 	<-sub1.Err()
 
 	// Give a few seconds to spin up another client
-	time.Sleep(5 * time.Second)
+	//time.Sleep(5 * time.Second)
 	chain = makeBlockChain(chain[len(chain)-1], 10, ethash.NewFaker(), db, 1)
 
 	headers = []*types.Header{}
@@ -238,4 +287,68 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 		t.Fatalf("found error while inserting blocks into blockhain %v", err)
 	}
 	<-sub2.Err()
+}
+
+type OrchestratorApi struct {
+	consensusChannel chan *params.MinimalEpochConsensusInfo
+}
+
+// MinimalConsensusInfo will notify and return about all consensus information
+// This iteration does not allow to fetch only desired range
+// It is entirely done to check if tests are having same problems with subscription
+func (api *OrchestratorApi) MinimalConsensusInfo(ctx context.Context, epoch uint64) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	// Change it to be triggered by a channel
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		for {
+			info := <-api.consensusChannel
+			payload := &ethash.MinimalEpochConsensusInfoPayload{
+				Epoch:            info.Epoch,
+				ValidatorList:    [32]string{},
+				EpochTimeStart:   info.EpochTimeStart,
+				SlotTimeDuration: info.SlotTimeDuration,
+			}
+
+			for index, validator := range info.ValidatorList {
+				payload.ValidatorList[index] = hexutil.Encode(validator.Marshal())
+			}
+
+			currentErr := notifier.Notify(rpcSub.ID, payload)
+
+			if nil != currentErr {
+				// For now only panic
+				panic(currentErr)
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+func makeOrchestratorServer(
+	t *testing.T,
+	consensusChannel chan *params.MinimalEpochConsensusInfo,
+) (listener net.Listener, server *rpc.Server, location string) {
+	location = "./test.ipc"
+	apis := make([]rpc.API, 0)
+	api := &OrchestratorApi{consensusChannel: consensusChannel}
+
+	apis = append(apis, rpc.API{
+		Namespace: "orc",
+		Version:   "1.0",
+		Service:   api,
+		Public:    true,
+	})
+
+	listener, server, err := rpc.StartIPCEndpoint(location, apis)
+	require.NoError(t, err)
+
+	return
 }

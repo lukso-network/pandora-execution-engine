@@ -18,19 +18,13 @@
 package eth
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
-	"net/url"
 	"runtime"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -100,9 +94,6 @@ type Ethereum struct {
 	p2pServer *p2p.Server
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	quit                 chan struct{} // Ethereum quit channel
-	confirmedBlockHashes event.Feed    // orchestrator client will pass fetched response using this event.
 }
 
 // New creates a new Ethereum object (including the
@@ -157,7 +148,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
-		quit:              make(chan struct{}),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -191,6 +181,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieTimeLimit:       config.TrieTimeout,
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
+			OrcClientEndpoint:   config.Miner.Notify,
 		}
 	)
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
@@ -270,101 +261,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 				"age", common.PrettyAge(t))
 		}
 	}
-	// check if we are running pandora engine. If so, only then call the go routine
-	if eth.miner.IsPandora() {
-		// consensus engine is on pandora mode. Now run the orchestrator go routine
-		go func() {
-			err := eth.pandoraBlockHashConfirmationFetcher()
-			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", err)
-			}
-		}()
-	}
-
 	return eth, nil
-}
-
-// pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
-// the orchestrator client with a set of headers and fetch response from the orchestrator.
-// If it gets any response, it will send that response in the feed.
-// Miner and blockchain both are initialized from the backend. So this is a suitable place
-// to write subscriber. Both Miner and blockchain can subscribe for the event from Ethereum.
-func (eth *Ethereum) pandoraBlockHashConfirmationFetcher() error {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// prepare header requests
-			headers := eth.blockchain.GetPendingHeaderContainer().ReadAllHeaders()
-			if len(headers) == 0 {
-				// no header found. nothing to prepare request. simply continue
-				continue
-			}
-
-			request, err := preparePanBlockHashRequest(headers)
-			if err != nil {
-				return err
-			}
-			// This may not be a good solution. But for now we are using it temporarily. In future we will change it.
-			// Miner.Notify will take an HTTP address of the orchestrator client.
-			// pandora engine using an web socket address in 0-th index.
-			// Thus, we are using http address at index- 1.
-			if len(eth.config.Miner.Notify) < 1 {
-				return errors.New("orchestrator http endpoint not provided")
-			}
-
-			// expecting http / https endpoint address. If not given throw an error
-			parsedUrl, err := url.Parse(eth.config.Miner.Notify[1])
-			if err != nil {
-				return err
-			}
-
-			switch parsedUrl.Scheme {
-			case "http", "https":
-				orcClient, err := pandora_orcclient.Dial(eth.config.Miner.Notify[1])
-				if err != nil {
-					return err
-				}
-				blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
-				if err != nil {
-					return err
-				}
-				// send the blockhash in the feed. Thus, miner and insertchain will be able to listen it.
-				eth.confirmedBlockHashes.Send(blockHashResponse)
-
-			default:
-				return fmt.Errorf("expecting http or https scheme. but provided %s", parsedUrl.Scheme)
-			}
-
-		case <-eth.quit:
-			// Ethereum service is closed. Break the loop
-			return nil
-		}
-	}
-}
-
-// preparePanBlockHashRequest prepares pandora BlockHash request for the orchestrator client.
-// After preparing request it will sort the request in slot ascending order.
-func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
-	var blockHashes []*pandora_orcclient.BlockHash
-	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraDataSealed{}
-		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
-		if err != nil {
-			return nil, err
-		}
-		blockHashes = append(blockHashes, &pandora_orcclient.BlockHash{Slot: pandoraExtraData.Slot, Hash: header.Hash()})
-	}
-
-	if len(blockHashes) > 0 {
-		sort.SliceStable(blockHashes, func(i, j int) bool {
-			return blockHashes[i].Slot < blockHashes[j].Slot
-		})
-	}
-
-	return blockHashes, nil
 }
 
 func makeExtraData(extra []byte) []byte {
@@ -616,10 +513,6 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	return protos
 }
 
-func (eth *Ethereum) SubscribeConfirmedBlockHashFetcher(ch chan<- []*pandora_orcclient.BlockStatus) event.Subscription {
-	return eth.confirmedBlockHashes.Subscribe(ch)
-}
-
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
@@ -657,9 +550,6 @@ func (s *Ethereum) Stop() error {
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.eventMux.Stop()
-
-	// close ethereum quit channel so that Ethereum related service can shut down
-	close(s.quit)
 
 	return nil
 }
