@@ -793,6 +793,8 @@ func (w *worker) resultLoop() {
 					}
 					retryLimit--
 				}
+				// remove the header from the pending queue
+				w.eth.BlockChain().GetPendingHeaderContainer().DeleteHeader(block.Header())
 				// if status is pending or invalid then just continue default work
 				if status == pandora_orcclient.Status(0) || status == pandora_orcclient.Status(2) {
 					log.Warn("failed to write block into the chain. block hash %v", block.Hash())
