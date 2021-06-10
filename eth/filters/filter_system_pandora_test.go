@@ -132,6 +132,20 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 func TestPendingBlockHeaderFullPath(t *testing.T) {
 	t.Parallel()
 
+	//// Open a pandora engine
+	//config := ethash.Config{
+	//	PowMode: ethash.ModePandora,
+	//	Log:     log.Root(),
+	//}
+	//var (
+	//	consensusInfo []*params.MinimalEpochConsensusInfo
+	//)
+	//
+	//// Dummy genesis epoch
+	//genesisEpoch := &params.MinimalEpochConsensusInfo{Epoch: 0}
+	//consensusInfo = append(consensusInfo, genesisEpoch)
+	//
+	//pandoraEngine := ethash.NewPandora(config, nil, false, consensusInfo, false)
 	// Initialize the backend
 	var (
 		db                  = rawdb.NewMemoryDatabase()
@@ -198,7 +212,7 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	<-sub1.Err()
 
 	// Give a few seconds to spin up another client
-	time.Sleep(5 * time.Second)
+	//time.Sleep(5 * time.Second)
 	chain = makeBlockChain(chain[len(chain)-1], 10, ethash.NewFaker(), db, 1)
 
 	headers = []*types.Header{}
