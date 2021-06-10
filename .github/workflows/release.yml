@@ -39,7 +39,7 @@ jobs:
       - name: Build binary
         run: |
           mkdir builds &&
-          go build -v --tags=blst_enabled -o ./builds/pandora ./cmd/geth   
+          go build -v --tags=blst_enabled -o ./builds/geth ./cmd/geth   
 
       # - name: Run GoReleaser
       #   uses: goreleaser/goreleaser-action@master
@@ -56,7 +56,7 @@ jobs:
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            ./builds/pandora
+            ./builds/geth
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           
