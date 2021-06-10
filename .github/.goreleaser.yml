@@ -13,6 +13,8 @@ builds:
       - linux
       - windows
       - darwin
+    flags:
+      - -tags=blst_enabled
 archives:
   - replacements:
       darwin: Darwin
