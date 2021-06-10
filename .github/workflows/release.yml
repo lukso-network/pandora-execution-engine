@@ -41,6 +41,6 @@ jobs:
         with:
           version: latest
           workdir: ./cmd/geth
-          args: release --rm-dist --snapshot
+          args: release --rm-dist --snapshot --config ../../.github/.goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
