@@ -36,11 +36,16 @@ jobs:
         run: |
           go get -v -t -d ./...
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@master
-        with:
-          version: latest
-          workdir: ./cmd/geth
-          args: release --rm-dist --snapshot --config ../../.github/.goreleaser.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Build binary
+        run: |
+          mkdir builds &&
+          go build -v --tags=blst_enabled -o ./builds/pandora ./cmd/geth   
+
+      # - name: Run GoReleaser
+      #   uses: goreleaser/goreleaser-action@master
+      #   with:
+      #     version: latest
+      #     workdir: ./cmd/geth
+      #     args: release --rm-dist --snapshot --config ../../.github/.goreleaser.yml
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
