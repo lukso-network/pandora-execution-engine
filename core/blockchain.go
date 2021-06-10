@@ -140,8 +140,8 @@ type CacheConfig struct {
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
-	SnapshotWait      bool     // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
-	OrcClientEndpoint []string // It is a temporary hack. Will change it when refactoring. It is the address of orchestrator client.
+	SnapshotWait      bool        // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+	OrcClientEndpoint interface{} // It is a temporary hack. Will change it when refactoring. It is the address of orchestrator client.
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -454,31 +454,40 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	// This may not be a good solution. But for now we are using it temporarily. In future we will change it.
-	// Miner.Notify will take an HTTP address of the orchestrator client.
-	// pandora engine using an web socket address in 0-th index.
-	// Thus, we are using http address at index- 1.
-	if len(bc.cacheConfig.OrcClientEndpoint) < 1 {
-		return errors.New("orchestrator http endpoint not provided")
-	}
-
-	// expecting http / https endpoint address. If not given throw an error
-	parsedUrl, err := url.Parse(bc.cacheConfig.OrcClientEndpoint[1])
-	if err != nil {
-		return err
-	}
-
-	// first initialize orchestrator client
 	var orcClient *pandora_orcclient.OrcClient
-	switch parsedUrl.Scheme {
-	case "http", "https":
-		orcClient, err = pandora_orcclient.Dial(bc.cacheConfig.OrcClientEndpoint[1])
+
+	switch orcClientObject := bc.cacheConfig.OrcClientEndpoint.(type) {
+	case []string:
+		// This may not be a good solution. But for now we are using it temporarily. In future we will change it.
+		// Miner.Notify will take an HTTP address of the orchestrator client.
+		// pandora engine using an web socket address in 0-th index.
+		// Thus, we are using http address at index- 1.
+		if len(orcClientObject) < 1 {
+			return errors.New("orchestrator http endpoint not provided")
+		}
+
+		// expecting http / https endpoint address. If not given throw an error
+		parsedUrl, err := url.Parse(orcClientObject[1])
 		if err != nil {
 			return err
 		}
 
+		// first initialize orchestrator client
+		switch parsedUrl.Scheme {
+		case "http", "https":
+			orcClient, err = pandora_orcclient.Dial(orcClientObject[1])
+			if err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf("expecting http or https scheme. but provided %s", parsedUrl.Scheme)
+		}
+	case *pandora_orcclient.OrcClient:
+		// for testing purpose we will send in process orchestrator client. we have to use it
+		orcClient = orcClientObject
 	default:
-		return fmt.Errorf("expecting http or https scheme. but provided %s", parsedUrl.Scheme)
+		return fmt.Errorf("unsupported orchestrator client type")
 	}
 
 	for {
@@ -1661,6 +1670,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 			retryLimit--
 		}
+		log.Debug("for blockHash %v received status %v", block.Header().Hash(), status)
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
@@ -1669,6 +1679,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			return CanonStatTy, consensus.ErrInvalidNumber
 		}
 		// if status is approved then write block in canonical chain.
+		log.Debug("block %v is verified. so continuing existing parts", block.Header().Hash())
 	}
 
 	// Calculate the total difficulty of the block

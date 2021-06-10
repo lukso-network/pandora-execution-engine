@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -134,7 +136,7 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	var (
 		db                  = rawdb.NewMemoryDatabase()
 		genesis             = new(core.Genesis).MustCommit(db)
-		blockchain, _       = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
+		blockchain, _       = core.NewBlockChain(db, &core.CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
 		chain               = makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
@@ -158,6 +160,8 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	sub1 := api.events.SubscribePendingHeads(chan1)
 
 	go func() { // simulate client
+		t.Logf("exiting go routine %d", len(pendingHeaderEvents[0].Headers))
+
 		sub0Iterator, sub1Iterator := 0, 0
 		// a batch of headers are received as event.
 		// but in subscriber end we have to send the batch as one by one header
@@ -184,9 +188,11 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	// This waiting is only for dummy purpose. We are pretending that after clients are prepared we are inserting headers.
 	// We can omit this sleep.
 	time.Sleep(1 * time.Second)
+	t.Logf("before inserting chain")
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("insert block chain failed due to %v", err)
 	}
+	t.Logf("after inserting chain")
 
 	<-sub0.Err()
 	<-sub1.Err()
