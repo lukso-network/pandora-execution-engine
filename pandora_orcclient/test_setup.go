@@ -26,19 +26,19 @@ func DialInProcRPCClient() *OrcClient {
 }
 
 // testing mock orchestrator service
-type mockOrchestratorService struct{}
+type MockOrchestratorService struct{}
 
 // NewMockOrchestratorServer method mock pandora chain apis
 func NewMockOrchestratorServer() *rpc.Server {
 	server := rpc.NewServer()
-	if err := server.RegisterName("orc", new(mockOrchestratorService)); err != nil {
+	if err := server.RegisterName("orc", new(MockOrchestratorService)); err != nil {
 		panic(err)
 	}
 	return server
 }
 
 // ConfirmPanBlockHashes confirms block confirmation
-func (OrcClient *mockOrchestratorService) ConfirmPanBlockHashes(ctx context.Context,
+func (OrcClient *MockOrchestratorService) ConfirmPanBlockHashes(ctx context.Context,
 	request []*BlockHash) (response []*BlockStatus, err error) {
 
 	if len(request) < 1 {

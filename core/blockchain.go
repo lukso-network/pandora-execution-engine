@@ -499,16 +499,20 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 				// no header found. nothing to prepare request. simply continue
 				continue
 			}
+			log.Debug("tick", "retrieving pending headers", headers)
 
 			request, err := preparePanBlockHashRequest(headers)
 			if err != nil {
 				return err
 			}
 
+			log.Debug("sending request to the orchestrator", "request", request)
+
 			blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
 			if err != nil {
 				return err
 			}
+			log.Debug("got confirmation", "sending to the feed", blockHashResponse)
 			// send the blockhash in the feed. Thus, miner and insertchain will be able to listen it.
 			bc.confirmedBlockHashes.Send(blockHashResponse)
 
@@ -1658,10 +1662,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		status := pandora_orcclient.Status(0)
 		for retryLimit > 0 && status == 0 {
 			// halt and get orchestrator confirmation
+			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
 			confirmedBlocks := <-bc.blockConfirmationCh
 			for _, confirmedBlock := range confirmedBlocks {
 				if confirmedBlock.Hash == block.Hash() {
 					status = confirmedBlock.Status
+					log.Debug("found confirmation", "confirmed block status", status)
 				}
 				if status != 0 {
 					// if status is invalid or correct then break the loop
@@ -1670,7 +1676,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 			retryLimit--
 		}
-		log.Debug("for blockHash %v received status %v", block.Header().Hash(), status)
+		log.Debug("deleting from pending container", "header hash", block.Hash())
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work

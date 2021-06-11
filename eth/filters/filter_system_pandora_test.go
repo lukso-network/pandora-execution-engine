@@ -172,21 +172,22 @@ func TestPendingBlockHeaderFullPath(t *testing.T) {
 	}
 	ethashEngine := ethash.NewPandora(config, urls, true, consensusInfo, false)
 
-	t.Fatal(fmt.Sprintf("THIS IS ETHASH ENGINE %v", ethashEngine))
+	//t.Fatal(fmt.Sprintf("THIS IS ETHASH ENGINE %v", ethashEngine))
 
 	// Initialize the backend
 	var (
 		db                  = rawdb.NewMemoryDatabase()
 		genesis             = new(core.Genesis).MustCommit(db)
-		blockchain, _       = core.NewBlockChain(db, &core.CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{}, nil, nil)
+		blockchain, _       = core.NewBlockChain(db, &core.CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.AllEthashProtocolChanges, ethashEngine, vm.Config{}, nil, nil)
 		backend             = &pandoraTestBackend{bc: blockchain}
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
-		chain               = makeBlockChain(genesis, 10, ethash.NewFaker(), db, 1)
+		chain               = makeBlockChain(genesis, 10, ethashEngine, db, 1)
 	)
 
 	var headers []*types.Header
 
 	for _, block := range chain {
+		fmt.Printf("full block %+v\n", *block)
 		headers = append(headers, block.Header())
 	}
 
