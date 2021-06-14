@@ -503,14 +503,16 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 
 			request, err := preparePanBlockHashRequest(headers)
 			if err != nil {
-				return err
+				log.Error("got error when preparing pandora block hash request", "error", err)
+				continue
 			}
 
 			log.Debug("sending request to the orchestrator", "request", request)
 
 			blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
 			if err != nil {
-				return err
+				log.Error("got error when calling orchestrator for getting confirmation request", "error", err)
+				continue
 			}
 			log.Debug("got confirmation", "sending to the feed", blockHashResponse)
 			// send the blockhash in the feed. Thus, miner and insertchain will be able to listen it.
