@@ -124,7 +124,7 @@ const (
 
 const (
 	// orchestratorConfirmationRetrievalLimit is the maximum limit of orchestrator client confirmation retrieval
-	orchestratorConfirmationRetrievalLimit = 5
+	orchestratorConfirmationRetrievalLimit = 10
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -426,7 +426,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		go func() {
 			err := bc.pandoraBlockHashConfirmationFetcher()
 			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", err)
+				log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
 			}
 		}()
 	}
@@ -503,14 +503,16 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 
 			request, err := preparePanBlockHashRequest(headers)
 			if err != nil {
-				return err
+				log.Error("got error when preparing pandora block hash request", "error", err)
+				continue
 			}
 
 			log.Debug("sending request to the orchestrator", "request", request)
 
 			blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
 			if err != nil {
-				return err
+				log.Error("got error when calling orchestrator for getting confirmation request", "error", err)
+				continue
 			}
 			log.Debug("got confirmation", "sending to the feed", blockHashResponse)
 			// send the blockhash in the feed. Thus, miner and insertchain will be able to listen it.
@@ -530,12 +532,13 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraData{}
+		pandoraExtraData := ethash.PandoraExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
 			return nil, err
 		}
+		log.Debug("preparing request", "block number", header.Number, "slot number", pandoraExtraData.Slot)
 		blockHashes = append(blockHashes, &pandora_orcclient.BlockHash{Slot: pandoraExtraData.Slot, Hash: header.Hash()})
 	}
 
@@ -1660,8 +1663,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
 
 		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Status(0)
-		for retryLimit > 0 && status == 0 {
+		status := pandora_orcclient.Pending
+		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			// halt and get orchestrator confirmation
 			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
 			confirmedBlocks := <-bc.blockConfirmationCh
@@ -1670,7 +1673,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					status = confirmedBlock.Status
 					log.Debug("found confirmation", "confirmed block status", status)
 				}
-				if status != 0 {
+				if status != pandora_orcclient.Pending {
 					// if status is invalid or correct then break the loop
 					break
 				}
@@ -1681,12 +1684,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Status(0) || status == pandora_orcclient.Status(2) {
-			log.Warn("failed to write block into the chain. block hash %v", block.Hash())
+		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
+			log.Warn("failed to write block into the chain", "block hash", block.Hash())
 			return CanonStatTy, consensus.ErrInvalidNumber
 		}
 		// if status is approved then write block in canonical chain.
-		log.Debug("block %v is verified. so continuing existing parts", block.Header().Hash())
+		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
 	}
 
 	// Calculate the total difficulty of the block

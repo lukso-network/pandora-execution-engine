@@ -208,7 +208,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
 		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
+		resultCh:           make(chan *types.Block), // TODO: ADD PANDORA CONDITION
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),

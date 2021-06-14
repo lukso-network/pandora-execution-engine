@@ -18,6 +18,7 @@ package eth
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"time"
 
@@ -243,6 +244,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 
 	if handler := handlers[msg.Code]; handler != nil {
+		log.Debug("handleMessage", "message code", msg.Code)
 		return handler(backend, msg, peer)
 	}
 	return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)
