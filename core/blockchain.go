@@ -124,7 +124,7 @@ const (
 
 const (
 	// orchestratorConfirmationRetrievalLimit is the maximum limit of orchestrator client confirmation retrieval
-	orchestratorConfirmationRetrievalLimit = 5
+	orchestratorConfirmationRetrievalLimit = 10
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
