@@ -530,7 +530,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraData{}
+		pandoraExtraData := ethash.PandoraExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
