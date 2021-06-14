@@ -426,7 +426,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		go func() {
 			err := bc.pandoraBlockHashConfirmationFetcher()
 			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", err)
+				log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
 			}
 		}()
 	}
