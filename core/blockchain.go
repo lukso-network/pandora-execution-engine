@@ -1662,8 +1662,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
 
 		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Status(0)
-		for retryLimit > 0 && status == 0 {
+		status := pandora_orcclient.Pending
+		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			// halt and get orchestrator confirmation
 			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
 			confirmedBlocks := <-bc.blockConfirmationCh
@@ -1672,7 +1672,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					status = confirmedBlock.Status
 					log.Debug("found confirmation", "confirmed block status", status)
 				}
-				if status != 0 {
+				if status != pandora_orcclient.Pending {
 					// if status is invalid or correct then break the loop
 					break
 				}
@@ -1683,7 +1683,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Status(0) || status == pandora_orcclient.Status(2) {
+		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid {
 			log.Warn("failed to write block into the chain. block hash %v", block.Hash())
 			return CanonStatTy, consensus.ErrInvalidNumber
 		}
