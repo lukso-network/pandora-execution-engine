@@ -1685,11 +1685,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
 		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid {
-			log.Warn("failed to write block into the chain. block hash %v", block.Hash())
+			log.Warn("failed to write block into the chain", "block hash", block.Hash())
 			return CanonStatTy, consensus.ErrInvalidNumber
 		}
 		// if status is approved then write block in canonical chain.
-		log.Debug("block %v is verified. so continuing existing parts", block.Header().Hash())
+		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
 	}
 
 	// Calculate the total difficulty of the block
