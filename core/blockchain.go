@@ -538,6 +538,7 @@ func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.B
 			log.Error("found error while decoding pandora extra data", err)
 			return nil, err
 		}
+		log.Debug("preparing request", "block number", header.Number, "slot number", pandoraExtraData.Slot)
 		blockHashes = append(blockHashes, &pandora_orcclient.BlockHash{Slot: pandoraExtraData.Slot, Hash: header.Hash()})
 	}
 
