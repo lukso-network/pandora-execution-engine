@@ -593,6 +593,7 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 			d.queue.Close()
 		}
 		if err = <-errc; err != nil && err != errCanceled {
+			log.Error("spawnSync", "found error", err)
 			break
 		}
 	}
@@ -1362,6 +1363,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	for {
 		select {
 		case <-d.cancelCh:
+			log.Error("fetchParts", "error found in cancel channel", errCanceled)
 			return errCanceled
 
 		case packet := <-deliveryCh:
@@ -1449,6 +1451,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 
 							if master {
 								d.cancel()
+								log.Error("fetch parts", "cancelled download", errTimeout)
 								return errTimeout
 							}
 						}

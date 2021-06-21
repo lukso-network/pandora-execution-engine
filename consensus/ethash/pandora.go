@@ -79,7 +79,7 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", int(math.Pow(2, 7)), NewMinimalConsensusInfo)
+	ethash.mci = newlru("epochSet", int(math.Pow(2, 20)), NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
@@ -727,6 +727,7 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	// In this mode we do not invalidate the mciCache!
 	// This is hell risky, we should first get epoch from mciCache and check if it is already inserted.
 	// If so, we need to resolve this conflict
+	log.Debug("adding cache", "minimum consensus info is added in the cache", "mci.cache")
 	pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
 	mci := ethash.mci
 	mciCache := mci.cache
