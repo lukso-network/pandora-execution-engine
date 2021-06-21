@@ -321,6 +321,7 @@ func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	log.Debug("received response for handleBlockHeaders", "response", fmt.Sprintf("%v", *res))
 	return backend.Handle(peer, res)
 }
 
@@ -331,6 +332,7 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	log.Debug("received response for handleBlockHeaders", "response", fmt.Sprintf("%v", *res))
 	return backend.Handle(peer, &res.BlockHeadersPacket)
 }
 
