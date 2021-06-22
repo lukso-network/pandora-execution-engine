@@ -276,7 +276,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		go func() {
 			err := eth.pandoraBlockHashConfirmationFetcher()
 			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", err)
+				log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
 			}
 		}()
 	}
