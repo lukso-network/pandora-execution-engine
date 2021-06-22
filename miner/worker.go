@@ -782,8 +782,8 @@ func (w *worker) resultLoop() {
 				w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
 
 				retryLimit := orchestratorConfirmationRetrievalLimit
-				status := pandora_orcclient.Status(0)
-				for retryLimit > 0 && status == 0 {
+				status := pandora_orcclient.Pending
+				for retryLimit > 0 && pandora_orcclient.Pending == status {
 					// halt and get orchestrator confirmation
 					confirmedBlocks := <-w.blockConfirmationCh
 					for _, confirmedBlock := range confirmedBlocks {
@@ -794,7 +794,7 @@ func (w *worker) resultLoop() {
 					retryLimit--
 				}
 				// if status is pending or invalid then just continue default work
-				if status == pandora_orcclient.Status(0) || status == pandora_orcclient.Status(2) {
+				if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid {
 					log.Warn("failed to write block into the chain. block hash %v", block.Hash())
 					continue
 				}

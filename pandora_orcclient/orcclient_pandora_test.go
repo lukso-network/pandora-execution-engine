@@ -15,12 +15,6 @@ import (
 )
 
 const (
-	Pending Status = iota
-	Verified
-	Invalid
-)
-
-const (
 	MockedHashInvalid = "0xc9a190eb52c18df5ffcb1d817214ecb08f025f8583805cd12064d30e3f9bd9d5"
 	MockedHashPending = "0xa99c69a301564970956edd897ff0590f4c0f1031daa464ded655af65ad0906df"
 )
