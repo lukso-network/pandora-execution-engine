@@ -1684,7 +1684,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid {
+		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
 			log.Warn("failed to write block into the chain", "block hash", block.Hash())
 			return CanonStatTy, consensus.ErrInvalidNumber
 		}
