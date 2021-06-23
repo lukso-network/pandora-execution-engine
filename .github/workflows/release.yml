@@ -35,12 +35,10 @@ jobs:
       - name: Install dependencies
         run: |
           go get -v -t -d ./...
-
       - name: Build binary
         run: |
           mkdir builds &&
-          go build -v --tags=blst_enabled -o ./builds/geth ./cmd/geth   
-
+          go build -v --tags=blst_enabled -o ./builds/geth ./cmd/geth
       # - name: Run GoReleaser
       #   uses: goreleaser/goreleaser-action@master
       #   with:
@@ -59,7 +57,7 @@ jobs:
             ./builds/geth
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          
+
       - name: Request Multinet Upgrade
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -69,4 +67,4 @@ jobs:
           -H "Accept: application/vnd.github.v3+json" \
           -d '{"event_type":"upgrade dev", "client_payload": {"repository": "PANDORA", "tag": "'$GH_TAG'"}}' \
           -u "$GITHUB_TOKEN" \
-          https://api.github.com/repos/lukso-network/l16-multinet/dispatches   
+          https://api.github.com/repos/lukso-network/l16-multinet/dispatches
