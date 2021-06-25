@@ -578,6 +578,61 @@ func TestEthash_IsMinimalConsensusPresentForTime(t *testing.T) {
 	assert.False(t, ethash.IsMinimalConsensusPresentForTime(timeAfterEpoch))
 }
 
+func TestEthash_NewPandoraExtraData(t *testing.T) {
+	testExtraDataCreationBasedOnRange := func(rangeOfSlots int, slot int) {
+		slotTimeDuration := SlotTimeDuration
+		genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
+		genesisStart := time.Now()
+		genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
+
+		for index := 0 + slot; index < rangeOfSlots; index++ {
+			currentSlot := uint64(index + slot)
+			headerTime := uint64(genesisStart.Unix()) + currentSlot*uint64(slotTimeDuration)
+			relativeTime := headerTime - uint64(genesisStart.Unix())
+			derivedEpoch := relativeTime / (pandoraEpochLength * SlotTimeDuration)
+			derivedTime := currentSlot*uint64(slotTimeDuration) + uint64(genesisStart.Unix())
+			minimalConsensusInfo := NewMinimalConsensusInfo(derivedEpoch)
+			minimalConsensusInfo.(*MinimalEpochConsensusInfo).AssignEpochStartFromGenesis(genesisStart)
+			epochTimeStart := minimalConsensusInfo.(*MinimalEpochConsensusInfo).EpochTimeStart
+			extractedTurn := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+
+			header := &types.Header{
+				ParentHash:  common.Hash{},
+				UncleHash:   common.Hash{},
+				Coinbase:    common.Address{},
+				Root:        common.Hash{},
+				TxHash:      common.Hash{},
+				ReceiptHash: common.Hash{},
+				Bloom:       types.Bloom{},
+				Difficulty:  nil,
+				Number:      big.NewInt(0),
+				GasLimit:    0,
+				GasUsed:     0,
+				Time:        derivedTime,
+				Extra:       nil,
+				MixDigest:   common.Hash{},
+				Nonce:       types.BlockNonce{},
+			}
+
+			extraData, err := NewPandoraExtraData(header, minimalConsensusInfo.(*MinimalEpochConsensusInfo))
+			assert.Nil(t, err)
+
+			extraDataSlot := extraData.Slot
+			extraDataEpoch := extraData.Epoch
+			extraDataTurn := extraData.Turn
+
+			assert.Equal(t, currentSlot, extraDataSlot)
+			assert.Equal(t, derivedEpoch, extraDataEpoch)
+			assert.Equal(t, extractedTurn, extraDataTurn)
+		}
+	}
+
+	testExtraDataCreationBasedOnRange(2048, 0)
+	testExtraDataCreationBasedOnRange(2049, 2048)
+	testExtraDataCreationBasedOnRange(500000, 657)
+	testExtraDataCreationBasedOnRange(512, 58)
+}
+
 func TestEthash_Prepare_Pandora(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
