@@ -18,13 +18,17 @@ package ethash
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-var errEthashStopped = errors.New("ethash stopped")
+var (
+	errEthashStopped      = errors.New("ethash stopped")
+	errInvalidParentHash  = errors.New("invalid parent hash")
+	errInvalidBlockNumber = errors.New("invalid block number")
+)
 
 // API exposes ethash related methods for the RPC interface.
 type API struct {
@@ -57,6 +61,45 @@ func (api *API) GetWork() ([4]string, error) {
 		return work, nil
 	case err := <-errc:
 		return [4]string{}, err
+	}
+}
+
+// GetShardingWork returns a work package for external miner.
+func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64) ([4]string, error) {
+	emptyRes := [4]string{}
+	if api.ethash.remote == nil {
+		return [4]string{}, errors.New("not supported")
+	}
+
+	var (
+		workCh = make(chan [4]string, 1)
+		errc   = make(chan error, 1)
+	)
+	select {
+	case api.ethash.remote.fetchWorkCh <- &sealWork{errc: errc, res: workCh}:
+	case <-api.ethash.remote.exitCh:
+		return emptyRes, errEthashStopped
+	}
+	select {
+	case work := <-workCh:
+		curBlockHeader := api.ethash.remote.currentBlock.Header()
+		if curBlockHeader != nil {
+			if curBlockHeader.ParentHash != parentHash {
+				log.Error("Mis-match in parentHash",
+					"blockNumber", curBlockHeader.Number.Uint64(),
+					"remoteParentHash", curBlockHeader.ParentHash, "receivedParentHash", parentHash)
+				return emptyRes, errInvalidParentHash
+			}
+
+			if curBlockHeader.Number.Uint64() != blockNumber {
+				log.Error("Mis-match in block number",
+					"remoteBlockNumber", curBlockHeader.Number.Uint64(), "receivedBlockNumber", blockNumber)
+				return emptyRes, errInvalidBlockNumber
+			}
+		}
+		return work, nil
+	case err := <-errc:
+		return emptyRes, err
 	}
 }
 
