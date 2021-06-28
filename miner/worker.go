@@ -40,8 +40,6 @@ import (
 )
 
 const (
-	// resultQueueSize is the size of channel listening to sealing result.
-	resultQueueSize = 10
 
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
@@ -1026,6 +1024,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
 	}
+
+	log.Debug("parent header info",
+		"extraData", fmt.Sprint("%+v", parent.Header().Extra),
+		"headerHash", parent.Header().Hash().Hex(), "parentHash", parent.Hash().Hex())
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
