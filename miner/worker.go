@@ -222,14 +222,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	recommit := worker.config.Recommit
 
 	if nil != chainConfig.PandoraConfig && len(chainConfig.PandoraConfig.ConsensusInfo) > 0 {
-		recommit = time.Duration(int(chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration)) * time.Second
+		recommit = chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
 		worker.disablePreseal()
 		worker.skipSealHook = func(t *task) (shouldSkip bool) {
 			pendingBlock := t.block
 			blockchain := eth.BlockChain()
 			currentHeader := blockchain.CurrentHeader()
 			interval := time.Duration(pendingBlock.Time()-currentHeader.Time) * time.Second
-			expectedInterval := chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration * time.Second
+			expectedInterval := chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
 			shouldSkip = expectedInterval > interval
 
 			if shouldSkip && expectedInterval > 0 {
