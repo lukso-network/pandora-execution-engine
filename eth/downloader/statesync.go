@@ -373,7 +373,13 @@ func (s *stateSync) loop() (err error) {
 
 		case req := <-s.deliver:
 			// Response, disconnect or timeout triggered, drop the peer if stalling
-			log.Trace("Received node data response", "peer", req.peer.id, "count", len(req.response), "dropped", req.dropped, "timeout", !req.dropped && req.timedOut())
+			log.Trace(
+				"Received node data response",
+				"peer", req.peer.id,
+				"count", len(req.response),
+				"dropped", req.dropped,
+				"timeout", !req.dropped && req.timedOut(),
+			)
 			if req.nItems <= 2 && !req.dropped && req.timedOut() {
 				// 2 items are the minimum requested, if even that times out, we've no use of
 				// this peer at the moment.
@@ -399,8 +405,9 @@ func (s *stateSync) loop() (err error) {
 			// Process all the received blobs and check for stale delivery
 			delivered, err := s.process(req)
 			req.peer.SetNodeDataIdle(delivered, req.delivered)
+
 			if err != nil {
-				log.Warn("Node data write error", "err", err)
+				log.Warn("Node data write error", "err", err, "delivered", delivered, "req", req)
 				return err
 			}
 		}
@@ -528,7 +535,6 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 			s.updateStats(0, duplicate, unexpected, time.Since(start))
 		}
 	}(time.Now())
-
 	// Iterate over all the delivered data and inject one-by-one into the trie
 	for _, blob := range req.response {
 		hash, err := s.processNodeData(blob)

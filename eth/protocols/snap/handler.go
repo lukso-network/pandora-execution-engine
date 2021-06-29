@@ -117,6 +117,8 @@ func handle(backend Backend, peer *Peer) error {
 // handleMessage is invoked whenever an inbound message is received from a
 // remote peer on the `spap` protocol. The remote connection is torn down upon
 // returning any error.
+// TODO: get hex of the msg and try to run test
+// ERR: `EOF`
 func handleMessage(backend Backend, peer *Peer) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := peer.rw.ReadMsg()
@@ -382,6 +384,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return backend.Handle(peer, res)
 
+	//	TODO: check if not here?
 	case msg.Code == GetTrieNodesMsg:
 		// Decode trie node retrieval request
 		var req GetTrieNodesPacket
