@@ -17,10 +17,11 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"math/rand"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
