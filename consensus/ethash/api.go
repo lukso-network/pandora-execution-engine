@@ -84,6 +84,11 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64) ([4]
 	case work := <-workCh:
 		curBlockHeader := api.ethash.remote.currentBlock.Header()
 		if curBlockHeader != nil {
+			// When producing block #1, validator does not know about hash of block #0
+			// so do not check the parent hash and block number 1
+			if blockNumber == 1 {
+				return work, nil
+			}
 			if curBlockHeader.ParentHash != parentHash {
 				log.Error("Mis-match in parentHash",
 					"blockNumber", curBlockHeader.Number.Uint64(),
