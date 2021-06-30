@@ -209,8 +209,10 @@ func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer
 		if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash[:]) {
 			log.Warn("Blob does not contain a hash",
 				"hash", hash.String(),
-				"bloom", backend.StateBloom(),
+				"bloom", bloom,
 			)
+
+			bloom.Dump()
 
 			// Only lookup the trie node if there's chance that we actually have it
 			continue

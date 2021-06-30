@@ -52,6 +52,18 @@ type SyncBloom struct {
 	pend   sync.WaitGroup
 }
 
+func (b *SyncBloom) Dump() {
+	bytes, err := b.bloom.MarshalJSON()
+
+	if nil == err {
+		fmt.Printf("\n JSON OF BLOOM:\n %s", bytes)
+
+		return
+	}
+
+	fmt.Printf("Error occured during marshaling of bloom")
+}
+
 // NewSyncBloom creates a new bloom filter of the given size (in megabytes) and
 // initializes it from the database. The bloom is hard coded to use 3 filters.
 func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
