@@ -27,6 +27,10 @@ const (
 	signatureSize    = 96
 )
 
+var (
+	genesisSlot = uint64(0)
+)
+
 // Use decorator pattern to get there as fast as possible
 // This is a prototype, it can be designed way better
 type Pandora struct {
@@ -79,7 +83,7 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", int(math.Pow(2, 7)), NewMinimalConsensusInfo)
+	ethash.mci = newlru("epochSet", math.MaxInt64, NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
@@ -230,12 +234,15 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 	for {
 		select {
 		case <-ticker.C:
-			epochFromCache, exists := ethashEngine.mci.cache.Get(int(lastKnownEpoch))
+			epochFromCache, exists := ethashEngine.mci.cache.Get(lastKnownEpoch)
+			genesisFromCache, genesisExists := ethashEngine.mci.cache.Get(genesisSlot)
 			logger.Info(
 				"awaiting for orchestrator information",
 				"epoch", lastKnownEpoch,
 				"exists", exists,
 				"epochFromCache", epochFromCache,
+				"genesisEpoch", genesisFromCache,
+				"genesisExists", genesisExists,
 			)
 		case payload := <-channel:
 			currentErr := insertFunc(payload)
@@ -525,9 +532,22 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 
 	// Retrieve genesis info for derivation
 	cache := mciCache.cache
-	genesisInfo, okGenesis := cache.Get(0)
+	genesisInfo, okGenesis := cache.Get(genesisSlot)
+
+	// This fallback is very quick fix and debug purpose only
+	stillNotOk := func() {
+		_, okGenesisPlus := ethash.mci.cache.Get(genesisSlot + 1)
+
+		if !okGenesisPlus {
+			log.Error("Still not ok for genesis plus 1")
+			return
+		}
+
+		log.Warn("Should be ok for +1")
+	}
 
 	if !okGenesis {
+		stillNotOk()
 		err = fmt.Errorf("cannot get minimal consensus info for genesis")
 
 		return
@@ -730,7 +750,14 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
 	mci := ethash.mci
 	mciCache := mci.cache
-	mciCache.Add(int(epoch), pandoraConsensusInfo)
+
+	if !mciCache.Contains(epoch) {
+		mciCache.Add(epoch, pandoraConsensusInfo)
+	}
+
+	if epoch != consensusInfo.Epoch {
+		panic("that should never happen")
+	}
 
 	return
 }
@@ -746,7 +773,7 @@ func (ethash *Ethash) IsMinimalConsensusPresentForTime(timestamp uint64) (presen
 func (ethash *Ethash) IsInGenesisSlot(timestamp uint64) (isGenesisSlot bool) {
 	mci := ethash.mci
 	mciCache := mci.cache
-	genesisInfo, present := mciCache.Get(0)
+	genesisInfo, present := mciCache.Get(genesisSlot)
 
 	if !present {
 		return

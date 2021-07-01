@@ -171,7 +171,7 @@ func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru 
 		maxItems = 1
 	}
 	cache, _ := simplelru.NewLRU(maxItems, func(key, value interface{}) {
-		log.Trace("Evicted ethash "+what, "epoch", key)
+		log.Trace("Evicted ethash "+what, "epoch", key, "maxItems", maxItems)
 	})
 	return &lru{what: what, new: new, cache: cache}
 }
