@@ -131,6 +131,9 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 		return false
 	}
 	err := <-errc
+	if err != nil{
+		log.Error("SubmitWork: found error while submitting work", "error", err)
+	}
 	return err == nil
 }
 
