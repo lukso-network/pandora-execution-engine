@@ -193,6 +193,21 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 			"epochTimeStart", minimalConsensus.EpochTimeStart,
 			"validatorListLen", len(minimalConsensus.ValidatorList),
 		)
+
+		var previousEpoch uint64
+
+		if minimalConsensus.Epoch > 0 {
+			previousEpoch = minimalConsensus.Epoch - 1
+		}
+
+		_, previousExists := ethashEngine.mci.cache.Get(previousEpoch)
+
+		if !previousExists && previousEpoch > 0 {
+			currentErr = fmt.Errorf("previous epoch does not exist in cache: %d", previousEpoch)
+
+			return
+		}
+
 		coreMinimalConsensus := NewMinimalConsensusInfo(minimalConsensus.Epoch).(*MinimalEpochConsensusInfo)
 		coreMinimalConsensus.EpochTimeStart = time.Unix(int64(minimalConsensus.EpochTimeStart), 0)
 		coreMinimalConsensus.EpochTimeStartUnix = minimalConsensus.EpochTimeStart
@@ -245,6 +260,7 @@ func (pandora *Pandora) HandleOrchestratorSubscriptions(orcSubscribe bool, ctx c
 				"genesisExists", genesisExists,
 			)
 		case payload := <-channel:
+			// TODO: try to assure parent validness
 			currentErr := insertFunc(payload)
 
 			if nil != currentErr {

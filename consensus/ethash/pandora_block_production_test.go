@@ -300,7 +300,7 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 		}
 
 		ethash := NewPandora(config, urls, true, consensusInfo, true)
-		previousInfo, isPreviousPresent := ethash.mci.cache.Get(1)
+		previousInfo, isPreviousPresent := ethash.mci.cache.Get(uint64(1))
 		assert.False(t, isPreviousPresent)
 		assert.Nil(t, previousInfo)
 
@@ -323,7 +323,7 @@ func TestPandora_OrchestratorSubscriptions(t *testing.T) {
 					t.FailNow()
 				}
 			default:
-				currentConsensusInfo, isPresent := ethash.mci.cache.Get(indexToCheck)
+				currentConsensusInfo, isPresent := ethash.mci.cache.Get(uint64(indexToCheck))
 
 				time.Sleep(time.Millisecond * 50)
 
