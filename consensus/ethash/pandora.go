@@ -99,7 +99,7 @@ func NewPandora(
 			0,
 		))
 		pandoraConsensusInfo.AssignValidators(currentConsensusInfo.ValidatorList)
-		mciCache.Add(index, pandoraConsensusInfo)
+		mciCache.Add(uint64(index), pandoraConsensusInfo)
 	}
 
 	ethash.remote = StartRemotePandora(ethash, notify, noverify, orcSubscribe)
@@ -588,7 +588,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	derivedEpoch := int(relativeTime / (pandoraEpochLength * SlotTimeDuration))
 
 	// Get minimal consensus info for counted epoch
-	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
+	minimalConsensusCache, okDerived := cache.Get(uint64(derivedEpoch))
 
 	if !okDerived {
 		err = fmt.Errorf(

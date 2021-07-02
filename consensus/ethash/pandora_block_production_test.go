@@ -673,7 +673,7 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	genesisEpoch.AssignValidators(validatorPublicList)
 
 	assert.NoError(t, ethash.InsertMinimalConsensusInfo(0, genesisEpoch))
-	genesisFromCache, genesisFetched := lruEpochSet.cache.Get(0)
+	genesisFromCache, genesisFetched := lruEpochSet.cache.Get(uint64(0))
 	assert.True(t, genesisFetched)
 	minimalConsensusFromCache := genesisFromCache.(*MinimalEpochConsensusInfo)
 	assert.Equal(t, genesisEpoch.ValidatorsList[0], minimalConsensusFromCache.ValidatorsList[0])
@@ -783,15 +783,15 @@ func TestVerifySeal(t *testing.T) {
 	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
 	genesisEpoch.AssignValidators(validatorPublicList)
 	// Should not be evicted
-	assert.False(t, lruEpochSet.cache.Add(0, genesisEpoch))
-	assert.True(t, lruEpochSet.cache.Contains(0))
-	assert.False(t, lruEpochSet.cache.Add(1, genesisEpoch))
-	assert.True(t, lruEpochSet.cache.Contains(1))
+	assert.False(t, lruEpochSet.cache.Add(uint64(0), genesisEpoch))
+	assert.True(t, lruEpochSet.cache.Contains(uint64(0)))
+	assert.False(t, lruEpochSet.cache.Add(uint64(1), genesisEpoch))
+	assert.True(t, lruEpochSet.cache.Contains(uint64(1)))
 	// Check epochs from cache
-	genesisEpochFromCache, ok := lruEpochSet.cache.Get(0)
+	genesisEpochFromCache, ok := lruEpochSet.cache.Get(uint64(0))
 	assert.Equal(t, genesisEpochFromCache, genesisEpoch)
 	assert.True(t, ok)
-	nextEpochSet, ok := lruEpochSet.cache.Get(1)
+	nextEpochSet, ok := lruEpochSet.cache.Get(uint64(1))
 	assert.Equal(t, nextEpochSet, genesisEpoch)
 	assert.True(t, ok)
 
