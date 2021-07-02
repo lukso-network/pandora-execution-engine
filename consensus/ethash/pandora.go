@@ -74,6 +74,10 @@ type MinimalEpochConsensusInfo struct {
 	SlotTimeDuration time.Duration `json:"SlotTimeDuration"`
 }
 
+// NewPandora creates new pandora mode on top of Ethash engine
+// In future our plan is to move it as a separate consensus engine
+// Cache size is correlated with 32 or 64 bit systems
+// We recommend to use 64 bit system to not overflow the cache and prevent eviction
 func NewPandora(
 	config Config,
 	notify []string,
@@ -83,7 +87,14 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", math.MaxInt64, NewMinimalConsensusInfo)
+	maxInt := math.MaxInt32 - 1
+	is64Bit := uint64(^uintptr(0)) == ^uint64(0)
+
+	if is64Bit {
+		maxInt = math.MaxInt64 - 1
+	}
+
+	ethash.mci = newlru("epochSet", maxInt, NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
@@ -550,20 +561,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	cache := mciCache.cache
 	genesisInfo, okGenesis := cache.Get(genesisSlot)
 
-	// This fallback is very quick fix and debug purpose only
-	stillNotOk := func() {
-		_, okGenesisPlus := ethash.mci.cache.Get(genesisSlot + 1)
-
-		if !okGenesisPlus {
-			log.Error("Still not ok for genesis plus 1")
-			return
-		}
-
-		log.Warn("Should be ok for +1")
-	}
-
 	if !okGenesis {
-		stillNotOk()
 		err = fmt.Errorf("cannot get minimal consensus info for genesis")
 
 		return
@@ -592,10 +590,11 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 
 	if !okDerived {
 		err = fmt.Errorf(
-			"missing minimal consensus info for epoch %d, relative: %d, start: %d",
+			"missing minimal consensus info for epoch %d, relative: %d, start: %d, headerTime: %d",
 			derivedEpoch,
 			relativeTime,
 			genesisStart.Unix(),
+			headerTime,
 		)
 
 		return
@@ -767,7 +766,9 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	mci := ethash.mci
 	mciCache := mci.cache
 
-	if !mciCache.Contains(epoch) {
+	// genesisSlot == epoch is a fallback to re-insert information that came from orchestrator instead of relying
+	// on genesis.json provided epoch
+	if !mciCache.Contains(epoch) || genesisSlot == epoch {
 		mciCache.Add(epoch, pandoraConsensusInfo)
 	}
 
@@ -781,6 +782,11 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 func (ethash *Ethash) IsMinimalConsensusPresentForTime(timestamp uint64) (present bool) {
 	header := &types.Header{Time: timestamp}
 	_, err := ethash.getMinimalConsensus(header)
+
+	if nil != err {
+		log.Trace("Missing minimal consensus", "err", err.Error())
+	}
+
 	present = nil == err
 
 	return
