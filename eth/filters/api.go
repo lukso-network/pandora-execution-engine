@@ -229,6 +229,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		// first send all available pending headers from the pending queue
 		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
 		for _, pendingHeader := range pendingHeaders {
+			log.Debug("pending headers are sending first", "from", pendingFilter.FromBlockHash, "header hash", pendingHeader.Hash())
 			notifier.Notify(rpcSub.ID, pendingHeader)
 		}
 

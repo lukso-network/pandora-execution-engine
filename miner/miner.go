@@ -159,6 +159,11 @@ func (miner *Miner) Mining() bool {
 	return miner.worker.isRunning()
 }
 
+// IsPandora checks whether running engine is on pandora mode.
+func (miner *Miner) IsPandora() bool {
+	return miner.worker.isPandora()
+}
+
 func (miner *Miner) HashRate() uint64 {
 	if pow, ok := miner.engine.(consensus.PoW); ok {
 		return uint64(pow.Hashrate())

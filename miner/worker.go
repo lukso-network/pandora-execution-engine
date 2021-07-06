@@ -40,8 +40,6 @@ import (
 )
 
 const (
-	// resultQueueSize is the size of channel listening to sealing result.
-	resultQueueSize = 10
 
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
@@ -208,7 +206,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
 		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
+		resultCh:           make(chan *types.Block), // TODO: ADD PANDORA CONDITION
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
@@ -770,11 +768,6 @@ func (w *worker) resultLoop() {
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
-			if w.isPandora() {
-				// notify about the pending headers to the orchestrator
-				log.Debug("resultLoop", "sending header with header hash", block.Header().Hash())
-				w.eth.BlockChain().GetPendingHeaderContainer().WriteAndNotifyHeader(block.Header())
-			}
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
