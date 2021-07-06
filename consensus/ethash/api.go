@@ -89,12 +89,12 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64) ([4]
 			if blockNumber == 1 {
 				return work, nil
 			}
-			if curBlockHeader.ParentHash != parentHash {
-				log.Error("Mis-match in parentHash",
-					"blockNumber", curBlockHeader.Number.Uint64(),
-					"remoteParentHash", curBlockHeader.ParentHash, "receivedParentHash", parentHash)
-				return emptyRes, errInvalidParentHash
-			}
+			//if curBlockHeader.ParentHash != parentHash {
+			//	log.Error("Mis-match in parentHash",
+			//		"blockNumber", curBlockHeader.Number.Uint64(),
+			//		"remoteParentHash", curBlockHeader.ParentHash, "receivedParentHash", parentHash)
+			//	return emptyRes, errInvalidParentHash
+			//}
 
 			if curBlockHeader.Number.Uint64() != blockNumber {
 				log.Error("Mis-match in block number",
