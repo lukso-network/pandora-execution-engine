@@ -1686,7 +1686,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// if status is pending or invalid then just continue default work
 		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
 			log.Warn("failed to write block into the chain", "block hash", block.Hash())
-			return CanonStatTy, consensus.ErrInvalidNumber
+			return CanonStatTy, consensus.ErrInvalidBlock
 		}
 		// if status is approved then write block in canonical chain.
 		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
