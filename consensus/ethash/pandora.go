@@ -309,7 +309,6 @@ func (pandora *Pandora) Loop() {
 				work.errc <- errNoMiningWork
 			} else {
 				work.res <- s.currentWork
-				log.Debug("triggered fetchWorkCh from pandora loop", "currentWork", s.currentWork)
 			}
 
 		case result := <-s.submitWorkCh:
@@ -395,8 +394,7 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	}
 	// Verify the correctness of submitted result.
 	header := block.Header()
-	//header.Nonce = nonce
-	//header.MixDigest = mixDigest
+	header.Nonce = nonce
 	extraDataWithSignature := new(PandoraExtraDataSealed)
 	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 
