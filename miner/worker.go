@@ -1025,7 +1025,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Time:       uint64(timestamp),
 	}
 
-	log.Debug("extraData info in parent block header", "extraData", fmt.Sprint("%v", parent.Header().Extra))
+	log.Debug("parent header info",
+		"extraData", fmt.Sprint("%+v", parent.Header().Extra),
+		"headerHash", parent.Header().Hash().Hex(), "parentHash", parent.Hash().Hex())
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
