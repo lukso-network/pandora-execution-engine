@@ -395,7 +395,6 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	// Verify the correctness of submitted result.
 	header := block.Header()
 	header.Nonce = nonce
-	header.MixDigest = mixDigest
 	extraDataWithSignature := new(PandoraExtraDataSealed)
 	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 
