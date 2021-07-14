@@ -402,9 +402,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			blsSignatureBytes := BlsSignatureBytes{}
 			copy(blsSignatureBytes[:], signature.Marshal())
 
-			//TODO: consider if it is needed
-			header.MixDigest = common.BytesToHash(blsSignatureBytes[:])
-
 			// Cast to []byte from [32]byte. This should prevent cropping
 			workSubmittedLock.Done()
 

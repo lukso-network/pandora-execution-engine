@@ -70,6 +70,10 @@ type MinimalEpochConsensusInfo struct {
 	SlotTimeDuration time.Duration `json:"SlotTimeDuration"`
 }
 
+// NewPandora creates new pandora mode on top of Ethash engine
+// In future our plan is to move it as a separate consensus engine
+// Cache size is correlated with 32 or 64 bit systems
+// We recommend to use 64 bit system to not overflow the cache and prevent eviction
 func NewPandora(
 	config Config,
 	notify []string,
@@ -79,7 +83,14 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	ethash.mci = newlru("epochSet", int(math.Pow(2, 20)), NewMinimalConsensusInfo)
+	maxInt := math.MaxInt32 - 1
+	is64Bit := uint64(^uintptr(0)) == ^uint64(0)
+
+	if is64Bit {
+		maxInt = math.MaxInt64 - 1
+	}
+
+	ethash.mci = newlru("epochSet", maxInt, NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 	genesisConsensusTimeStart := consensusInfo[0]
@@ -384,8 +395,6 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	}
 	// Verify the correctness of submitted result.
 	header := block.Header()
-	//header.Nonce = nonce
-	//header.MixDigest = mixDigest
 	extraDataWithSignature := new(PandoraExtraDataSealed)
 	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 
