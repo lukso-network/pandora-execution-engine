@@ -18,6 +18,7 @@ package ethash
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -84,6 +85,7 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64) ([4]
 	case work := <-workCh:
 		curBlockHeader := api.ethash.remote.currentBlock.Header()
 		if curBlockHeader != nil {
+			log.Debug("Current Block Header Data", "time", curBlockHeader.Time, "block number", curBlockHeader.Number)
 			// When producing block #1, validator does not know about hash of block #0
 			// so do not check the parent hash and block number 1
 			if blockNumber == 1 {

@@ -796,8 +796,13 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 		return
 	}
 
+	calculatedSlot := uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn
+	log.Debug("In newPandoraExtraData", "calculated slot", calculatedSlot, "header time", headerTime, "derived epoch", derivedEpoch, "epoch time start", epochTimeStart)
+	if derivedEpoch == 0 && calculatedSlot == 0 {
+		calculatedSlot++
+	}
 	extraData = &PandoraExtraData{
-		Slot:  uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn,
+		Slot:  calculatedSlot,
 		Epoch: derivedEpoch,
 		Turn:  extractedTurn,
 	}
