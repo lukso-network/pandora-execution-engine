@@ -291,7 +291,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 		return data
 	}
-
 	return nil // Can't find the data anywhere.
 }
 

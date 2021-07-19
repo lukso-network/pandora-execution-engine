@@ -18,6 +18,8 @@
 package ethconfig
 
 import (
+	"context"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"math/big"
 	"os"
 	"os/user"
@@ -37,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -209,12 +212,21 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
-
-	// In proof of stake use pandora minimal approach
-	if nil != chainConfig.PandoraConfig {
-		config.PowMode = ethash.ModePandora
+	// If pandora engine is requested, set it up
+	if chainConfig.Pandora != nil {
+		log.Debug("Pandora engine is enabled. So setting up pandora engine")
+		if len(notify) < 2 {
+			log.Crit("Orchestrator endpoint was empty. Provide orchestrator endpoint in --notify flag")
+		}
+		dialRPCClient := func(endpoint string) (*rpc.Client, error) {
+			rpcClient, err := rpc.Dial(endpoint)
+			if err != nil {
+				return nil, err
+			}
+			return rpcClient, nil
+		}
+		return pandora.New(context.Background(), chainConfig.Pandora, notify, dialRPCClient)
 	}
-
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case ethash.ModeFake:
@@ -226,28 +238,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
-	case ethash.ModePandora:
-		log.Warn("Ethash used in pandora mode")
-		engine := ethash.NewPandora(
-			ethash.Config{
-				CacheDir:         stack.ResolvePath(config.CacheDir),
-				CachesInMem:      config.CachesInMem,
-				CachesOnDisk:     config.CachesOnDisk,
-				CachesLockMmap:   config.CachesLockMmap,
-				DatasetDir:       config.DatasetDir,
-				DatasetsInMem:    config.DatasetsInMem,
-				DatasetsOnDisk:   config.DatasetsOnDisk,
-				DatasetsLockMmap: config.DatasetsLockMmap,
-				PowMode:          ethash.ModePandora,
-			},
-			notify,
-			noverify,
-			chainConfig.PandoraConfig.ConsensusInfo,
-			true,
-		)
-		engine.SetThreads(-1) // Disable CPU mining
-
-		return engine
 	default:
 		engine := ethash.New(ethash.Config{
 			CacheDir:         stack.ResolvePath(config.CacheDir),
@@ -260,7 +250,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			DatasetsLockMmap: config.DatasetsLockMmap,
 		}, notify, noverify)
 		engine.SetThreads(-1) // Disable CPU mining
-
 		return engine
 	}
 }

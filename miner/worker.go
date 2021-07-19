@@ -19,16 +19,16 @@ package miner
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -105,7 +105,6 @@ const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
 	commitInterruptResubmit
-	commitInterruptNewSlot
 )
 
 // newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
@@ -186,6 +185,10 @@ type worker struct {
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+
+	// if pandora is running then seal hash will be changed. track if is changed
+	updateTracker    chan pandora.SealHashUpdate
+	updateTrackerSub event.Subscription
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -211,6 +214,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		updateTracker:      make(chan pandora.SealHashUpdate),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -218,80 +222,13 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
-	// Sanitize recommit interval if the user-specified one is too short.
-	recommit := worker.config.Recommit
-
-	if nil != chainConfig.PandoraConfig && len(chainConfig.PandoraConfig.ConsensusInfo) > 0 {
-		recommit = chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
-		worker.disablePreseal()
-		worker.skipSealHook = func(t *task) (shouldSkip bool) {
-			pendingBlock := t.block
-			blockchain := eth.BlockChain()
-			currentHeader := blockchain.CurrentHeader()
-			interval := time.Duration(pendingBlock.Time()-currentHeader.Time) * time.Second
-			expectedInterval := chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
-			shouldSkip = expectedInterval > interval
-
-			if shouldSkip && expectedInterval > 0 {
-				log.Info(
-					"skipping sealing, interval lower than expected",
-					"expected",
-					expectedInterval,
-					"current",
-					interval,
-				)
-
-				return
-			}
-
-			return
-		}
-
-		// We need to update time if it got stuck, because sealer needs to take proper work load
-		worker.resubmitHook = func(duration time.Duration, duration2 time.Duration) {
-			pandoraEngine := engine.(*ethash.Ethash)
-			currentHeader := worker.current.header
-			err := engine.Prepare(worker.chain, currentHeader)
-
-			if nil != err {
-				log.Error(
-					"could not prepare header",
-					"hash",
-					engine.SealHash(currentHeader).Hex(),
-					"error",
-					err.Error(),
-				)
-				return
-			}
-
-			timeNow := time.Now()
-			currentHeader.Time = uint64(timeNow.Unix())
-			newHeaderHash := pandoraEngine.SealHash(currentHeader)
-			currentHeader.Difficulty = big.NewInt(1)
-			err = pandoraEngine.PreparePandoraHeader(currentHeader)
-
-			if nil != err {
-				log.Error(
-					"could not prepare pandora header",
-					"sealHash",
-					engine.SealHash(currentHeader).Hex(),
-					"error",
-					err.Error(),
-				)
-				return
-			}
-
-			currentBlock := types.NewBlockWithHeader(currentHeader)
-
-			worker.pendingTasks[newHeaderHash] = &task{
-				receipts:  copyReceipts(worker.current.receipts),
-				state:     worker.current.state,
-				block:     currentBlock,
-				createdAt: timeNow,
-			}
-		}
+	if pandoraEngine, pandoraRunning := worker.isPandora(); pandoraRunning {
+		// pandora is running so subscribe with event
+		worker.updateTrackerSub = pandoraEngine.SubscribeToUpdateSealHashEvent(worker.updateTracker)
 	}
 
+	// Sanitize recommit interval if the user-specified one is too short.
+	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
@@ -307,6 +244,15 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		worker.startCh <- struct{}{}
 	}
 	return worker
+}
+
+// check if pandora is running. If so retrieve the engine
+func (w *worker) isPandora() (*pandora.Pandora, bool) {
+	// For pandora engine, it needs blockchain header reader
+	if pandoraEngine, ok := w.engine.(*pandora.Pandora); ok {
+		return pandoraEngine, ok
+	}
+	return nil, false
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
@@ -416,8 +362,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
-	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
-	isPandora := isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -425,7 +369,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
-
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
 		case <-w.exitCh:
@@ -439,57 +382,11 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
 			if t.block.NumberU64()+staleThreshold <= number {
+				log.Debug("worker.go removing task from pending map", "sealHash", h)
 				delete(w.pendingTasks, h)
 			}
 		}
 		w.pendingMu.Unlock()
-	}
-
-	tryInvokePandoraSlotProgression := func() bool {
-		timeToCheck := time.Now().Unix()
-
-		if !isPandora {
-			return false
-		}
-
-		isPandoraReady := ethashEngine.IsMinimalConsensusPresentForTime(uint64(timeToCheck))
-		shouldContinueLoop := !isPandoraReady
-
-		if shouldContinueLoop {
-			log.Warn("Pandora is not ready yet, missing minimal consensus", "timestamp", timeToCheck)
-			return true
-		}
-
-		isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
-
-		if isGenesisSlot {
-			log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
-			return true
-
-		}
-
-		newTransactions := atomic.LoadInt32(&w.newTxs)
-		newTransactionsCheck := newTransactions == 0
-		timeNow := time.Now().Unix()
-		timestamp = timeNow
-
-		// If new transactions were pushed then try to handle it old way
-		if !newTransactionsCheck {
-			log.Debug("New transactions arrived", "transactionsCount", newTransactions)
-			return false
-		}
-
-		log.Info(
-			"Recommitting work for pandora mode",
-			"timestamp",
-			timestamp,
-			"newTransactions",
-			atomic.LoadInt32(&w.newTxs),
-		)
-
-		commit(true, commitInterruptNewSlot)
-
-		return true
 	}
 
 	for {
@@ -505,25 +402,14 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
-			// Increase timestamp and commit when no transactions arrived in pandora mode
-			// Ideally it should commit only on new slots
-			if tryInvokePandoraSlotProgression() {
-				log.Info("Skipping slot propagation")
-				timer.Reset(recommit)
-
-				continue
-			}
-
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
 				if atomic.LoadInt32(&w.newTxs) == 0 {
-					log.Info("I am skipping recommit, because no new transactions arrived")
 					timer.Reset(recommit)
 					continue
 				}
-
 				commit(true, commitInterruptResubmit)
 			}
 
@@ -568,6 +454,12 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	defer func() {
+		if _, running := w.isPandora(); running {
+			// pandora is running so close subscription
+			w.updateTrackerSub.Unsubscribe()
+		}
+	}()
 
 	for {
 		select {
@@ -650,8 +542,6 @@ func (w *worker) mainLoop() {
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
-			case ev := <-w.apiCall:
-
 
 		// System stopped
 		case <-w.exitCh:
@@ -700,6 +590,7 @@ func (w *worker) taskLoop() {
 				continue
 			}
 			w.pendingMu.Lock()
+			log.Debug("worker.go putting task into pending task map", "sealHash", sealHash)
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
@@ -718,6 +609,20 @@ func (w *worker) taskLoop() {
 func (w *worker) resultLoop() {
 	for {
 		select {
+		case updatedInfo := <-w.updateTracker:
+			log.Debug("worker.go pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
+			w.pendingMu.Lock()
+			prevTask, exist := w.pendingTasks[updatedInfo.PreviousHash]
+			if exist {
+				log.Debug("worker.go task found with previousSealHash")
+				delete(w.pendingTasks, updatedInfo.PreviousHash)
+				w.pendingTasks[updatedInfo.UpdatedHash] = prevTask
+				log.Debug("worker.go task found with newSealHash")
+			} else {
+				log.Debug("worker.go task not found", "sealHash", updatedInfo.PreviousHash)
+			}
+			w.pendingMu.Unlock()
+
 		case block := <-w.resultCh:
 			// Short circuit when receiving empty result.
 			if block == nil {
@@ -765,7 +670,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
-				"elapsed", common.PrettyDuration(time.Since(task.createdAt)), "mixDigest", block.MixDigest().Hex())
+				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
@@ -777,12 +682,6 @@ func (w *worker) resultLoop() {
 			return
 		}
 	}
-}
-
-// isPandora returns if we are running pandora engine
-func (w *worker) isPandora() bool {
-	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
-	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 }
 
 // makeCurrent creates a new environment for the current cycle.
@@ -1026,11 +925,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
 	}
-
-	log.Debug("parent header info",
-		"extraData", fmt.Sprint("%+v", parent.Header().Extra),
-		"headerHash", parent.Header().Hash().Hex(), "parentHash", parent.Hash().Hex())
-
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
@@ -1043,11 +937,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to prepare header for mining", "err", err)
 		return
 	}
-
-	silesiaBlock := w.chainConfig.IsSilesia(header.Number)
-
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil && !silesiaBlock {
+	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
@@ -1059,12 +950,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 	}
-
-	log.Debug(fmt.Sprintf("committing header sealhash: %s", w.engine.SealHash(header).String()),
-		"header", header,
-		"sealHash", w.engine.SealHash(header),
-	)
-
 	// Could potentially happen if starting to mine in an odd state.
 	err := w.makeCurrent(parent, header)
 	if err != nil {
@@ -1073,11 +958,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Create the current work task and check any fork transitions needed
 	env := w.current
-	isDaoForkSupported := w.chainConfig.DAOForkSupport
-	isDaoForkSupported = isDaoForkSupported && w.chainConfig.DAOForkBlock != nil
-	isDaoForkSupported = isDaoForkSupported && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0
-
-	if isDaoForkSupported && !silesiaBlock {
+	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(env.state)
 	}
 	// Accumulate the uncles for the current block
@@ -1164,8 +1045,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		select {
 		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
-			log.Debug("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-				"header", block.Header(),
+			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))

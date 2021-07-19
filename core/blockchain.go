@@ -30,7 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+
 	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -441,8 +442,8 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 
 // isPandora returns if we are running pandora engine
 func (bc *BlockChain) isPandora() bool {
-	ethashEngine, isEthashEngine := bc.engine.(*ethash.Ethash)
-	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
+	_, isPandoraEnigne := bc.engine.(*pandora.Pandora)
+	return isPandoraEnigne
 }
 
 // pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
@@ -532,7 +533,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraDataSealed{}
+		pandoraExtraData := pandora.ExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
@@ -1969,6 +1970,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
 		return bc.insertSideChain(block, it)
+	// If epoch info not found then wait for getting the epoch info. Retry again and again. Don't save it into
+	// bad block. Otherwise when service will reconnect and send epoch, due to bad block it won't get downloaded.
+	// Downloader will treat it as bad block and discard it. But We don't know if it is actually a bad block.
+	// Don't process it. only return error.
+	case errors.Is(err, consensus.ErrEpochNotFound):
+		log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
+		return it.index, err
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
