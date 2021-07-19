@@ -222,7 +222,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	recommit := worker.config.Recommit
 
 	if nil != chainConfig.PandoraConfig && len(chainConfig.PandoraConfig.ConsensusInfo) > 0 {
-		recommit = chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
+		recommit = 1 * time.Second //chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration / 2 * time.Second
 		worker.disablePreseal()
 		worker.skipSealHook = func(t *task) (shouldSkip bool) {
 			pendingBlock := t.block
