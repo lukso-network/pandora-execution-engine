@@ -446,27 +446,27 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	}
 
 	tryInvokePandoraSlotProgression := func() bool {
-		timeToCheck := time.Now().Unix()
+		//timeToCheck := time.Now().Unix()
 
 		if !isPandora {
 			return false
 		}
 
-		isPandoraReady := ethashEngine.IsMinimalConsensusPresentForTime(uint64(timeToCheck))
-		shouldContinueLoop := !isPandoraReady
+		//isPandoraReady := ethashEngine.IsMinimalConsensusPresentForTime(uint64(timeToCheck))
+		//shouldContinueLoop := !isPandoraReady
+		//
+		//if shouldContinueLoop {
+		//	log.Warn("Pandora is not ready yet, missing minimal consensus", "timestamp", timeToCheck)
+		//	return true
+		//}
 
-		if shouldContinueLoop {
-			log.Warn("Pandora is not ready yet, missing minimal consensus", "timestamp", timeToCheck)
-			return true
-		}
-
-		isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
-
-		if isGenesisSlot {
-			log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
-			return true
-
-		}
+		//isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
+		//
+		//if isGenesisSlot {
+		//	log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
+		//	return true
+		//
+		//}
 
 		newTransactions := atomic.LoadInt32(&w.newTxs)
 		newTransactionsCheck := newTransactions == 0
