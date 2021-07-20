@@ -548,7 +548,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 
 	// Extract epoch
 	headerTime := header.Time
-	relativeTime := headerTime - uint64(genesisStart.Unix())
+	relativeTime := int64(headerTime) - genesisStart.Unix()
 
 	if relativeTime < 0 {
 		err = fmt.Errorf(
