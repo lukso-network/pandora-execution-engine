@@ -549,7 +549,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	// Extract epoch
 	headerTime := header.Time
 	relativeTime := int64(headerTime) - genesisStart.Unix()
-
+	log.Debug("generate relative time", "relative time", relativeTime)
 	if relativeTime < 0 {
 		err = fmt.Errorf(
 			"awaiting for vanguard to start. Left: %ds",
@@ -788,6 +788,7 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	headerTime := header.Time
 
 	extractedTurn := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+	extractedTurn++
 
 	// Check to not overflow the index
 	if extractedTurn > uint64(len(minimalConsensus.ValidatorsList)) {
@@ -798,9 +799,9 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 
 	calculatedSlot := uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn
 	log.Debug("In newPandoraExtraData", "calculated slot", calculatedSlot, "header time", headerTime, "derived epoch", derivedEpoch, "epoch time start", epochTimeStart)
-	if derivedEpoch == 0 && calculatedSlot == 0 {
-		calculatedSlot++
-	}
+	//if derivedEpoch == 0 && calculatedSlot == 0 {
+	//	calculatedSlot++
+	//}
 	extraData = &PandoraExtraData{
 		Slot:  calculatedSlot,
 		Epoch: derivedEpoch,
