@@ -639,20 +639,28 @@ func (pandoraMode *MinimalEpochConsensusInfo) extractValidator(timestamp uint64)
 }
 
 func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
-	headerTime := header.Time
+	//headerTime := header.Time
 	minimalConsensus, err := ethash.getMinimalConsensus(header)
 
 	if nil != err {
 		return
 	}
 
-	// Check if time slot is within desired boundaries. To consider if needed.
-	// We could maybe have an assumption that cache should be invalidated before use.
-	err, _, publicKey := minimalConsensus.extractValidator(headerTime)
-
-	if nil != err {
+	pandoraExtraData := new(PandoraExtraData)
+	err = rlp.DecodeBytes(header.Extra, pandoraExtraData)
+	if err != nil {
 		return
 	}
+
+	log.Debug("verifyPandoraHeader", "slot number", pandoraExtraData.Slot, "epoch", pandoraExtraData.Epoch, "turn", pandoraExtraData.Turn)
+
+	// Check if time slot is within desired boundaries. To consider if needed.
+	// We could maybe have an assumption that cache should be invalidated before use.
+	publicKey := minimalConsensus.ValidatorsList[pandoraExtraData.Turn] // minimalConsensus.extractValidator(headerTime)
+
+	//if nil != err {
+	//	return
+	//}
 
 	pandoraExtraDataSealed := new(PandoraExtraDataSealed)
 	err = rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
