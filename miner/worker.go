@@ -650,8 +650,6 @@ func (w *worker) mainLoop() {
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
-			case ev := <-w.apiCall:
-
 
 		// System stopped
 		case <-w.exitCh:
