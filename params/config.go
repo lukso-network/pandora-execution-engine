@@ -355,6 +355,10 @@ type EthashConfig struct{}
 
 type PandoraConfig struct {
 	ConsensusInfo []*MinimalEpochConsensusInfo `json:"consensusInfo"`
+
+	GenesisStartTime uint64        `json:"genesisStartTime,omitempty"`
+	SlotsPerEpoch    uint64        `json:"slotsPerEpoch,omitempty"`
+	SlotTimeDuration time.Duration `json:"slotTimeDuration"` // Slot time duration
 }
 
 // This should be cached or retrieved in a handshake with vanguard
