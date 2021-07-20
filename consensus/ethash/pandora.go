@@ -646,28 +646,22 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	pandoraExtraData := new(PandoraExtraData)
-	err = rlp.DecodeBytes(header.Extra, pandoraExtraData)
-	if err != nil {
-		return
-	}
-
-	log.Debug("verifyPandoraHeader", "slot number", pandoraExtraData.Slot, "epoch", pandoraExtraData.Epoch, "turn", pandoraExtraData.Turn)
-
-	// Check if time slot is within desired boundaries. To consider if needed.
-	// We could maybe have an assumption that cache should be invalidated before use.
-	publicKey := minimalConsensus.ValidatorsList[pandoraExtraData.Turn] // minimalConsensus.extractValidator(headerTime)
-
-	//if nil != err {
-	//	return
-	//}
-
 	pandoraExtraDataSealed := new(PandoraExtraDataSealed)
 	err = rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
 
 	if nil != err {
 		return
 	}
+
+	log.Debug("verifyPandoraHeader", "slot number", pandoraExtraDataSealed.Slot, "epoch", pandoraExtraDataSealed.Epoch, "turn", pandoraExtraDataSealed.Turn)
+
+	// Check if time slot is within desired boundaries. To consider if needed.
+	// We could maybe have an assumption that cache should be invalidated before use.
+	publicKey := minimalConsensus.ValidatorsList[pandoraExtraDataSealed.Turn] // minimalConsensus.extractValidator(headerTime)
+
+	//if nil != err {
+	//	return
+	//}
 
 	blsSginatureBytes := pandoraExtraDataSealed.BlsSignatureBytes
 	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
