@@ -548,8 +548,8 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 
 	// Extract epoch
 	headerTime := header.Time
-	relativeTime := headerTime - uint64(genesisStart.Unix())
-
+	relativeTime := int64(headerTime) - genesisStart.Unix()
+	log.Debug("generate relative time", "relative time", relativeTime)
 	if relativeTime < 0 {
 		err = fmt.Errorf(
 			"awaiting for vanguard to start. Left: %ds",
@@ -639,16 +639,8 @@ func (pandoraMode *MinimalEpochConsensusInfo) extractValidator(timestamp uint64)
 }
 
 func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
-	headerTime := header.Time
+	//headerTime := header.Time
 	minimalConsensus, err := ethash.getMinimalConsensus(header)
-
-	if nil != err {
-		return
-	}
-
-	// Check if time slot is within desired boundaries. To consider if needed.
-	// We could maybe have an assumption that cache should be invalidated before use.
-	err, _, publicKey := minimalConsensus.extractValidator(headerTime)
 
 	if nil != err {
 		return
@@ -660,6 +652,16 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	if nil != err {
 		return
 	}
+
+	log.Debug("verifyPandoraHeader", "slot number", pandoraExtraDataSealed.Slot, "epoch", pandoraExtraDataSealed.Epoch, "turn", pandoraExtraDataSealed.Turn)
+
+	// Check if time slot is within desired boundaries. To consider if needed.
+	// We could maybe have an assumption that cache should be invalidated before use.
+	publicKey := minimalConsensus.ValidatorsList[pandoraExtraDataSealed.Turn] // minimalConsensus.extractValidator(headerTime)
+
+	//if nil != err {
+	//	return
+	//}
 
 	blsSginatureBytes := pandoraExtraDataSealed.BlsSignatureBytes
 	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
@@ -788,6 +790,7 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	headerTime := header.Time
 
 	extractedTurn := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+	extractedTurn++
 
 	// Check to not overflow the index
 	if extractedTurn > uint64(len(minimalConsensus.ValidatorsList)) {
@@ -798,9 +801,9 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 
 	calculatedSlot := uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn
 	log.Debug("In newPandoraExtraData", "calculated slot", calculatedSlot, "header time", headerTime, "derived epoch", derivedEpoch, "epoch time start", epochTimeStart)
-	if derivedEpoch == 0 && calculatedSlot == 0 {
-		calculatedSlot++
-	}
+	//if derivedEpoch == 0 && calculatedSlot == 0 {
+	//	calculatedSlot++
+	//}
 	extraData = &PandoraExtraData{
 		Slot:  calculatedSlot,
 		Epoch: derivedEpoch,

@@ -460,13 +460,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			return true
 		}
 
-		isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
-
-		if isGenesisSlot {
-			log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
-			return true
-
-		}
+		//isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
+		//
+		//if isGenesisSlot {
+		//	log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
+		//	return true
+		//
+		//}
 
 		newTransactions := atomic.LoadInt32(&w.newTxs)
 		newTransactionsCheck := newTransactions == 0
