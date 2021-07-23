@@ -560,6 +560,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	}
 
 	derivedEpoch := int(relativeTime / (pandoraEpochLength * SlotTimeDuration))
+	log.Debug("in getMinimalConsensus", "header time", headerTime, "genesis start time", genesisStart.Unix(), "relative time", relativeTime, "derieved epoch", derivedEpoch)
 
 	// Get minimal consensus info for counted epoch
 	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
