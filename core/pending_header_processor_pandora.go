@@ -28,6 +28,11 @@ func (container *PandoraPendingHeaderContainer) WriteAndNotifyHeader(header *typ
 	container.WriteHeader(header)
 
 	// now send notification
+	container.NotifyHeader(header)
+}
+
+// NotifyHeader notifies to the subscribers
+func (container *PandoraPendingHeaderContainer) NotifyHeader(header *types.Header) {
 	container.pndHeaderFeed.Send(PendingHeaderEvent{Headers: []*types.Header{header}})
 }
 

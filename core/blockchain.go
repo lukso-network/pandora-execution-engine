@@ -445,6 +445,19 @@ func (bc *BlockChain) isPandora() bool {
 	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 }
 
+// isInPandoraLiveSync is a state when header is in currentSlot, otherwise we have normal sync
+// I wanted to use Syncing() but its higher api, so its temporary function that should be reconsidered
+func (bc *BlockChain) isInPandoraLiveSync(header *types.Header) (liveSync bool) {
+	if !bc.isPandora() {
+		return
+	}
+
+	ethashEngine := bc.engine.(*ethash.Ethash)
+	_, liveSync = ethashEngine.IsInRecentSlot(header)
+
+	return
+}
+
 // pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
 // the orchestrator client with a set of headers and fetch response from the orchestrator.
 // If it gets any response, it will send that response in the feed.
@@ -1658,7 +1671,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
-	if bc.isPandora() {
+	// If syncing leave it unprocessed, just only notify the orchestrator
+	if bc.isInPandoraLiveSync(block.Header()) {
 		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
 		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
 
@@ -1684,12 +1698,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
 		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
+		if pandora_orcclient.Verified != status {
 			log.Warn("failed to write block into the chain", "block hash", block.Hash())
 			return CanonStatTy, consensus.ErrInvalidBlock
 		}
 		// if status is approved then write block in canonical chain.
 		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
+	}
+
+	if bc.isPandora() && !bc.isInPandoraLiveSync(block.Header()) {
+		log.Debug(
+			"writeBlockWithState",
+			"sending header with header hash", block.Header().Hash(),
+			"omitting pending queue due to the live sync", "block should be inserted into canonical chain",
+		)
+		bc.pendingHeaderContainer.NotifyHeader(block.Header())
 	}
 
 	// Calculate the total difficulty of the block

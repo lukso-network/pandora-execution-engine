@@ -27,6 +27,10 @@ const (
 	signatureSize    = 96
 )
 
+var (
+	MockedTimeNow uint64 = 0
+)
+
 // Use decorator pattern to get there as fast as possible
 // This is a prototype, it can be designed way better
 type Pandora struct {
@@ -521,11 +525,8 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64, ctx
 	return
 }
 
-func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
-	minimalConsensus *MinimalEpochConsensusInfo,
-	err error,
-) {
-	mciCache := ethash.mci
+func getGenesisConsensus(mci *lru) (genesisConsensusInfo *MinimalEpochConsensusInfo, err error) {
+	mciCache := mci
 
 	if nil == mciCache {
 		err = fmt.Errorf("mci lru cache cannot be empty to run pandora mode")
@@ -543,7 +544,27 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 		return
 	}
 
-	minimalGenesisConsensusInfo := genesisInfo.(*MinimalEpochConsensusInfo)
+	genesisConsensusInfo, okGenesis = genesisInfo.(*MinimalEpochConsensusInfo)
+
+	if !okGenesis {
+		err = fmt.Errorf("cannot convert minimal consensus info for genesis")
+	}
+
+	return
+}
+
+func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
+	minimalConsensus *MinimalEpochConsensusInfo,
+	err error,
+) {
+	mciCache := ethash.mci
+	minimalGenesisConsensusInfo, err := getGenesisConsensus(mciCache)
+
+	if nil != err {
+		return
+	}
+
+	mci := mciCache.cache
 	genesisStart := minimalGenesisConsensusInfo.EpochTimeStart
 
 	// Extract epoch
@@ -563,7 +584,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	log.Debug("in getMinimalConsensus", "header time", headerTime, "genesis start time", genesisStart.Unix(), "relative time", relativeTime, "derieved epoch", derivedEpoch)
 
 	// Get minimal consensus info for counted epoch
-	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
+	minimalConsensusCache, okDerived := mci.Get(derivedEpoch)
 
 	if !okDerived {
 		err = fmt.Errorf(
@@ -577,6 +598,28 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	}
 
 	minimalConsensus = minimalConsensusCache.(*MinimalEpochConsensusInfo)
+
+	return
+}
+
+func (ethash *Ethash) IsInRecentSlot(header *types.Header) (err error, inRecentSlot bool) {
+	timeNow := uint64(time.Now().Unix())
+
+	if MockedTimeNow > 0 {
+		timeNow = MockedTimeNow
+	}
+
+	currentMinimalConsensus, err := getGenesisConsensus(ethash.mci)
+
+	if nil != err {
+		return
+	}
+
+	epochTimeStart := currentMinimalConsensus.EpochTimeStart
+	extractedTurn := currentMinimalConsensus.slotsSinceEpochStart(header.Time)
+	slotTimeStart := (extractedTurn * SlotTimeDuration) + uint64(epochTimeStart.Unix())
+	slotTimeEnd := slotTimeStart + SlotTimeDuration
+	inRecentSlot = timeNow >= slotTimeStart && timeNow < slotTimeEnd
 
 	return
 }
@@ -605,6 +648,15 @@ func (ethash *Ethash) PreparePandoraHeader(header *types.Header) (err error) {
 	return
 }
 
+// extractTurn will
+func (pandoraMode *MinimalEpochConsensusInfo) slotsSinceEpochStart(timestamp uint64) (slots uint64) {
+	epochTimeStart := pandoraMode.EpochTimeStart
+	epochTimeStartUnix := epochTimeStart.Unix()
+	slots = (timestamp - uint64(epochTimeStartUnix)) / SlotTimeDuration
+
+	return
+}
+
 func (pandoraMode *MinimalEpochConsensusInfo) extractValidator(timestamp uint64) (
 	err error,
 	extractedTurn uint64,
@@ -625,7 +677,7 @@ func (pandoraMode *MinimalEpochConsensusInfo) extractValidator(timestamp uint64)
 		return
 	}
 
-	extractedTurn = (timestamp - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+	extractedTurn = pandoraMode.slotsSinceEpochStart(timestamp)
 
 	// Check to not overflow the index
 	if extractedTurn > uint64(len(pandoraMode.ValidatorsList)) {
