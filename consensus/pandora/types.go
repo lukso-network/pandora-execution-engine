@@ -1,5 +1,7 @@
 package pandora
 
+import "time"
+
 // EpochInfo
 type EpochInfo struct {
 	Epoch            uint64        `json:"epoch"`         // Epoch number
@@ -22,6 +24,8 @@ type ExtraDataWithBLSSig struct {
 
 // sealWork wraps a seal work package for remote sealer.
 type shardingInfoReq struct {
-	errc chan error
-	res  chan<- [4]string //
+	errc  chan error
+	res   chan<- [4]string //
+	slot  uint64
+	epoch uint64
 }
