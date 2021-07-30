@@ -1,9 +1,6 @@
 package pandora
 
 import (
-	"math/big"
-	"runtime"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -12,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
+	"math/big"
 )
 
 var (
@@ -73,58 +71,35 @@ func (p *Pandora) VerifyHeader(chain consensus.ChainHeaderReader, header *types.
 }
 
 func (p *Pandora) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	// Spawn as many workers as allowed threads
-	workers := runtime.GOMAXPROCS(0)
-	if len(headers) < workers {
-		workers = len(headers)
-	}
+	abort := make(chan struct{})
+	results := make(chan error, len(headers))
 
-	// Create a task channel and spawn the verifiers
-	var (
-		inputs = make(chan int)
-		done   = make(chan int, workers)
-		errors = make([]error, len(headers))
-		abort  = make(chan struct{})
-	)
-
-	for i := 0; i < workers; i++ {
-		go func() {
-			for index := range inputs {
-				errors[index] = p.verifyHeaderWorker(chain, headers, index)
-				done <- index
-			}
-		}()
-	}
-
-	errorsOut := make(chan error, len(headers))
 	go func() {
-		defer close(inputs)
-		var (
-			in, out = 0, 0
-			checked = make([]bool, len(headers))
-			inputs  = inputs
-		)
-		for {
+		for i, header := range headers {
+			var parent *types.Header
+
+			if i == 0 {
+				parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+			} else if headers[i-1].Hash() == headers[i].ParentHash {
+				parent = headers[i-1]
+			}
+
+			if parent == nil {
+				results <- consensus.ErrUnknownAncestor
+				continue
+			}
+
+			err := p.verifyHeader(chain, header, parent)
+
 			select {
-			case inputs <- in:
-				if in++; in == len(headers) {
-					// Reached end of headers. Stop sending to workers.
-					inputs = nil
-				}
-			case index := <-done:
-				for checked[index] = true; checked[out]; out++ {
-					errorsOut <- errors[out]
-					if out == len(headers)-1 {
-						return
-					}
-				}
 			case <-abort:
 				return
+			case results <- err:
 			}
 		}
 	}()
 
-	return abort, errorsOut
+	return abort, results
 }
 
 // VerifyUncles implements consensus.Engine, always returning an error for any
