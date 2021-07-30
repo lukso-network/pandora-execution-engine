@@ -3,7 +3,6 @@ package pandora
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -135,6 +134,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 			shardingInfoReq.res <- shardingInfo
 
 		case submitSignatureData := <-p.submitShardingInfoCh:
+			log.Debug("get submit signature api called", "submitSignatureData", submitSignatureData)
 
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
