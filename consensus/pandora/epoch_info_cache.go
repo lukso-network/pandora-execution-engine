@@ -28,7 +28,7 @@ func (c *EpochInfoCache) put(epoch uint64, epochInfo *EpochInfo) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	copiedEpochInfo := copyEpochInfo(epochInfo)
+	copiedEpochInfo := epochInfo.copy()
 	c.epochInfos.Add(epoch, copiedEpochInfo)
 	return nil
 }
@@ -41,7 +41,7 @@ func (c *EpochInfoCache) get(epoch uint64) (*EpochInfo, error) {
 	item, exists := c.epochInfos.Get(epoch)
 	if exists && item != nil {
 		epochInfo := item.(*EpochInfo)
-		copiedEpochInfo := copyEpochInfo(epochInfo)
+		copiedEpochInfo := epochInfo.copy()
 		return copiedEpochInfo, nil
 	}
 	return nil, errInvalidEpochInfo

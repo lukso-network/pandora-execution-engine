@@ -329,7 +329,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	PandoraConfig *PandoraConfig `json:"pandora,omitempty"`
+	Pandora *PandoraConfig `json:"pandora,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

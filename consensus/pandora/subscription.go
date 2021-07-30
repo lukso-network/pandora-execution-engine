@@ -66,20 +66,27 @@ func (p *Pandora) connectToOrchestrator() error {
 }
 
 func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
-	curHeader := p.chain.CurrentHeader()
-	log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
-	extraData := new(ExtraData)
-	err := rlp.DecodeBytes(curHeader.Extra, extraData)
-	if err != nil {
-		return nil, err
-	}
-	// subscribing from previous epoch
-	p.currentEpoch = extraData.Epoch - 1
-	if p.currentEpoch < 0 {
+	var curCanonicalEpoch uint64
+	if p.chain != nil {
+		curHeader := p.chain.CurrentHeader()
+		log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
+		extraData := new(ExtraData)
+		err := rlp.DecodeBytes(curHeader.Extra, extraData)
+		if err != nil {
+			log.Error("Failed to decode extraData of the canonical head", "err", err)
+			return nil, err
+		}
+		// subscribing from previous epoch for safety reason
+		curCanonicalEpoch = extraData.Epoch - 1
+		p.currentEpoch = extraData.Epoch - 1
+	} else {
+		log.Debug("Chain is nil. subscription starts from epoch 0")
+		// when there is no blockchain in local, subscription starts from 0
+		curCanonicalEpoch = 0
 		p.currentEpoch = 0
 	}
 	// connect to pandora subscription
-	sub, err := p.SubscribeEpochInfo(p.ctx, p.currentEpoch, p.namespace, p.rpcClient)
+	sub, err := p.SubscribeEpochInfo(p.ctx, curCanonicalEpoch, p.namespace, p.rpcClient)
 	if err != nil {
 		return nil, err
 	}
@@ -104,9 +111,11 @@ func (p *Pandora) SubscribeEpochInfo(
 	namespace string,
 	client *rpc.Client,
 ) (*rpc.ClientSubscription, error) {
+
 	ch := make(chan *EpochInfoPayload)
 	sub, err := client.Subscribe(ctx, namespace, ch, "minimalConsensusInfo", fromEpoch)
 	if nil != err {
+		log.Error("Failed to subscribe orchestrator minimalConsensusInfo stream api", "err", err)
 		return nil, err
 	}
 	log.Debug("subscribed to orchestrator for new epoch info", "fromEpoch", fromEpoch)
@@ -118,9 +127,10 @@ func (p *Pandora) SubscribeEpochInfo(
 			case epochInfo := <-ch:
 				log.Debug("Received new epoch info", "epochInfo", fmt.Sprintf("%+v", epochInfo))
 				// dispatch newPendingHeader to handler
-				err = p.processEpochInfo(epochInfo)
-				if nil != err {
+				if err = p.processEpochInfo(epochInfo); err != nil {
 					log.Error("Failed to process epoch info", "err", err)
+					p.subscriptionErrCh <- err
+					return
 				}
 			case err := <-sub.Err():
 				if err != nil {
@@ -139,6 +149,7 @@ func (p *Pandora) SubscribeEpochInfo(
 func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	// checking proper length of the validator list.
 	if uint64(len(info.ValidatorList)) != p.config.SlotsPerEpoch {
+		log.Debug("Mis-match in validator list length", "slotsPerEpoch", p.config.SlotsPerEpoch, "len", len(info.ValidatorList))
 		return errInvalidValidatorSize
 	}
 

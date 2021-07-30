@@ -18,12 +18,6 @@ import (
 	"github.com/silesiacoin/bls/herumi"
 )
 
-// copyEpochInfo
-func copyEpochInfo(ei *EpochInfo) *EpochInfo {
-	cpy := *ei
-	return &cpy
-}
-
 // extraDataWithoutBLSSig
 func extraDataWithoutBLSSig(rlpExtraData []byte) (*ExtraData, error) {
 	extraData := new(ExtraData)
@@ -105,6 +99,7 @@ func (pandoraExtraDataSealed *ExtraDataSealed) FromExtraDataAndSignature(
 	pandoraExtraDataSealed.ExtraData = pandoraExtraData
 	pandoraExtraDataSealed.BlsSignatureBytes = &blsSignatureBytes
 }
+
 func (p *Pandora) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int) error {
 	var parent *types.Header
 	if index == 0 {
@@ -119,17 +114,11 @@ func (p *Pandora) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers 
 }
 
 func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
-	// Ensure that the header's extra-data section is of a reasonable size
-	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
-		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
-	}
-
 	if header.Time <= parent.Time {
 		return errOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := p.CalcDifficulty(chain, header.Time, parent)
-
 	if expected.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
@@ -184,15 +173,16 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	if extractedEpoch != p.currentEpoch {
 		curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
 		if err != nil {
-			log.Error("Epoch info not found in cache", "err", err)
+			log.Error("Epoch info not found in cache", "err", err,
+				"slot", extractedSlot, "epoch", extractedEpoch)
 			return err
 		}
 		// update current epoch info from cache
 		p.updateCurEpochInfo(curEpochInfo)
 	}
 
-	blsSginatureBytes := extraDataWithBLSSig.BlsSignatureBytes
-	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
+	blsSignatureBytes := extraDataWithBLSSig.BlsSignatureBytes
+	signature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 	if err != nil {
 		log.Error("Failed retrieve signature from extraData", "err", err)
 		return err
@@ -212,6 +202,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 func (p *Pandora) updateCurEpochInfo(epochInfo *EpochInfo) {
 	p.processingLock.Lock()
 	defer p.processingLock.Unlock()
+
 	p.currentEpochInfo = epochInfo
 	p.currentEpoch = epochInfo.Epoch
 }

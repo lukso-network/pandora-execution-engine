@@ -26,7 +26,7 @@ var (
 	errInvalidValidatorSize = errors.New("invalid length of validator list")
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
 	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
-	errNoShardingBlock      = errors.New("no pandora sharding block available yet")
+	errNoShardingBlock      = errors.New("no pandora sharding header available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
 	errOlderBlockTime       = errors.New("timestamp older than parent")
@@ -58,26 +58,20 @@ type Pandora struct {
 	subscription      *rpc.ClientSubscription
 	subscriptionErrCh chan error
 
-	apiResponse [4]string
-	results     chan<- *types.Block
-	works       map[common.Hash]*types.Block
+	results chan<- *types.Block
+	works   map[common.Hash]*types.Block
 
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
-
-	newSealRequestCh chan *sealTask
-
-	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
-	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
+	newSealRequestCh     chan *sealTask
 }
 
 func New(
 	ctx context.Context,
 	cfg *params.PandoraConfig,
-	chain consensus.ChainHeaderReader,
 	urls []string,
 	dialRPCFn DialRPCFn,
-) (*Pandora, error) {
+) *Pandora {
 
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop()
@@ -90,14 +84,10 @@ func New(
 	if cfg.SlotTimeDuration == 0 {
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
-	if urls[0] == "" {
-		return nil, errEmptyOrchestratorUrl
-	}
 
-	pandora := &Pandora{
+	return &Pandora{
 		ctx:            ctx,
 		cancel:         cancel,
-		chain:          chain,
 		config:         cfg,
 		epochInfoCache: NewEpochInfoCache(),
 		dialRPC:        dialRPCFn,
@@ -110,18 +100,17 @@ func New(
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
 	}
-
-	pandora.start()
-	return pandora, nil
 }
 
-func (p *Pandora) start() {
+func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
 	// Exit early if pandora endpoint is not set.
 	if p.endpoint == "" {
+		log.Error("Orchestrator endpoint is empty")
 		return
 	}
+	p.isRunning = true
+	p.chain = chain
 	go func() {
-		p.isRunning = true
 		p.waitForConnection()
 		if p.ctx.Err() != nil {
 			log.Info("Context closed, exiting pandora goroutine")
@@ -202,14 +191,11 @@ func (p *Pandora) run(done <-chan struct{}) {
 			} else {
 				// current block available. now put that info into header extra data and generate seal hash
 				// before that check if current block is valid and compatible with the request
-
-				currentBlock := p.currentBlock
-				currentBlockHeader := currentBlock.Header()
-
+				currentBlockHeader := p.currentBlock.Header()
+				currentBlock := p.currentBlock.WithSeal(currentBlockHeader)
 				if shardingInfoReq.blockNumber > 1 {
 					// When producing block #1, validator does not know about hash of block #0
 					// so do not check the parent hash and block number 1
-
 					if currentBlockHeader.ParentHash != shardingInfoReq.parentHash {
 						log.Error("Mis-match in parentHash",
 							"blockNumber", currentBlockHeader.Number.Uint64(),
@@ -218,7 +204,6 @@ func (p *Pandora) run(done <-chan struct{}) {
 						// error found. so don't do anything
 						continue
 					}
-
 					if currentBlockHeader.Number.Uint64() != shardingInfoReq.blockNumber {
 						log.Error("Mis-match in block number",
 							"remoteBlockNumber", currentBlockHeader.Number.Uint64(), "receivedBlockNumber", shardingInfoReq.blockNumber)
@@ -255,6 +240,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
 			log.Debug("Starting retry to connect and subscribe to orchestrator chain")
+			// TODO- We need a fall-back support to connect with other orchestrator node for verifying incoming blocks when own orchestrator is down
 			// Try to check the connection and retry to establish the connection
 			p.retryToConnectAndSubscribe(err)
 			continue

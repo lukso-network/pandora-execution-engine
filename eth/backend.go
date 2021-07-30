@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"math/big"
 	"runtime"
 	"sync"
@@ -195,6 +196,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
+	// For pandora engine, it needs blockchain header reader
+	if pandoraEngine, ok := eth.engine.(*pandora.Pandora); ok {
+		pandoraEngine.Start(eth.blockchain)
+	}
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)

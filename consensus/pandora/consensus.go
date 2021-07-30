@@ -59,6 +59,7 @@ func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
 	hasher.Sum(hash[:0])
 	return hash
 }
+
 func (p *Pandora) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	number := header.Number.Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {

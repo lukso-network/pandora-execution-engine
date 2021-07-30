@@ -31,7 +31,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -442,8 +441,7 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 
 // isPandora returns if we are running pandora engine
 func (bc *BlockChain) isPandora() bool {
-	// TODO- Need to change from ethash to pandora
-	_, isPandoraEnigne := bc.engine.(*ethash.Ethash)
+	_, isPandoraEnigne := bc.engine.(*pandora.Pandora)
 	return isPandoraEnigne
 }
 
