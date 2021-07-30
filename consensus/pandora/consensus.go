@@ -1,6 +1,9 @@
 package pandora
 
 import (
+	"math/big"
+	"runtime"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -9,8 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
-	"math/big"
-	"runtime"
 )
 
 var (
@@ -22,6 +23,42 @@ func (pan *Pandora) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
 
+// SealHash returns the hash of a block prior to it being sealed.
+func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewLegacyKeccak256()
+
+	extraData := header.Extra
+	extraDataLen := len(extraData)
+
+	// Bls signature is 96 bytes long and will be inserted at the bottom of the extraData field
+	if extraDataLen > signatureSize {
+		//extraData = extraData[:extraDataLen-signatureSize]
+		pandoraExtraData := new(ExtraDataSealed)
+		pandoraExtraData.FromHeader(header)
+		headerExtra := new(ExtraData)
+		headerExtra.Epoch = pandoraExtraData.Epoch
+		headerExtra.Turn = pandoraExtraData.Turn
+		headerExtra.Slot = pandoraExtraData.Slot
+		extraData, _ = rlp.EncodeToBytes(headerExtra)
+	}
+	rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		extraData,
+	})
+	hasher.Sum(hash[:0])
+	return hash
+}
 func (p *Pandora) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	number := header.Number.Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {
@@ -123,29 +160,6 @@ func (p *Pandora) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header 
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
-}
-
-// SealHash returns the hash of a block prior to it being sealed.
-func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	extraData := header.Extra
-	rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		extraData,
-	})
-	hasher.Sum(hash[:0])
-	return hash
 }
 
 func (p *Pandora) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {

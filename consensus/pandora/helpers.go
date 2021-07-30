@@ -1,7 +1,11 @@
 package pandora
 
 import (
+	"math/big"
+	"math/bits"
+
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -9,8 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
+	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
-	"math/big"
 )
 
 // copyEpochInfo
@@ -61,6 +66,45 @@ func getDummyHeader() *types.Header {
 	}
 }
 
+func Mul64(a, b uint64) (uint64, error) {
+	overflows, val := bits.Mul64(a, b)
+	if overflows > 0 {
+		return 0, errors.New("multiplication overflows")
+	}
+	return val, nil
+}
+
+func (p *Pandora) StartSlot(epoch uint64) (uint64, error) {
+	slot, err := Mul64(p.config.SlotsPerEpoch, epoch)
+	if err != nil {
+		return slot, errors.Errorf("start slot calculation overflows: %v", err)
+	}
+	return slot, nil
+}
+
+func (pandoraExtraDataSealed *ExtraDataSealed) FromHeader(header *types.Header) {
+	err := rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
+
+	if nil != err {
+		panic(err.Error())
+	}
+}
+
+func (pandoraExtraDataSealed *ExtraDataSealed) FromExtraDataAndSignature(
+	pandoraExtraData ExtraData,
+	signature common2.Signature,
+) {
+	var blsSignatureBytes BlsSignatureBytes
+	signatureBytes := signature.Marshal()
+
+	if len(signatureBytes) != signatureSize {
+		panic("Incompatible bls mode detected")
+	}
+
+	copy(blsSignatureBytes[:], signatureBytes[:])
+	pandoraExtraDataSealed.ExtraData = pandoraExtraData
+	pandoraExtraDataSealed.BlsSignatureBytes = &blsSignatureBytes
+}
 func (p *Pandora) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int) error {
 	var parent *types.Header
 	if index == 0 {

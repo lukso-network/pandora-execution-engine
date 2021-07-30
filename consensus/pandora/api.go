@@ -12,9 +12,7 @@ import (
 )
 
 var (
-	errPandoraStopped     = errors.New("pandora stopped")
-	errInvalidParentHash  = errors.New("invalid parent hash")
-	errInvalidBlockNumber = errors.New("invalid block number")
+	errPandoraStopped = errors.New("pandora stopped")
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -32,8 +30,8 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	}
 
 	var (
-		shardingInfoCh = make(chan [4]string)
-		errorCh        = make(chan error)
+		shardingInfoCh = make(chan [4]string, 1)
+		errorCh        = make(chan error, 1)
 	)
 
 	select {
@@ -45,26 +43,6 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	select {
 	case shardingInfo := <-shardingInfoCh:
 		log.Debug("Sending current sharding info to validator", "shardingInfo", fmt.Sprintf("%+v", shardingInfo))
-		curBlockHeader := api.pandora.currentBlock.Header()
-		if curBlockHeader != nil {
-			log.Debug("Current Block Header Data", "time", curBlockHeader.Time, "block number", curBlockHeader.Number)
-			// When producing block #1, validator does not know about hash of block #0
-			// so do not check the parent hash and block number 1
-			if blockNumber == 1 {
-				return shardingInfo, nil
-			}
-			if curBlockHeader.ParentHash != parentHash {
-				log.Error("Mis-match in parentHash",
-					"blockNumber", curBlockHeader.Number.Uint64(),
-					"remoteParentHash", curBlockHeader.ParentHash, "receivedParentHash", parentHash)
-				return emptyRes, errInvalidParentHash
-			}
-			if curBlockHeader.Number.Uint64() != blockNumber {
-				log.Error("Mis-match in block number",
-					"remoteBlockNumber", curBlockHeader.Number.Uint64(), "receivedBlockNumber", blockNumber)
-				return emptyRes, errInvalidBlockNumber
-			}
-		}
 		return shardingInfo, nil
 	case err := <-errorCh:
 		return emptyRes, err
