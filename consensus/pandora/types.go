@@ -19,6 +19,11 @@ type shardingResult struct {
 	errc chan error
 }
 
+type ExtraDataSealed struct {
+	ExtraData
+	BlsSignatureBytes *BlsSignatureBytes
+}
+
 // EpochInfo
 type EpochInfo struct {
 	Epoch            uint64        `json:"epoch"`         // Epoch number

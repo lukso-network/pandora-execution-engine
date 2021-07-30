@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -441,8 +441,8 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 
 // isPandora returns if we are running pandora engine
 func (bc *BlockChain) isPandora() bool {
-	ethashEngine, isEthashEngine := bc.engine.(*ethash.Ethash)
-	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
+	_, isPandoraEnigne := bc.engine.(*pandora.Pandora)
+	return isPandoraEnigne
 }
 
 // pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
@@ -532,7 +532,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraDataSealed{}
+		pandoraExtraData := pandora.ExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
