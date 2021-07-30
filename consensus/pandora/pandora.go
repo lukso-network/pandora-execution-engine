@@ -2,15 +2,12 @@ package pandora
 
 import (
 	"context"
-	"errors"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/crypto/sha3"
+	"github.com/pkg/errors"
 	"sync"
 	"time"
 )
@@ -25,6 +22,8 @@ var (
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
 	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding block available yet")
+	errOlderBlockTime       = errors.New("timestamp older than parent")
+	errSigFailedToVerify    = errors.New("signature did not verify")
 )
 
 // DialRPCFn dials to the given endpoint
@@ -51,15 +50,14 @@ type Pandora struct {
 	subscription      *rpc.ClientSubscription
 	subscriptionErrCh chan error
 
-	apiResponse          [4]string
-	results              chan<- *types.Block
+	apiResponse [4]string
+	results     chan<- *types.Block
 
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 	currentBlock         *types.Block
 
 	newSealRequestCh chan *sealTask
-
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
@@ -98,10 +96,10 @@ func New(
 		endpoint:       urls[0],
 		namespace:      "orc",
 
-		fetchShardingInfoCh: make(chan *shardingInfoReq),
+		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
-		newSealRequestCh: make(chan *sealTask),
-		subscriptionErrCh:   make(chan error),
+		newSealRequestCh:     make(chan *sealTask),
+		subscriptionErrCh:    make(chan error),
 	}
 
 	pandora.start()
@@ -134,12 +132,11 @@ func (p *Pandora) run(done <-chan struct{}) {
 	for {
 		select {
 
-		case sealReqeust := <- p.newSealRequestCh:
+		case sealReqeust := <-p.newSealRequestCh:
 			log.Debug("new seal request in pandora engine", "block number", sealReqeust.block.Number())
 			// first save it to result channel. so that we can send worker about the info
 			p.results = sealReqeust.results
 			// then prepare hash and set the block to current state
-
 
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			curHeader := getDummyHeader()
@@ -173,25 +170,15 @@ func (p *Pandora) Close() error {
 	return nil
 }
 
-// SealHash returns the hash of a block prior to it being sealed.
-func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	extraData := header.Extra
-	rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		extraData,
-	})
-	hasher.Sum(hash[:0])
-	return hash
+func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{p},
+			Public:    true,
+		},
+	}
 }
