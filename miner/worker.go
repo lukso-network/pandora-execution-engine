@@ -465,16 +465,6 @@ func (w *worker) mainLoop() {
 		case req := <-w.newWorkCh:
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
-		case updatedInfo := <-w.updateTracker:
-			log.Debug("pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
-			prevTask, exist := w.pendingTasks[updatedInfo.PreviousHash]
-			if exist {
-				log.Debug("task found with previousSealHash")
-				delete(w.pendingTasks, updatedInfo.PreviousHash)
-				w.pendingTasks[updatedInfo.UpdatedHash] = prevTask
-				log.Debug("task found with newSealHash")
-			}
-
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
@@ -617,6 +607,18 @@ func (w *worker) taskLoop() {
 func (w *worker) resultLoop() {
 	for {
 		select {
+		case updatedInfo := <-w.updateTracker:
+			log.Debug("pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
+			w.pendingMu.Lock()
+			prevTask, exist := w.pendingTasks[updatedInfo.PreviousHash]
+			if exist {
+				log.Debug("task found with previousSealHash")
+				delete(w.pendingTasks, updatedInfo.PreviousHash)
+				w.pendingTasks[updatedInfo.UpdatedHash] = prevTask
+				log.Debug("task found with newSealHash")
+			}
+			w.pendingMu.Unlock()
+
 		case block := <-w.resultCh:
 			// Short circuit when receiving empty result.
 			if block == nil {
