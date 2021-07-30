@@ -170,7 +170,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 		extractedEpoch, "turn", extractedIndex)
 
 	// update in-memory current epoch info and epoch number
-	if extractedEpoch != p.currentEpoch {
+	if extractedEpoch == 0 || extractedEpoch != p.currentEpoch {
 		curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
 		if err != nil {
 			log.Error("Epoch info not found in cache", "err", err,

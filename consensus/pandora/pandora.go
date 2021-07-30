@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	reConPeriod             = 15 * time.Second
+	reConPeriod             = 2 * time.Second
 	DefaultGenesisStartTime = uint64(time.Now().Unix())
 	DefaultSlotsPerEpoch    = uint64(32)
 	DefaultSlotTimeDuration = 6 * time.Second
@@ -59,14 +59,11 @@ type Pandora struct {
 	namespace         string
 	subscription      *rpc.ClientSubscription
 	subscriptionErrCh chan error
-
 	results chan<- *types.Block
 	works   map[common.Hash]*types.Block
-
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 	newSealRequestCh     chan *sealTask
-
 	updatedSealHash event.Feed
 	scope           event.SubscriptionScope
 }
@@ -98,6 +95,7 @@ func New(
 		dialRPC:        dialRPCFn,
 		endpoint:       urls[0],
 		namespace:      "orc",
+
 
 		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
