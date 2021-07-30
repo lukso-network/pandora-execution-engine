@@ -70,15 +70,20 @@ func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 	if p.chain != nil {
 		curHeader := p.chain.CurrentHeader()
 		log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
-		extraData := new(ExtraData)
-		err := rlp.DecodeBytes(curHeader.Extra, extraData)
-		if err != nil {
-			log.Error("Failed to decode extraData of the canonical head", "err", err)
-			return nil, err
+		if curHeader.Number.Uint64() > 0 {
+			extraData := new(ExtraData)
+			err := rlp.DecodeBytes(curHeader.Extra, extraData)
+			if err != nil {
+				log.Error("Failed to decode extraData of the canonical head", "err", err)
+				return nil, err
+			}
+			// subscribing from previous epoch for safety reason
+			curCanonicalEpoch = extraData.Epoch - 1
+			p.currentEpoch = extraData.Epoch - 1
+		} else {
+			curCanonicalEpoch = 0
+			p.currentEpoch = 0
 		}
-		// subscribing from previous epoch for safety reason
-		curCanonicalEpoch = extraData.Epoch - 1
-		p.currentEpoch = extraData.Epoch - 1
 	} else {
 		log.Debug("Chain is nil. subscription starts from epoch 0")
 		// when there is no blockchain in local, subscription starts from 0
@@ -166,6 +171,11 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 			log.Error("Failed to decode validator public key bytes from string", "err", err)
 			return err
 		}
+
+		if epochInfo.Epoch == 0 && i == 0 {
+			continue
+		}
+
 		pubKey, err := herumi.PublicKeyFromBytes(pubKeyBytes)
 		if err != nil {
 			log.Error("Failed to retrieve validator public key from bytes", "err", err)
