@@ -159,6 +159,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 
 			feed.send()
 
+
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
 			log.Debug("Starting retry to connect and subscribe to orchestrator chain")
