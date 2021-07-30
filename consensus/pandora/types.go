@@ -1,6 +1,23 @@
 package pandora
 
-import "time"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"time"
+)
+
+const signatureSize = 96
+
+type BlsSignatureBytes [signatureSize]byte
+
+// mineResult wraps the pow solution parameters for the specified block.
+type shardingResult struct {
+	nonce   types.BlockNonce
+	hash    common.Hash
+	blsSeal *BlsSignatureBytes
+
+	errc chan error
+}
 
 // EpochInfo
 type EpochInfo struct {
@@ -24,8 +41,11 @@ type ExtraDataWithBLSSig struct {
 
 // sealWork wraps a seal work package for remote sealer.
 type shardingInfoReq struct {
-	errc  chan error
-	res   chan<- [4]string //
-	slot  uint64
-	epoch uint64
+	slot        uint64
+	epoch       uint64
+	blockNumber uint64
+	parentHash  common.Hash
+
+	errc chan error
+	res  chan<- [4]string //
 }

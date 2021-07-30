@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -47,4 +49,33 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	case err := <-errorCh:
 		return emptyRes, err
 	}
+}
+
+// SubmitWorkBLS can be used by external miner to submit their POS solution.
+// It returns an indication if the work was accepted.
+// Note either an invalid solution, a stale work a non-existent work will return false.
+// This submit work contains BLS storing feature.
+func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSignatureString string) bool {
+	if api.pandora == nil {
+		return false
+	}
+
+	signatureBytes := hexutil.MustDecode(hexSignatureString)
+	blsSignatureBytes := new(BlsSignatureBytes)
+	copy(blsSignatureBytes[:], signatureBytes[:])
+
+	var errc = make(chan error, 1)
+
+	select {
+	case api.pandora.submitShardingInfoCh <- &shardingResult{
+		nonce:   nonce,
+		hash:    hash,
+		blsSeal: blsSignatureBytes,
+		errc:    errc,
+	}:
+	case <-api.pandora.ctx.Done():
+		return false
+	}
+	err := <-errc
+	return err == nil
 }

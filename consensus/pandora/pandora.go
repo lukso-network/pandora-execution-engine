@@ -3,6 +3,7 @@ package pandora
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,9 +52,10 @@ type Pandora struct {
 	subscription      *rpc.ClientSubscription
 	subscriptionErrCh chan error
 
-	apiResponse         [4]string
-	results             chan<- *types.Block
-	fetchShardingInfoCh chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
+	apiResponse          [4]string
+	results              chan<- *types.Block
+	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
+	submitShardingInfoCh chan *shardingResult
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
@@ -130,6 +132,8 @@ func (p *Pandora) run(done <-chan struct{}) {
 			hash := p.SealHash(curHeader)
 			shardingInfo := prepareShardingInfo(curHeader, hash)
 			shardingInfoReq.res <- shardingInfo
+
+		case submitSignatureData := <-p.submitShardingInfoCh:
 
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
