@@ -3,17 +3,17 @@ package pandora
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/crypto/sha3"
-	"sync"
-	"time"
 )
 
 var (
@@ -26,6 +26,8 @@ var (
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
 	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding block available yet")
+	errInvalidParentHash    = errors.New("invalid parent hash")
+	errInvalidBlockNumber   = errors.New("invalid block number")
 )
 
 // DialRPCFn dials to the given endpoint
@@ -44,6 +46,7 @@ type Pandora struct {
 	epochInfoCache    *EpochInfoCache
 	currentEpoch      uint64
 	currentEpochInfo  *EpochInfo
+	currentBlock      *types.Block
 	dialRPC           DialRPCFn
 	endpoint          string
 	connected         bool
@@ -52,14 +55,14 @@ type Pandora struct {
 	subscription      *rpc.ClientSubscription
 	subscriptionErrCh chan error
 
-	apiResponse          [4]string
-	results              chan<- *types.Block
+	apiResponse [4]string
+	results     chan<- *types.Block
+	works       map[common.Hash]*types.Block
 
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 
 	newSealRequestCh chan *sealTask
-
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
@@ -98,10 +101,11 @@ func New(
 		endpoint:       urls[0],
 		namespace:      "orc",
 
-		fetchShardingInfoCh: make(chan *shardingInfoReq),
+		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
-		newSealRequestCh: make(chan *sealTask),
-		subscriptionErrCh:   make(chan error),
+		newSealRequestCh:     make(chan *sealTask),
+		subscriptionErrCh:    make(chan error),
+		works:                make(map[common.Hash]*types.Block),
 	}
 
 	pandora.start()
@@ -124,30 +128,125 @@ func (p *Pandora) start() {
 	}()
 }
 
+func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) [4]string {
+	currentHeader := currentBlock.Header()
+
+	// modify the header with slot, epoch and turn
+	extraData := new(ExtraData)
+	extraData.Slot = slotNumber
+	extraData.Epoch = epoch
+
+	// calculate turn
+	startSlot, err := p.StartSlot(epoch)
+	if err != nil {
+		log.Error("error while calculating start slot from epoch", "error", err, "epoch", epoch)
+	}
+	extraData.Turn = slotNumber - startSlot
+
+	extraDataInBytes, err := rlp.EncodeToBytes(extraData)
+	if err != nil {
+		log.Error("error while encoding extra data to bytes", "error", err)
+	}
+
+	currentHeader.Extra = extraDataInBytes
+
+	// get the updated block
+	updatedBlock := currentBlock.WithSeal(currentHeader)
+	// update the current block with this newly created block
+	//p.currentBlock = updatedBlock
+
+	rlpHeader, _ := rlp.EncodeToBytes(updatedBlock.Header())
+
+	hash := p.SealHash(updatedBlock.Header())
+
+	var retVal [4]string
+	retVal[0] = hash.Hex()
+	retVal[1] = updatedBlock.Header().ReceiptHash.Hex()
+	retVal[2] = hexutil.Encode(rlpHeader)
+	retVal[3] = hexutil.Encode(updatedBlock.Header().Number.Bytes())
+
+	p.works[hash] = updatedBlock
+
+	return retVal
+}
+
 // run subscribes to all the services for the ETH1.0 chain.
 func (p *Pandora) run(done <-chan struct{}) {
 	log.Debug("Pandora chain service is starting")
 	p.runError = nil
+
+	// ticker is needed to clean up the map
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
 	// the loop waits for any error which comes from consensus info subscription
 	// if any subscription error happens, it will try to reconnect and re-subscribe with pandora chain again.
 	for {
 		select {
 
-		case sealReqeust := <- p.newSealRequestCh:
-			log.Debug("new seal request in pandora engine", "block number", sealReqeust.block.Number())
+		case sealRequest := <-p.newSealRequestCh:
+			log.Debug("new seal request in pandora engine", "block number", sealRequest.block.Number())
 			// first save it to result channel. so that we can send worker about the info
-			p.results = sealReqeust.results
-			// then prepare hash and set the block to current state
-
+			p.results = sealRequest.results
+			// then simply save the block into current block. We will use it again
+			p.currentBlock = sealRequest.block
 
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
-			curHeader := getDummyHeader()
-			hash := p.SealHash(curHeader)
-			shardingInfo := prepareShardingInfo(curHeader, hash)
-			shardingInfoReq.res <- shardingInfo
+			// Get sharding work API is called and we got slot number from vanguard
+			if p.currentBlock == nil {
+				// no block is available. worker has not submit any block to seal. So something went wrong. send error
+				shardingInfoReq.errc <- errNoShardingBlock
+			} else {
+				// current block available. now put that info into header extra data and generate seal hash
+				// before that check if current block is valid and compatible with the request
+
+				currentBlock := p.currentBlock
+				currentBlockHeader := currentBlock.Header()
+
+				if shardingInfoReq.blockNumber > 1 {
+					// When producing block #1, validator does not know about hash of block #0
+					// so do not check the parent hash and block number 1
+
+					if currentBlockHeader.ParentHash != shardingInfoReq.parentHash {
+						log.Error("Mis-match in parentHash",
+							"blockNumber", currentBlockHeader.Number.Uint64(),
+							"remoteParentHash", currentBlockHeader.ParentHash, "receivedParentHash", shardingInfoReq.parentHash)
+						shardingInfoReq.errc <- errInvalidParentHash
+						// error found. so don't do anything
+						continue
+					}
+
+					if currentBlockHeader.Number.Uint64() != shardingInfoReq.blockNumber {
+						log.Error("Mis-match in block number",
+							"remoteBlockNumber", currentBlockHeader.Number.Uint64(), "receivedBlockNumber", shardingInfoReq.blockNumber)
+						shardingInfoReq.errc <- errInvalidBlockNumber
+						// error found. so don't do anything
+						continue
+					}
+				}
+				// now modify the current block header and generate seal hash
+				log.Debug("for GetShardingWork updating block header extra data", "slot", shardingInfoReq.slot, "epoch", shardingInfoReq.epoch)
+				shardingInfoReq.res <- p.updateBlockHeader(currentBlock, shardingInfoReq.slot, shardingInfoReq.epoch)
+			}
 
 		case submitSignatureData := <-p.submitShardingInfoCh:
+			if p.submitWork(submitSignatureData.nonce, submitSignatureData.hash, submitSignatureData.blsSeal) {
+				log.Debug("submitWork is successful", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash)
+				submitSignatureData.errc <- nil
+			} else {
+				log.Debug("submitWork is failed", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash, "current block number", p.currentBlock.NumberU64())
+				submitSignatureData.errc <- errors.New("invalid submit work request")
+			}
+
+		case <-ticker.C:
+			// Clear stale pending blocks
+			if p.currentBlock != nil {
+				for hash, block := range p.works {
+					if block.NumberU64()+staleThreshold <= p.currentBlock.NumberU64() {
+						delete(p.works, hash)
+					}
+				}
+			}
 
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
@@ -170,27 +269,4 @@ func (p *Pandora) Close() error {
 		defer p.cancel()
 	}
 	return nil
-}
-
-// SealHash returns the hash of a block prior to it being sealed.
-func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	extraData := header.Extra
-	rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		extraData,
-	})
-	hasher.Sum(hash[:0])
-	return hash
 }

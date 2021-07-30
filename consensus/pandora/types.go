@@ -1,9 +1,10 @@
 package pandora
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"time"
 )
 
 const signatureSize = 96
@@ -37,6 +38,7 @@ type ExtraData struct {
 // ExtraDataWithBLSSig
 type ExtraDataWithBLSSig struct {
 	ExtraData
+	BlsSignatureBytes *BlsSignatureBytes
 }
 
 // sealWork wraps a seal work package for remote sealer.
@@ -49,7 +51,6 @@ type shardingInfoReq struct {
 	errc chan error
 	res  chan<- [4]string //
 }
-
 
 // sealTask wraps a seal block with relative result channel
 type sealTask struct {
