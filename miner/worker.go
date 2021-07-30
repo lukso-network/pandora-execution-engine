@@ -382,6 +382,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
 			if t.block.NumberU64()+staleThreshold <= number {
+				log.Debug("worker.go removing task from pending map", "sealHash", h)
 				delete(w.pendingTasks, h)
 			}
 		}
@@ -589,6 +590,7 @@ func (w *worker) taskLoop() {
 				continue
 			}
 			w.pendingMu.Lock()
+			log.Debug("worker.go putting task into pending task map", "sealHash", sealHash)
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
@@ -608,14 +610,16 @@ func (w *worker) resultLoop() {
 	for {
 		select {
 		case updatedInfo := <-w.updateTracker:
-			log.Debug("pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
+			log.Debug("worker.go pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
 			w.pendingMu.Lock()
 			prevTask, exist := w.pendingTasks[updatedInfo.PreviousHash]
 			if exist {
-				log.Debug("task found with previousSealHash")
+				log.Debug("worker.go task found with previousSealHash")
 				delete(w.pendingTasks, updatedInfo.PreviousHash)
 				w.pendingTasks[updatedInfo.UpdatedHash] = prevTask
-				log.Debug("task found with newSealHash")
+				log.Debug("worker.go task found with newSealHash")
+			} else {
+				log.Debug("worker.go task not found", "sealHash", updatedInfo.PreviousHash)
 			}
 			w.pendingMu.Unlock()
 
