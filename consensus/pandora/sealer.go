@@ -23,7 +23,8 @@ func (pan *Pandora) Seal(chain consensus.ChainHeaderReader, block *types.Block, 
 }
 
 func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, blsSignatureBytes *BlsSignatureBytes) bool {
-	if pan.currentBlock == nil {
+	currentBlock := pan.getCurrentBlock()
+	if currentBlock == nil {
 		log.Error("No block found while submitting work", "sealhash", sealHash)
 		return false
 	}
@@ -32,7 +33,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	block := pan.works[sealHash]
 	if block == nil {
 		log.Warn("Work submitted but none pending", "sealHash", sealHash,
-			"blockNumber", pan.currentBlock.NumberU64())
+			"blockNumber", currentBlock.NumberU64())
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -82,7 +83,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	solution := block.WithSeal(header)
 
 	// The submitted solution is within the scope of acceptance.
-	if solution.NumberU64()+staleThreshold > pan.currentBlock.NumberU64() {
+	if solution.NumberU64()+staleThreshold > currentBlock.NumberU64() {
 		select {
 		case pan.results <- solution:
 			log.Debug("Sharding block submitted is acceptable", "number", solution.NumberU64(),

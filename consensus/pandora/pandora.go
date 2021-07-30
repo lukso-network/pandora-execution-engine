@@ -46,26 +46,27 @@ type Pandora struct {
 	cancel         context.CancelFunc
 	runError       error
 
-	chain             consensus.ChainHeaderReader
-	config            *params.PandoraConfig // Consensus engine configuration parameters
-	epochInfoCache    *EpochInfoCache
-	currentEpoch      uint64
-	currentEpochInfo  *EpochInfo
-	currentBlock      *types.Block
-	dialRPC           DialRPCFn
-	endpoint          string
-	connected         bool
-	rpcClient         *rpc.Client
-	namespace         string
-	subscription      *rpc.ClientSubscription
-	subscriptionErrCh chan error
-	results chan<- *types.Block
-	works   map[common.Hash]*types.Block
+	chain                consensus.ChainHeaderReader
+	config               *params.PandoraConfig // Consensus engine configuration parameters
+	epochInfoCache       *EpochInfoCache
+	currentEpoch         uint64
+	currentEpochInfo     *EpochInfo
+	currentBlock         *types.Block
+	currentBlockMu       sync.RWMutex
+	dialRPC              DialRPCFn
+	endpoint             string
+	connected            bool
+	rpcClient            *rpc.Client
+	namespace            string
+	subscription         *rpc.ClientSubscription
+	subscriptionErrCh    chan error
+	results              chan<- *types.Block
+	works                map[common.Hash]*types.Block
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 	newSealRequestCh     chan *sealTask
-	updatedSealHash event.Feed
-	scope           event.SubscriptionScope
+	updatedSealHash      event.Feed
+	scope                event.SubscriptionScope
 }
 
 func New(
@@ -96,7 +97,6 @@ func New(
 		endpoint:       urls[0],
 		namespace:      "orc",
 
-
 		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
 		newSealRequestCh:     make(chan *sealTask),
@@ -121,6 +121,19 @@ func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
 		}
 		p.run(p.ctx.Done())
 	}()
+}
+
+// getCurrentBlock get current block
+func (p *Pandora) getCurrentBlock() *types.Block {
+	p.currentBlockMu.RLock()
+	defer p.currentBlockMu.RUnlock()
+	return p.currentBlock
+}
+
+func (p *Pandora) setCurrentBlock(block *types.Block) {
+	p.currentBlockMu.Lock()
+	p.currentBlock = block
+	p.currentBlockMu.Unlock()
 }
 
 func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) [4]string {
@@ -148,7 +161,7 @@ func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64
 	// get the updated block
 	updatedBlock := currentBlock.WithSeal(currentHeader)
 	// update the current block with this newly created block
-	//p.currentBlock = updatedBlock
+	p.setCurrentBlock(updatedBlock)
 
 	rlpHeader, _ := rlp.EncodeToBytes(updatedBlock.Header())
 
@@ -186,18 +199,19 @@ func (p *Pandora) run(done <-chan struct{}) {
 			// first save it to result channel. so that we can send worker about the info
 			p.results = sealRequest.results
 			// then simply save the block into current block. We will use it again
-			p.currentBlock = sealRequest.block
+			p.setCurrentBlock(sealRequest.block)
 
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			// Get sharding work API is called and we got slot number from vanguard
-			if p.currentBlock == nil {
+			currentBlock := p.getCurrentBlock()
+			if currentBlock == nil {
 				// no block is available. worker has not submit any block to seal. So something went wrong. send error
 				shardingInfoReq.errc <- errNoShardingBlock
 			} else {
 				// current block available. now put that info into header extra data and generate seal hash
 				// before that check if current block is valid and compatible with the request
-				currentBlockHeader := p.currentBlock.Header()
-				currentBlock := p.currentBlock.WithSeal(currentBlockHeader)
+				currentBlockHeader := currentBlock.Header()
+				cpBlock := currentBlock.WithSeal(currentBlockHeader)
 				if shardingInfoReq.blockNumber > 1 {
 					// When producing block #1, validator does not know about hash of block #0
 					// so do not check the parent hash and block number 1
@@ -219,7 +233,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 				}
 				// now modify the current block header and generate seal hash
 				log.Debug("for GetShardingWork updating block header extra data", "slot", shardingInfoReq.slot, "epoch", shardingInfoReq.epoch)
-				shardingInfoReq.res <- p.updateBlockHeader(currentBlock, shardingInfoReq.slot, shardingInfoReq.epoch)
+				shardingInfoReq.res <- p.updateBlockHeader(cpBlock, shardingInfoReq.slot, shardingInfoReq.epoch)
 			}
 
 		case submitSignatureData := <-p.submitShardingInfoCh:
@@ -228,15 +242,16 @@ func (p *Pandora) run(done <-chan struct{}) {
 				submitSignatureData.errc <- nil
 			} else {
 				log.Debug("submitWork is failed", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
-					"current block number", p.currentBlock.NumberU64())
+					"current block number", p.getCurrentBlock().NumberU64())
 				submitSignatureData.errc <- errors.New("invalid submit work request")
 			}
 
 		case <-ticker.C:
 			// Clear stale pending blocks
-			if p.currentBlock != nil {
+			currentBlock := p.getCurrentBlock()
+			if currentBlock != nil {
 				for hash, block := range p.works {
-					if block.NumberU64()+staleThreshold <= p.currentBlock.NumberU64() {
+					if block.NumberU64()+staleThreshold <= currentBlock.NumberU64() {
 						delete(p.works, hash)
 					}
 				}
