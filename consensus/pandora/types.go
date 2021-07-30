@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	bls_common "github.com/silesiacoin/bls/common"
 )
 
 const signatureSize = 96
@@ -20,8 +21,20 @@ type shardingResult struct {
 	errc chan error
 }
 
+type ExtraDataSealed struct {
+	ExtraData
+	BlsSignatureBytes *BlsSignatureBytes
+}
+
 // EpochInfo
 type EpochInfo struct {
+	Epoch            uint64
+	ValidatorList    [32]bls_common.PublicKey
+	EpochTimeStart   uint64
+	SlotTimeDuration time.Duration
+}
+
+type EpochInfoPayload struct {
 	Epoch            uint64        `json:"epoch"`         // Epoch number
 	ValidatorList    [32]string    `json:"validatorList"` // Validators public key list for specific epoch
 	EpochTimeStart   uint64        `json:"epochTimeStart"`
@@ -33,12 +46,6 @@ type ExtraData struct {
 	Slot  uint64
 	Epoch uint64
 	Turn  uint64
-}
-
-// ExtraDataWithBLSSig
-type ExtraDataWithBLSSig struct {
-	ExtraData
-	BlsSignatureBytes *BlsSignatureBytes
 }
 
 // sealWork wraps a seal work package for remote sealer.
@@ -56,4 +63,13 @@ type shardingInfoReq struct {
 type sealTask struct {
 	block   *types.Block
 	results chan<- *types.Block
+}
+
+func (ei *EpochInfo) copy() *EpochInfo {
+	return &EpochInfo{
+		ei.Epoch,
+		ei.ValidatorList,
+		ei.EpochTimeStart,
+		ei.SlotTimeDuration,
+	}
 }

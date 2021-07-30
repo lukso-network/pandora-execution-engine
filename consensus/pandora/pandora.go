@@ -2,9 +2,10 @@ package pandora
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -12,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -28,6 +29,8 @@ var (
 	errNoShardingBlock      = errors.New("no pandora sharding block available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
+	errOlderBlockTime       = errors.New("timestamp older than parent")
+	errSigFailedToVerify    = errors.New("signature did not verify")
 )
 
 // DialRPCFn dials to the given endpoint
@@ -234,7 +237,8 @@ func (p *Pandora) run(done <-chan struct{}) {
 				log.Debug("submitWork is successful", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash)
 				submitSignatureData.errc <- nil
 			} else {
-				log.Debug("submitWork is failed", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash, "current block number", p.currentBlock.NumberU64())
+				log.Debug("submitWork is failed", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
+					"current block number", p.currentBlock.NumberU64())
 				submitSignatureData.errc <- errors.New("invalid submit work request")
 			}
 
@@ -269,4 +273,17 @@ func (p *Pandora) Close() error {
 		defer p.cancel()
 	}
 	return nil
+}
+
+func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{p},
+			Public:    true,
+		},
+	}
 }

@@ -4,12 +4,18 @@ import (
 	"math/big"
 	"math/bits"
 
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	common2 "github.com/silesiacoin/bls/common"
+	"github.com/silesiacoin/bls/herumi"
 )
 
 // copyEpochInfo
@@ -76,7 +82,7 @@ func (p *Pandora) StartSlot(epoch uint64) (uint64, error) {
 	return slot, nil
 }
 
-func (pandoraExtraDataSealed *ExtraDataWithBLSSig) FromHeader(header *types.Header) {
+func (pandoraExtraDataSealed *ExtraDataSealed) FromHeader(header *types.Header) {
 	err := rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
 
 	if nil != err {
@@ -84,7 +90,7 @@ func (pandoraExtraDataSealed *ExtraDataWithBLSSig) FromHeader(header *types.Head
 	}
 }
 
-func (pandoraExtraDataSealed *ExtraDataWithBLSSig) FromExtraDataAndSignature(
+func (pandoraExtraDataSealed *ExtraDataSealed) FromExtraDataAndSignature(
 	pandoraExtraData ExtraData,
 	signature common2.Signature,
 ) {
@@ -98,4 +104,114 @@ func (pandoraExtraDataSealed *ExtraDataWithBLSSig) FromExtraDataAndSignature(
 	copy(blsSignatureBytes[:], signatureBytes[:])
 	pandoraExtraDataSealed.ExtraData = pandoraExtraData
 	pandoraExtraDataSealed.BlsSignatureBytes = &blsSignatureBytes
+}
+func (p *Pandora) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int) error {
+	var parent *types.Header
+	if index == 0 {
+		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+	} else if headers[index-1].Hash() == headers[index].ParentHash {
+		parent = headers[index-1]
+	}
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	return p.verifyHeader(chain, headers[index], parent)
+}
+
+func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
+	// Ensure that the header's extra-data section is of a reasonable size
+	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
+		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
+	}
+
+	if header.Time <= parent.Time {
+		return errOlderBlockTime
+	}
+	// Verify the block's difficulty based on its timestamp and parent's difficulty
+	expected := p.CalcDifficulty(chain, header.Time, parent)
+
+	if expected.Cmp(header.Difficulty) != 0 {
+		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
+	}
+	// Verify that the gas limit is <= 2^63-1
+	cap := uint64(0x7fffffffffffffff)
+	if header.GasLimit > cap {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	}
+
+	// Verify that the gas limit remains within allowed bounds
+	diff := int64(parent.GasLimit) - int64(header.GasLimit)
+	if diff < 0 {
+		diff *= -1
+	}
+	limit := parent.GasLimit / params.GasLimitBoundDivisor
+
+	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
+		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
+	}
+	// Verify that the block number is parent's +1
+	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
+		return consensus.ErrInvalidNumber
+	}
+
+	// verify bls signature
+	if err := p.verifyBLSSignature(header); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *Pandora) verifyBLSSignature(header *types.Header) error {
+	// decode the extraData byte
+	extraDataWithBLSSig := new(ExtraDataSealed)
+	if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
+		log.Error("Failed to decode extraData with signature", "err", err)
+		return err
+	}
+	// extract the extraData
+	extractedSlot := extraDataWithBLSSig.Slot
+	extractedEpoch := extraDataWithBLSSig.Epoch
+	extractedIndex := extraDataWithBLSSig.Turn
+	log.Debug("Incoming header's extraData info", "slot", extractedSlot, "epoch",
+		extractedEpoch, "turn", extractedIndex)
+
+	// update in-memory current epoch info and epoch number
+	if extractedEpoch != p.currentEpoch {
+		curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
+		if err != nil {
+			log.Error("Epoch info not found in cache", "err", err)
+			return err
+		}
+		// update current epoch info from cache
+		p.updateCurEpochInfo(curEpochInfo)
+	}
+
+	blsSginatureBytes := extraDataWithBLSSig.BlsSignatureBytes
+	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
+	if err != nil {
+		log.Error("Failed retrieve signature from extraData", "err", err)
+		return err
+	}
+
+	// Check if signature of header is valid
+	curEpochInfo := p.currentEpochInfo.copy()
+	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
+	sealHash := p.SealHash(header)
+	if !signature.Verify(validatorPubKey, sealHash[:]) {
+		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)
+		return errSigFailedToVerify
+	}
+	return nil
+}
+
+func (p *Pandora) updateCurEpochInfo(epochInfo *EpochInfo) {
+	p.processingLock.Lock()
+	defer p.processingLock.Unlock()
+	p.currentEpochInfo = epochInfo
+	p.currentEpoch = epochInfo.Epoch
 }

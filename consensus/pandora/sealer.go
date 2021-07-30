@@ -36,7 +36,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	}
 	// Verify the correctness of submitted result.
 	header := block.Header()
-	extraDataWithSignature := new(ExtraDataWithBLSSig)
+	extraDataWithSignature := new(ExtraDataSealed)
 	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 
 	if nil != err {
@@ -62,8 +62,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 
 	start := time.Now()
 
-	//TODO: VERIFY SEAL
-	if err := pan.verifyBLSSignature(nil, header, true); err != nil {
+	if err := pan.verifyBLSSignature(header); err != nil {
 		log.Warn("Invalid proof-of-work submitted", "sealhash", sealHash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
 		return false
 	}

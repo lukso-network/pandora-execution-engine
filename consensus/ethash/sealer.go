@@ -27,7 +27,6 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -50,11 +49,8 @@ var (
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
 func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	powMode := ethash.config.PowMode
-	mockedHeaderMode := ModeFake == powMode || ModeFullFake == powMode
-	minimalPowModeCheck := mockedHeaderMode || ModePandora == powMode
-
-	if mockedHeaderMode {
+	// If we're running a fake PoW, simply return a 0 nonce immediately
+	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
@@ -62,18 +58,8 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 		default:
 			ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(block.Header()))
 		}
-	}
-
-	// If we're running pandora mode we only want to notify remote sealer about new block
-	if ModePandora == powMode && nil != ethash.remote {
-		ethash.remote.workCh <- &sealTask{block: block, results: results}
-	}
-
-	// If we're running a fake PoW, simply return a 0 nonce immediately
-	if minimalPowModeCheck {
 		return nil
 	}
-
 	// If we're running a shared PoW, delegate sealing to it
 	if ethash.shared != nil {
 		return ethash.shared.Seal(chain, block, results, stop)
@@ -236,7 +222,6 @@ type mineResult struct {
 	nonce     types.BlockNonce
 	mixDigest common.Hash
 	hash      common.Hash
-	blsSeal   *BlsSignatureBytes
 
 	errc chan error
 }
@@ -257,10 +242,6 @@ type sealWork struct {
 }
 
 func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
-	if ModePandora == ethash.config.PowMode {
-		return nil
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &remoteSealer{
 		ethash:       ethash,
@@ -308,7 +289,6 @@ func (s *remoteSealer) loop() {
 				work.errc <- errNoMiningWork
 			} else {
 				work.res <- s.currentWork
-				s.ethash.config.Log.Debug("triggered fetchWorkCh from sealer loop", "currentWork", s.currentWork)
 			}
 
 		case result := <-s.submitWorkCh:
@@ -387,14 +367,6 @@ func (s *remoteSealer) notifyWork() {
 
 func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []byte, work [4]string) {
 	defer s.reqWG.Done()
-
-	// TODO: enable this or move to another flag to provide orchestrator url
-	// Vanguard now will pull the blocks, but it will be great to notify about new work
-	notHttp := !strings.Contains(url, "http://") || strings.Contains(url, "https://")
-
-	if s.ethash.IsPandoraModeEnabled() && notHttp {
-		return
-	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {

@@ -1,7 +1,6 @@
 package pandora
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -20,9 +18,6 @@ var (
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	chain   consensus.ChainHeaderReader
 	pandora *Pandora
 }
 
@@ -31,17 +26,18 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	log.Trace(">>> GetShardingWork", "parentHash", parentHash, "blockNumber", blockNumber, "slot number", slotNumber, "epoch", epoch)
 	emptyRes := [4]string{}
 	if api.pandora == nil {
-		return [4]string{}, errors.New("not supported")
+		return emptyRes, errors.New("pandora engine not supported")
 	}
 
 	var (
 		shardingInfoCh = make(chan [4]string, 1)
 		errorCh        = make(chan error, 1)
 	)
+
 	select {
 	case api.pandora.fetchShardingInfoCh <- &shardingInfoReq{errc: errorCh, res: shardingInfoCh, slot: slotNumber, epoch: epoch}:
 		log.Debug("sent sharding info request to fetch channel")
-	case <-api.ctx.Done():
+	case <-api.pandora.ctx.Done():
 		return emptyRes, errPandoraStopped
 	}
 	select {

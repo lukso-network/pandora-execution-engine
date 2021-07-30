@@ -3,9 +3,12 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	bls_common "github.com/silesiacoin/bls/common"
+	"github.com/silesiacoin/bls/herumi"
 	"time"
 )
 
@@ -101,7 +104,7 @@ func (p *Pandora) SubscribeEpochInfo(
 	namespace string,
 	client *rpc.Client,
 ) (*rpc.ClientSubscription, error) {
-	ch := make(chan *EpochInfo)
+	ch := make(chan *EpochInfoPayload)
 	sub, err := client.Subscribe(ctx, namespace, ch, "minimalConsensusInfo", fromEpoch)
 	if nil != err {
 		return nil, err
@@ -133,16 +136,39 @@ func (p *Pandora) SubscribeEpochInfo(
 }
 
 // processEpochInfo
-func (p *Pandora) processEpochInfo(info *EpochInfo) error {
+func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	// checking proper length of the validator list.
 	if uint64(len(info.ValidatorList)) != p.config.SlotsPerEpoch {
 		return errInvalidValidatorSize
 	}
 
-	p.currentEpochInfo = info
-	p.currentEpoch = info.Epoch
+	epochInfo := new(EpochInfo)
+	epochInfo.Epoch = info.Epoch
+	epochInfo.SlotTimeDuration = info.SlotTimeDuration
+	epochInfo.EpochTimeStart = info.EpochTimeStart
+	epochInfo.ValidatorList = [32]bls_common.PublicKey{}
+
+	// convert public key string to publicKey
+	for i, pubKeyStr := range info.ValidatorList {
+		pubKeyBytes, err := hexutil.Decode(pubKeyStr)
+		if err != nil {
+			log.Error("Failed to decode validator public key bytes from string", "err", err)
+			return err
+		}
+		pubKey, err := herumi.PublicKeyFromBytes(pubKeyBytes)
+		if err != nil {
+			log.Error("Failed to retrieve validator public key from bytes", "err", err)
+			return err
+		}
+		epochInfo.ValidatorList[i] = pubKey
+	}
+
+	// update current epoch info
+	copiedEpochInfo := epochInfo.copy()
+	p.updateCurEpochInfo(copiedEpochInfo)
+
 	// store epoch info in in-memeory cache
-	if err := p.epochInfoCache.put(info.Epoch, info); err != nil {
+	if err := p.epochInfoCache.put(info.Epoch, copiedEpochInfo); err != nil {
 		return err
 	}
 

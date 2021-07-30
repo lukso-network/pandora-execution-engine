@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -441,8 +442,9 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 
 // isPandora returns if we are running pandora engine
 func (bc *BlockChain) isPandora() bool {
-	ethashEngine, isEthashEngine := bc.engine.(*ethash.Ethash)
-	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
+	// TODO- Need to change from ethash to pandora
+	_, isPandoraEnigne := bc.engine.(*ethash.Ethash)
+	return isPandoraEnigne
 }
 
 // pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
@@ -532,7 +534,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		pandoraExtraData := ethash.PandoraExtraDataSealed{}
+		pandoraExtraData := pandora.ExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
