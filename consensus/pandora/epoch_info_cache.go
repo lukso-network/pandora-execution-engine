@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-const inmemoryEpochInfos = 4096 // Number of recent block signatures to keep in memory
+const inmemoryEpochInfos = 4096
 
 type EpochInfoCache struct {
 	epochInfos *lru.Cache // Signatures of recent blocks to speed up mining

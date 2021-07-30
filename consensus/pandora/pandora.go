@@ -30,32 +30,6 @@ var (
 // DialRPCFn dials to the given endpoint
 type DialRPCFn func(endpoint string) (*rpc.Client, error)
 
-// EpochInfo
-type EpochInfo struct {
-	Epoch            uint64        `json:"epoch"`         // Epoch number
-	ValidatorList    [32]string    `json:"validatorList"` // Validators public key list for specific epoch
-	EpochTimeStart   uint64        `json:"epochTimeStart"`
-	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
-}
-
-// ExtraData
-type ExtraData struct {
-	Slot  uint64
-	Epoch uint64
-	Turn  uint64
-}
-
-// ExtraDataWithBLSSig
-type ExtraDataWithBLSSig struct {
-	ExtraData
-}
-
-// sealWork wraps a seal work package for remote sealer.
-type shardingInfoReq struct {
-	errc chan error
-	res  chan<- [4]string //
-}
-
 // Pandora
 type Pandora struct {
 	isRunning      bool
@@ -156,9 +130,6 @@ func (p *Pandora) run(done <-chan struct{}) {
 			hash := p.SealHash(curHeader)
 			shardingInfo := prepareShardingInfo(curHeader, hash)
 			shardingInfoReq.res <- shardingInfo
-
-			feed.send()
-
 
 		case err := <-p.subscriptionErrCh:
 			log.Debug("Got subscription error", "err", err)
