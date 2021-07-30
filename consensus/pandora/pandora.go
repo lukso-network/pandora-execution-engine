@@ -56,6 +56,7 @@ type Pandora struct {
 	results              chan<- *types.Block
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
+	currentBlock         *types.Block
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
