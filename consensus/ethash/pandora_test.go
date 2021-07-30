@@ -80,4 +80,12 @@ func Test_Ethash_IsInRecentSlot(t *testing.T) {
 		assert.NoError(t, currentErr)
 		assert.False(t, inRecentSlot)
 	})
+
+	t.Run("should return true if slot is higher than genesis", func(t *testing.T) {
+		MockedTimeNow = MockedTimeNow + SlotTimeDuration*3
+		header := &types.Header{Time: MockedTimeNow}
+		currentErr, inRecentSlot := ethash.IsInRecentSlot(header)
+		assert.NoError(t, currentErr)
+		assert.True(t, inRecentSlot)
+	})
 }
