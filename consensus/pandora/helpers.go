@@ -166,22 +166,28 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	extractedSlot := extraDataWithBLSSig.Slot
 	extractedEpoch := extraDataWithBLSSig.Epoch
 	extractedIndex := extraDataWithBLSSig.Turn
-	log.Debug("Incoming header's extraData info", "slot", extractedSlot, "epoch",
-		extractedEpoch, "turn", extractedIndex)
-
 	// update in-memory current epoch info and epoch number
-	if extractedEpoch == 0 || extractedEpoch != p.currentEpoch {
-		curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
-		if err != nil {
-			log.Error("Epoch info not found in cache", "err", err,
-				"slot", extractedSlot, "epoch", extractedEpoch)
-			return err
-		}
-		// update current epoch info from cache
-		p.updateCurEpochInfo(curEpochInfo)
+	//if extractedEpoch == 0 || extractedEpoch != p.currentEpoch {
+	//	curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
+	//	if err != nil {
+	//		log.Error("Epoch info not found in cache", "err", err,
+	//			"slot", extractedSlot, "epoch", extractedEpoch)
+	//		return err
+	//	}
+	//	// update current epoch info from cache
+	//	p.updateCurEpochInfo(curEpochInfo)
+	//}
+
+	curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
+	if err != nil {
+		log.Error("Epoch info not found in cache", "err", err,
+			"slot", extractedSlot, "epoch", extractedEpoch)
+		return err
 	}
 
 	blsSignatureBytes := extraDataWithBLSSig.BlsSignatureBytes
+	log.Debug("Incoming header's extraData info", "slot", extractedSlot, "epoch",
+		extractedEpoch, "turn", extractedIndex, "blsSig", common.Bytes2Hex(blsSignatureBytes[:]))
 	signature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 	if err != nil {
 		log.Error("Failed retrieve signature from extraData", "err", err)
@@ -189,7 +195,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	}
 
 	// Check if signature of header is valid
-	curEpochInfo := p.currentEpochInfo.copy()
+	//curEpochInfo := p.currentEpochInfo.copy()
 	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
 	sealHash := p.SealHash(header)
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
@@ -199,10 +205,10 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	return nil
 }
 
-func (p *Pandora) updateCurEpochInfo(epochInfo *EpochInfo) {
-	p.processingLock.Lock()
-	defer p.processingLock.Unlock()
-
-	p.currentEpochInfo = epochInfo
-	p.currentEpoch = epochInfo.Epoch
-}
+//func (p *Pandora) updateCurEpochInfo(epochInfo *EpochInfo) {
+//	p.processingLock.Lock()
+//	defer p.processingLock.Unlock()
+//
+//	p.currentEpochInfo = epochInfo
+//	p.currentEpoch = epochInfo.Epoch
+//}

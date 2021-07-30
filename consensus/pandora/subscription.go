@@ -185,11 +185,11 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	}
 
 	// update current epoch info
-	copiedEpochInfo := epochInfo.copy()
-	p.updateCurEpochInfo(copiedEpochInfo)
+	//copiedEpochInfo := epochInfo.copy()
+	//p.updateCurEpochInfo(copiedEpochInfo)
 
 	// store epoch info in in-memeory cache
-	if err := p.epochInfoCache.put(info.Epoch, copiedEpochInfo); err != nil {
+	if err := p.epochInfoCache.put(info.Epoch, epochInfo); err != nil {
 		return err
 	}
 
