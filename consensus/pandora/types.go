@@ -21,6 +21,11 @@ type shardingResult struct {
 	errc chan error
 }
 
+type SealHashUpdate struct {
+	PreviousHash common.Hash
+	UpdatedHash  common.Hash
+}
+
 type ExtraDataSealed struct {
 	ExtraData
 	BlsSignatureBytes *BlsSignatureBytes

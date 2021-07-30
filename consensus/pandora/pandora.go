@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
+
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,6 +66,9 @@ type Pandora struct {
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 	newSealRequestCh     chan *sealTask
+
+	updatedSealHash event.Feed
+	scope           event.SubscriptionScope
 }
 
 func New(
@@ -122,7 +127,7 @@ func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
 
 func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) [4]string {
 	currentHeader := currentBlock.Header()
-
+	previousSealHash := p.SealHash(currentHeader)
 	// modify the header with slot, epoch and turn
 	extraData := new(ExtraData)
 	extraData.Slot = slotNumber
@@ -150,6 +155,8 @@ func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64
 	rlpHeader, _ := rlp.EncodeToBytes(updatedBlock.Header())
 
 	hash := p.SealHash(updatedBlock.Header())
+	// seal hash is updated and worker.go is holding previous seal hash. notify worker.go to update it
+	p.updatedSealHash.Send(SealHashUpdate{UpdatedHash: hash, PreviousHash: previousSealHash})
 
 	var retVal [4]string
 	retVal[0] = hash.Hex()
@@ -258,6 +265,7 @@ func (p *Pandora) Close() error {
 	if p.cancel != nil {
 		defer p.cancel()
 	}
+	p.scope.Close()
 	return nil
 }
 
@@ -272,4 +280,9 @@ func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 			Public:    true,
 		},
 	}
+}
+
+// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
+func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
+	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }
