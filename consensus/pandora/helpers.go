@@ -1,6 +1,7 @@
 package pandora
 
 import (
+	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
 	"math/bits"
 
@@ -197,6 +198,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	// Check if signature of header is valid
 	//curEpochInfo := p.currentEpochInfo.copy()
 	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
+	log.Debug("In verifyBlsSignature", "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 	sealHash := p.SealHash(header)
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
 		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)
