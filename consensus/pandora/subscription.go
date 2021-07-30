@@ -139,6 +139,8 @@ func (p *Pandora) processEpochInfo(info *EpochInfo) error {
 		return errInvalidValidatorSize
 	}
 
+	p.currentEpochInfo = info
+	p.currentEpoch = info.Epoch
 	// store epoch info in in-memeory cache
 	if err := p.epochInfoCache.put(info.Epoch, info); err != nil {
 		return err

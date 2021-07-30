@@ -54,8 +54,12 @@ type Pandora struct {
 
 	apiResponse          [4]string
 	results              chan<- *types.Block
+
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
+
+	newSealRequestCh chan *sealTask
+
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
@@ -95,6 +99,8 @@ func New(
 		namespace:      "orc",
 
 		fetchShardingInfoCh: make(chan *shardingInfoReq),
+		submitShardingInfoCh: make(chan *shardingResult),
+		newSealRequestCh: make(chan *sealTask),
 		subscriptionErrCh:   make(chan error),
 	}
 
@@ -127,6 +133,14 @@ func (p *Pandora) run(done <-chan struct{}) {
 	// if any subscription error happens, it will try to reconnect and re-subscribe with pandora chain again.
 	for {
 		select {
+
+		case sealReqeust := <- p.newSealRequestCh:
+			log.Debug("new seal request in pandora engine", "block number", sealReqeust.block.Number())
+			// first save it to result channel. so that we can send worker about the info
+			p.results = sealReqeust.results
+			// then prepare hash and set the block to current state
+
+
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			curHeader := getDummyHeader()
 			hash := p.SealHash(curHeader)
