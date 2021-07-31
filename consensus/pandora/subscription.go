@@ -185,14 +185,11 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 		epochInfo.ValidatorList[i] = pubKey
 	}
 
-	// update current epoch info
-	//copiedEpochInfo := epochInfo.copy()
-	//p.updateCurEpochInfo(copiedEpochInfo)
-
 	// store epoch info in in-memeory cache
-	if err := p.epochInfoCache.put(info.Epoch, epochInfo); err != nil {
-		return err
-	}
+	//if err := p.epochInfoCache.put(info.Epoch, epochInfo); err != nil {
+	//	return err
+	//}
+	p.setEpochInfo(epochInfo.Epoch, epochInfo)
 
 	return nil
 }

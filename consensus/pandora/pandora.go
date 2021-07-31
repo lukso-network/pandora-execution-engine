@@ -67,6 +67,9 @@ type Pandora struct {
 	newSealRequestCh     chan *sealTask
 	updatedSealHash      event.Feed
 	scope                event.SubscriptionScope
+
+	epochInfosMu sync.RWMutex
+	epochInfos   map[uint64]*EpochInfo
 }
 
 func New(
@@ -102,6 +105,7 @@ func New(
 		newSealRequestCh:     make(chan *sealTask),
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
+		epochInfos:           make(map[uint64]*EpochInfo), // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
 
