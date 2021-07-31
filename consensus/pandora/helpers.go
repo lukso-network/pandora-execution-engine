@@ -185,8 +185,9 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 		return err
 	}
 	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
-	log.Debug("In verifyBlsSignature", "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 	sealHash := p.SealHash(header)
+	log.Debug("In verifyBlsSignature","header extra data",common.Bytes2Hex(header.Extra),"header block Number", header.Number.Uint64(), "sealHash", sealHash,"sealHash (signature msg) in bytes", sealHash[:], "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
+
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
 		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)
 		return errSigFailedToVerify
