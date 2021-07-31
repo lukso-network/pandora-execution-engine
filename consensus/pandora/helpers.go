@@ -170,7 +170,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 
 	//curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
 	curEpochInfo := p.getEpochInfo(extractedEpoch)
-	if curEpochInfo != nil {
+	if curEpochInfo == nil {
 		log.Error("Epoch info not found in cache", "slot", extractedSlot, "epoch", extractedEpoch)
 		return errors.New("Epoch info not found")
 	}
@@ -207,5 +207,6 @@ func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
 	p.epochInfosMu.Lock()
 	defer p.epochInfosMu.Unlock()
 
+	log.Debug("store new epoch info into map", "epoch", epoch, "epochInfo", fmt.Sprintf("%+v", epochInfo))
 	p.epochInfos[epoch] = epochInfo
 }
