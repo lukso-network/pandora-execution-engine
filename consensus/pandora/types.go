@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	bls_common "github.com/silesiacoin/bls/common"
+	bls_common "github.com/prysmaticlabs/prysm/shared/bls/common"
 )
 
 const signatureSize = 96
@@ -77,4 +77,10 @@ func (ei *EpochInfo) copy() *EpochInfo {
 		ei.EpochTimeStart,
 		ei.SlotTimeDuration,
 	}
+}
+
+// copyEpochInfo
+func copyEpochInfo(ei *EpochInfo) *EpochInfo {
+	cpy := *ei
+	return &cpy
 }

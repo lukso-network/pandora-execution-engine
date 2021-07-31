@@ -7,8 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	bls_common "github.com/silesiacoin/bls/common"
-	"github.com/silesiacoin/bls/herumi"
+	bls_common "github.com/prysmaticlabs/prysm/shared/bls/common"
+	"github.com/prysmaticlabs/prysm/shared/bls/herumi"
+
 	"time"
 )
 

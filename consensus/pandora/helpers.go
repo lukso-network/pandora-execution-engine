@@ -15,8 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
-	common2 "github.com/silesiacoin/bls/common"
-	"github.com/silesiacoin/bls/herumi"
+	bls_common "github.com/prysmaticlabs/prysm/shared/bls/common"
+	"github.com/prysmaticlabs/prysm/shared/bls/herumi"
 )
 
 // extraDataWithoutBLSSig
@@ -87,7 +87,7 @@ func (pandoraExtraDataSealed *ExtraDataSealed) FromHeader(header *types.Header) 
 
 func (pandoraExtraDataSealed *ExtraDataSealed) FromExtraDataAndSignature(
 	pandoraExtraData ExtraData,
-	signature common2.Signature,
+	signature bls_common.Signature,
 ) {
 	var blsSignatureBytes BlsSignatureBytes
 	signatureBytes := signature.Marshal()
@@ -167,17 +167,6 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	extractedSlot := extraDataWithBLSSig.Slot
 	extractedEpoch := extraDataWithBLSSig.Epoch
 	extractedIndex := extraDataWithBLSSig.Turn
-	// update in-memory current epoch info and epoch number
-	//if extractedEpoch == 0 || extractedEpoch != p.currentEpoch {
-	//	curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
-	//	if err != nil {
-	//		log.Error("Epoch info not found in cache", "err", err,
-	//			"slot", extractedSlot, "epoch", extractedEpoch)
-	//		return err
-	//	}
-	//	// update current epoch info from cache
-	//	p.updateCurEpochInfo(curEpochInfo)
-	//}
 
 	curEpochInfo, err := p.epochInfoCache.get(extractedEpoch)
 	if err != nil {
@@ -189,14 +178,12 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	blsSignatureBytes := extraDataWithBLSSig.BlsSignatureBytes
 	log.Debug("Incoming header's extraData info", "slot", extractedSlot, "epoch",
 		extractedEpoch, "turn", extractedIndex, "blsSig", common.Bytes2Hex(blsSignatureBytes[:]))
+
 	signature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 	if err != nil {
 		log.Error("Failed retrieve signature from extraData", "err", err)
 		return err
 	}
-
-	// Check if signature of header is valid
-	//curEpochInfo := p.currentEpochInfo.copy()
 	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
 	log.Debug("In verifyBlsSignature", "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 	sealHash := p.SealHash(header)
@@ -206,11 +193,3 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	}
 	return nil
 }
-
-//func (p *Pandora) updateCurEpochInfo(epochInfo *EpochInfo) {
-//	p.processingLock.Lock()
-//	defer p.processingLock.Unlock()
-//
-//	p.currentEpochInfo = epochInfo
-//	p.currentEpoch = epochInfo.Epoch
-//}
