@@ -1,9 +1,10 @@
 package pandora
 
 import (
-	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
 	"math/bits"
+
+	"github.com/status-im/keycard-go/hexutils"
 
 	"fmt"
 
@@ -172,7 +173,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	curEpochInfo := p.getEpochInfo(extractedEpoch)
 	if curEpochInfo == nil {
 		log.Error("Epoch info not found in cache", "slot", extractedSlot, "epoch", extractedEpoch)
-		return errors.New("Epoch info not found")
+		return consensus.ErrEpochNotFound
 	}
 
 	blsSignatureBytes := extraDataWithBLSSig.BlsSignatureBytes
@@ -186,7 +187,7 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 	}
 	validatorPubKey := curEpochInfo.ValidatorList[extractedIndex]
 	sealHash := p.SealHash(header)
-	log.Debug("In verifyBlsSignature","header extra data",common.Bytes2Hex(header.Extra),"header block Number", header.Number.Uint64(), "sealHash", sealHash,"sealHash (signature msg) in bytes", sealHash[:], "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
+	log.Debug("In verifyBlsSignature", "header extra data", common.Bytes2Hex(header.Extra), "header block Number", header.Number.Uint64(), "sealHash", sealHash, "sealHash (signature msg) in bytes", sealHash[:], "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
 		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)

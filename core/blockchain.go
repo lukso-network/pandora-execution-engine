@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -30,6 +29,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 
 	"github.com/ethereum/go-ethereum/pandora_orcclient"
 
@@ -1969,6 +1970,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
 		return bc.insertSideChain(block, it)
+	// If epoch info not found then wait for getting the epoch info. Retry again and again. Don't save it into
+	// bad block. Otherwise when service will reconnect and send epoch, due to bad block it won't get downloaded.
+	// Downloader will treat it as bad block and discard it. But We don't know if it is actually a bad block.
+	// Don't process it. only return error.
+	case errors.Is(err, consensus.ErrEpochNotFound):
+		log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
+		return it.index, err
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):

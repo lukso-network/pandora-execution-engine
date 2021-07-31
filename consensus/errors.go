@@ -38,4 +38,7 @@ var (
 	// ErrInvalidBlock happens when orchestrator does not validate the block.
 	// maybe it is invalid, pending or skipped.
 	ErrInvalidBlock = errors.New("block is not verified")
+
+	// ErrEpochNotFound for pandora if epoch info not found then it will return an error
+	ErrEpochNotFound = errors.New("Epoch info not found")
 )
