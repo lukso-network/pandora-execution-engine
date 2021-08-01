@@ -500,7 +500,10 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 				// no header found. nothing to prepare request. simply continue
 				continue
 			}
-			log.Debug("tick", "retrieving pending headers", headers)
+			log.Debug("tick...")
+			for _, headVal := range headers {
+				log.Debug("pending header container contains", "retrieving pending headers", headVal.Hash())
+			}
 
 			request, err := preparePanBlockHashRequest(headers)
 			if err != nil {
@@ -508,7 +511,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 				continue
 			}
 
-			log.Debug("sending request to the orchestrator", "request", request)
+			for _, req := range request {
+				log.Debug("sending request to the orchestrator", "request hash", req.Hash, "request slot", req.Slot)
+			}
 
 			blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
 			if err != nil {
@@ -1682,7 +1687,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			for _, confirmedBlock := range confirmedBlocks {
 				if confirmedBlock.Hash == block.Hash() {
 					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status)
+					log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
 				}
 				if status != pandora_orcclient.Pending {
 					// if status is invalid or correct then break the loop
