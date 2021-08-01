@@ -69,21 +69,28 @@ func (p *Pandora) connectToOrchestrator() error {
 func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 	var curCanonicalEpoch uint64
 	if p.chain != nil {
-		curHeader := p.chain.CurrentHeader()
-		log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
+		curBlock := p.chain.CurrentBlock()
+		curHeader := curBlock.Header()
+
 		if curHeader.Number.Uint64() > 0 {
-			extraData := new(ExtraData)
-			err := rlp.DecodeBytes(curHeader.Extra, extraData)
+			extraDataWithSig := new(ExtraDataSealed)
+			err := rlp.DecodeBytes(curHeader.Extra, extraDataWithSig)
 			if err != nil {
 				log.Error("Failed to decode extraData of the canonical head", "err", err)
 				return nil, err
 			}
-			// subscribing from previous epoch for safety reason
-			curCanonicalEpoch = extraData.Epoch - 1
-			p.currentEpoch = extraData.Epoch - 1
-		} else {
-			curCanonicalEpoch = 0
-			p.currentEpoch = 0
+
+			log.Debug("Retrieved current header from local chain",
+				"blkNumber", curBlock.Number(), "epoch", extraDataWithSig.Epoch, "slot", extraDataWithSig.Slot)
+
+			if extraDataWithSig.Epoch > 0 {
+				// subscribing from previous epoch for safety reason
+				curCanonicalEpoch = extraDataWithSig.Epoch - 1
+				p.currentEpoch = extraDataWithSig.Epoch - 1
+			} else {
+				curCanonicalEpoch = 0
+				p.currentEpoch = 0
+			}
 		}
 	} else {
 		log.Debug("Chain is nil. subscription starts from epoch 0")
@@ -134,15 +141,18 @@ func (p *Pandora) SubscribeEpochInfo(
 				log.Debug("Received new epoch info", "epochInfo", fmt.Sprintf("%+v", epochInfo))
 				// dispatch newPendingHeader to handler
 				if err = p.processEpochInfo(epochInfo); err != nil {
-					log.Error("Failed to process epoch info", "err", err)
+					log.Error("Failed to process epoch info", "err", err, "ctx", "pandora-consensus")
 					p.subscriptionErrCh <- err
 					return
 				}
 			case err := <-sub.Err():
 				if err != nil {
-					log.Debug("Got subscription error", "err", err)
+					log.Debug("Got subscription error", "err", err, "ctx", "pandora-consensus")
 					p.subscriptionErrCh <- err
+					return
 				}
+			case <-p.ctx.Done():
+				log.Debug("Received cancelled context, closing existing epoch info subscription", "ctx", "pandora-consensus")
 				return
 			}
 		}

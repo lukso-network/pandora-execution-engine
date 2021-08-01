@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -46,7 +48,7 @@ type Pandora struct {
 	cancel         context.CancelFunc
 	runError       error
 
-	chain                consensus.ChainHeaderReader
+	chain                consensus.ChainReader
 	config               *params.PandoraConfig // Consensus engine configuration parameters
 	epochInfoCache       *EpochInfoCache
 	currentEpoch         uint64
@@ -69,7 +71,7 @@ type Pandora struct {
 	scope                event.SubscriptionScope
 
 	epochInfosMu sync.RWMutex
-	epochInfos   map[uint64]*EpochInfo
+	epochInfos   *lru.Cache
 }
 
 func New(
@@ -90,6 +92,11 @@ func New(
 	if cfg.SlotTimeDuration == 0 {
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
+	// need to define maximum size. It will take maximum latest 100 epochs
+	epochCache, err := lru.New(1 << 7)
+	if err != nil {
+		log.Error("epoch cache creation failed", "error", err)
+	}
 
 	return &Pandora{
 		ctx:            ctx,
@@ -105,11 +112,11 @@ func New(
 		newSealRequestCh:     make(chan *sealTask),
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
-		epochInfos:           make(map[uint64]*EpochInfo), // need to define maximum size. It will take maximum latest 100 epochs
+		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
 
-func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
+func (p *Pandora) Start(chain consensus.ChainReader) {
 	// Exit early if pandora endpoint is not set.
 	if p.endpoint == "" {
 		log.Error("Orchestrator endpoint is empty")

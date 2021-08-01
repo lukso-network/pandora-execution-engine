@@ -150,14 +150,14 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 	}
 
 	// verify bls signature
-	if err := p.verifyBLSSignature(header); err != nil {
-		return err
-	}
+	//if err := p.VerifyBLSSignature(header); err != nil {
+	//	return err
+	//}
 
 	return nil
 }
 
-func (p *Pandora) verifyBLSSignature(header *types.Header) error {
+func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	// decode the extraData byte
 	extraDataWithBLSSig := new(ExtraDataSealed)
 	if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
@@ -198,17 +198,21 @@ func (p *Pandora) verifyBLSSignature(header *types.Header) error {
 
 // getEpochInfo
 func (p *Pandora) getEpochInfo(epoch uint64) *EpochInfo {
-	p.epochInfosMu.RLock()
-	defer p.epochInfosMu.RUnlock()
-
-	return p.epochInfos[epoch]
+	//p.epochInfosMu.RLock()
+	//defer p.epochInfosMu.RUnlock()
+	info, found := p.epochInfos.Get(epoch)
+	if !found {
+		log.Error("epoch not found in cache", "epoch", epoch)
+		return nil
+	}
+	return info.(*EpochInfo)
 }
 
 // setEpochInfo
 func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
-	p.epochInfosMu.Lock()
-	defer p.epochInfosMu.Unlock()
+	//p.epochInfosMu.Lock()
+	//defer p.epochInfosMu.Unlock()
 
 	log.Debug("store new epoch info into map", "epoch", epoch, "epochInfo", fmt.Sprintf("%+v", epochInfo))
-	p.epochInfos[epoch] = epochInfo
+	p.epochInfos.Add(epoch, epochInfo)
 }

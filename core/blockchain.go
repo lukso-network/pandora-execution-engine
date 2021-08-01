@@ -452,7 +452,7 @@ func (bc *BlockChain) isPandora() bool {
 // Miner and blockchain both are initialized from the backend. So this is a suitable place
 // to write subscriber. Both Miner and blockchain can subscribe for the event from Ethereum.
 func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	var orcClient *pandora_orcclient.OrcClient
@@ -491,6 +491,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		return fmt.Errorf("unsupported orchestrator client type")
 	}
 
+	defer orcClient.Close()
+
+
 	for {
 		select {
 		case <-ticker.C:
@@ -500,7 +503,10 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 				// no header found. nothing to prepare request. simply continue
 				continue
 			}
-			log.Debug("tick", "retrieving pending headers", headers)
+			log.Debug("tick...")
+			for _, headVal := range headers {
+				log.Debug("pending header container contains", "retrieving pending headers", headVal.Hash())
+			}
 
 			request, err := preparePanBlockHashRequest(headers)
 			if err != nil {
@@ -508,7 +514,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 				continue
 			}
 
-			log.Debug("sending request to the orchestrator", "request", request)
+			for _, req := range request {
+				log.Debug("sending request to the orchestrator", "request hash", req.Hash, "request slot", req.Slot)
+			}
 
 			blockHashResponse, err := orcClient.GetConfirmedPanBlockHashes(context.Background(), request)
 			if err != nil {
@@ -522,7 +530,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		case <-bc.quit:
 			// Ethereum service is closed. Break the loop
 			//close orc client
-			orcClient.Close()
+			log.Debug("exiting pandora block confirmation fetcher...")
 			return nil
 		}
 	}
@@ -533,6 +541,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
+		if header == nil || header.Extra == nil {
+			return nil, errors.New("header must have extra data")
+		}
 		pandoraExtraData := pandora.ExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
@@ -1611,6 +1622,51 @@ func (bc *BlockChain) TxLookupLimit() uint64 {
 
 var lastWrite uint64
 
+func (bc *BlockChain) verifySignAndNotifyOrchestrator(block *types.Block) (stat WriteStatus, err error) {
+	pandoraEngine, _ := bc.engine.(*pandora.Pandora)
+	log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
+	err = pandoraEngine.VerifyBLSSignature(block.Header())
+	if err != nil {
+		if err != consensus.ErrEpochNotFound {
+			bc.reportBlock(block, nil, err)
+		}
+		return CanonStatTy, err
+	}
+
+	log.Debug("verifySignAndNotifyOrchestrator", "sending header with header hash", block.Header().Hash(), "blockNumber", block.NumberU64())
+	bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
+
+	retryLimit := orchestratorConfirmationRetrievalLimit
+	status := pandora_orcclient.Pending
+	for retryLimit > 0 && status == pandora_orcclient.Pending {
+		// halt and get orchestrator confirmation
+		log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
+		confirmedBlocks := <-bc.blockConfirmationCh
+		for _, confirmedBlock := range confirmedBlocks {
+			if confirmedBlock.Hash == block.Hash() {
+				status = confirmedBlock.Status
+				log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+			}
+			if status != pandora_orcclient.Pending {
+				// if status is invalid or correct then break the loop
+				break
+			}
+		}
+		retryLimit--
+	}
+	log.Debug("deleting from pending container", "header hash", block.Hash())
+	// remove the header from the pending queue
+	bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
+	// if status is pending or invalid then just continue default work
+	if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
+		log.Warn("failed to write block into the chain", "block hash", block.Hash())
+		return CanonStatTy, consensus.ErrInvalidBlock
+	}
+	// if status is approved then write block in canonical chain.
+	log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
+	return NonStatTy, nil
+}
+
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
@@ -1639,6 +1695,11 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 			return err
 		}
 	}
+	if bc.isPandora() {
+		if _, err := bc.verifySignAndNotifyOrchestrator(block); err != nil {
+			return err
+		}
+	}
 	bc.writeHeadBlock(block)
 	return nil
 }
@@ -1660,37 +1721,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
 	if bc.isPandora() {
-		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
-		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
-
-		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Pending
-		for retryLimit > 0 && status == pandora_orcclient.Pending {
-			// halt and get orchestrator confirmation
-			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-			confirmedBlocks := <-bc.blockConfirmationCh
-			for _, confirmedBlock := range confirmedBlocks {
-				if confirmedBlock.Hash == block.Hash() {
-					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status)
-				}
-				if status != pandora_orcclient.Pending {
-					// if status is invalid or correct then break the loop
-					break
-				}
-			}
-			retryLimit--
+		stat, err := bc.verifySignAndNotifyOrchestrator(block)
+		if err != nil {
+			return stat, err
 		}
-		log.Debug("deleting from pending container", "header hash", block.Hash())
-		// remove the header from the pending queue
-		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
-		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
-			log.Warn("failed to write block into the chain", "block hash", block.Hash())
-			return CanonStatTy, consensus.ErrInvalidBlock
-		}
-		// if status is approved then write block in canonical chain.
-		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
 	}
 
 	// Calculate the total difficulty of the block
@@ -1974,9 +2008,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	// bad block. Otherwise when service will reconnect and send epoch, due to bad block it won't get downloaded.
 	// Downloader will treat it as bad block and discard it. But We don't know if it is actually a bad block.
 	// Don't process it. only return error.
-	case errors.Is(err, consensus.ErrEpochNotFound):
-		log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
-		return it.index, err
+	//case errors.Is(err, consensus.ErrEpochNotFound):
+	//	log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
+	//	return it.index, err
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
