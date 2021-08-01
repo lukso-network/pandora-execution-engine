@@ -1660,6 +1660,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
 	if bc.isPandora() {
+		pandoraEngine, _ := bc.engine.(*pandora.Pandora)
+		log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
+		err = pandoraEngine.VerifyBLSSignature(block.Header())
+		if err != nil {
+			if err != consensus.ErrEpochNotFound {
+				bc.reportBlock(block, nil, err)
+			}
+			return CanonStatTy, err
+		}
+
 		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
 		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
 
@@ -1974,9 +1984,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	// bad block. Otherwise when service will reconnect and send epoch, due to bad block it won't get downloaded.
 	// Downloader will treat it as bad block and discard it. But We don't know if it is actually a bad block.
 	// Don't process it. only return error.
-	case errors.Is(err, consensus.ErrEpochNotFound):
-		log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
-		return it.index, err
+	//case errors.Is(err, consensus.ErrEpochNotFound):
+	//	log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
+	//	return it.index, err
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):

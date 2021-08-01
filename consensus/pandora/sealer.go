@@ -64,7 +64,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 
 	start := time.Now()
 
-	if err := pan.verifyBLSSignature(header); err != nil {
+	if err := pan.VerifyBLSSignature(header); err != nil {
 		log.Warn("Invalid bls signature submitted from validator",
 			"sealHash", sealHash, "elapsed", common.PrettyDuration(time.Since(start)),
 			"err", err, "slot", pandoraExtraData.Slot, "blockNumber", header.Number)
