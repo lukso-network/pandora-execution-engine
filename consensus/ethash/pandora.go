@@ -690,6 +690,9 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	// We could maybe have an assumption that cache should be invalidated before use.
 	publicKey := minimalConsensus.ValidatorsList[pandoraExtraDataSealed.Turn] // minimalConsensus.extractValidator(headerTime)
 
+	if nil == publicKey {
+		return fmt.Errorf("public key is nil, something is very odd")
+	}
 	//if nil != err {
 	//	return
 	//}
