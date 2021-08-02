@@ -602,28 +602,6 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	return
 }
 
-func (ethash *Ethash) IsInRecentSlot(header *types.Header) (err error, inRecentSlot bool) {
-	timeNow := uint64(time.Now().Unix())
-
-	if MockedTimeNow > 0 {
-		timeNow = MockedTimeNow
-	}
-
-	currentMinimalConsensus, err := getGenesisConsensus(ethash.mci)
-
-	if nil != err {
-		return
-	}
-
-	epochTimeStart := currentMinimalConsensus.EpochTimeStart
-	extractedTurn := currentMinimalConsensus.slotsSinceEpochStart(header.Time)
-	slotTimeStart := (extractedTurn * SlotTimeDuration) + uint64(epochTimeStart.Unix())
-	slotTimeEnd := slotTimeStart + SlotTimeDuration
-	inRecentSlot = timeNow >= slotTimeStart && timeNow < slotTimeEnd
-
-	return
-}
-
 func (ethash *Ethash) PreparePandoraHeader(header *types.Header) (err error) {
 	minimalConsensus, err := ethash.getMinimalConsensus(header)
 

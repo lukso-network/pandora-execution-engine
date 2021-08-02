@@ -420,17 +420,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}()
 	}
 
-	// check if we are running pandora engine. If so, only then call the go routine
-	if bc.isPandora() {
-		// consensus engine is on pandora mode. Now run the orchestrator go routine
-		go func() {
-			err := bc.pandoraBlockHashConfirmationFetcher()
-			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
-			}
-		}()
-	}
-
 	return bc, nil
 }
 
@@ -443,19 +432,6 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 func (bc *BlockChain) isPandora() bool {
 	ethashEngine, isEthashEngine := bc.engine.(*ethash.Ethash)
 	return isEthashEngine && ethashEngine.IsPandoraModeEnabled()
-}
-
-// isInPandoraLiveSync is a state when header is in currentSlot, otherwise we have normal sync
-// I wanted to use Syncing() but its higher api, so its temporary function that should be reconsidered
-func (bc *BlockChain) isInPandoraLiveSync(header *types.Header) (liveSync bool) {
-	if !bc.isPandora() {
-		return
-	}
-
-	ethashEngine := bc.engine.(*ethash.Ethash)
-	_, liveSync = ethashEngine.IsInRecentSlot(header)
-
-	return
 }
 
 // pandoraBlockHashConfirmationFetcher is a ticker based loop. In every 2 sec, it calls
@@ -1668,52 +1644,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
-
-	// verification is done. Now if pandora mode is running then push it into the queue
-	// After that, wait for response of the orchestrator client.
-	// If syncing leave it unprocessed, just only notify the orchestrator
-	if bc.isInPandoraLiveSync(block.Header()) {
-		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
-		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
-
-		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Pending
-		for retryLimit > 0 && status == pandora_orcclient.Pending {
-			// halt and get orchestrator confirmation
-			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-			confirmedBlocks := <-bc.blockConfirmationCh
-			for _, confirmedBlock := range confirmedBlocks {
-				if confirmedBlock.Hash == block.Hash() {
-					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status)
-				}
-				if status != pandora_orcclient.Pending {
-					// if status is invalid or correct then break the loop
-					break
-				}
-			}
-			retryLimit--
-		}
-		log.Debug("deleting from pending container", "header hash", block.Hash())
-		// remove the header from the pending queue
-		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
-		// if status is pending or invalid then just continue default work
-		if pandora_orcclient.Verified != status {
-			log.Warn("failed to write block into the chain", "block hash", block.Hash())
-			return CanonStatTy, consensus.ErrInvalidBlock
-		}
-		// if status is approved then write block in canonical chain.
-		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
-	}
-
-	if bc.isPandora() && !bc.isInPandoraLiveSync(block.Header()) {
-		log.Debug(
-			"writeBlockWithState",
-			"sending header with header hash", block.Header().Hash(),
-			"omitting pending queue due to the live sync", "block should be inserted into canonical chain",
-		)
-		bc.pendingHeaderContainer.NotifyHeader(block.Header())
-	}
 
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
