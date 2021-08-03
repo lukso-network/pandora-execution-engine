@@ -72,18 +72,21 @@ func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 		curHeader := p.chain.CurrentHeader()
 		log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
 		if curHeader.Number.Uint64() > 0 {
-			extraData := new(ExtraData)
-			err := rlp.DecodeBytes(curHeader.Extra, extraData)
+			extraDataWithSig := new(ExtraDataSealed)
+			err := rlp.DecodeBytes(curHeader.Extra, extraDataWithSig)
 			if err != nil {
 				log.Error("Failed to decode extraData of the canonical head", "err", err)
 				return nil, err
 			}
-			// subscribing from previous epoch for safety reason
-			curCanonicalEpoch = extraData.Epoch - 1
-			p.currentEpoch = extraData.Epoch - 1
-		} else {
-			curCanonicalEpoch = 0
-			p.currentEpoch = 0
+
+			if extraDataWithSig.Epoch > 0 {
+				// subscribing from previous epoch for safety reason
+				curCanonicalEpoch = extraDataWithSig.Epoch - 1
+				p.currentEpoch = extraDataWithSig.Epoch - 1
+			} else {
+				curCanonicalEpoch = 0
+				p.currentEpoch = 0
+			}
 		}
 	} else {
 		log.Debug("Chain is nil. subscription starts from epoch 0")

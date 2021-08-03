@@ -327,8 +327,8 @@ type ChainConfig struct {
 	EWASMBlock  *big.Int `json:"ewasmBlock,omitempty"`  // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
+	Ethash  *EthashConfig  `json:"ethash,omitempty"`
+	Clique  *CliqueConfig  `json:"clique,omitempty"`
 	Pandora *PandoraConfig `json:"pandora,omitempty"`
 }
 
@@ -340,6 +340,7 @@ type PandoraConfig struct {
 	SlotsPerEpoch    uint64        `json:"slotsPerEpoch,omitempty"`
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"` // Slot time duration
 }
+
 // String implements the stringer interface, returning the consensus engine details.
 func (c *EthashConfig) String() string {
 	return "ethash"
