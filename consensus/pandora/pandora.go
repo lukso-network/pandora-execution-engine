@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -69,7 +71,7 @@ type Pandora struct {
 	scope                event.SubscriptionScope
 
 	epochInfosMu sync.RWMutex
-	epochInfos   map[uint64]*EpochInfo
+	epochInfos   *lru.Cache
 }
 
 func New(
@@ -90,6 +92,11 @@ func New(
 	if cfg.SlotTimeDuration == 0 {
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
+	// need to define maximum size. It will take maximum latest 100 epochs
+	epochCache, err := lru.New(1 << 7)
+	if err != nil {
+		log.Error("epoch cache creation failed", "error", err)
+	}
 
 	return &Pandora{
 		ctx:            ctx,
@@ -105,7 +112,7 @@ func New(
 		newSealRequestCh:     make(chan *sealTask),
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
-		epochInfos:           make(map[uint64]*EpochInfo), // need to define maximum size. It will take maximum latest 100 epochs
+		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
 
