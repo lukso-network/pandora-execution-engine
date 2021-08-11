@@ -3,6 +3,7 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -59,6 +60,7 @@ func TestPandora_Start(t *testing.T) {
 		waitingPandoraEngine, _ := createDummyPandora(t)
 		waitingPandoraEngine.endpoint = ipcTestLocation
 		ticker := time.NewTicker(reConPeriod)
+		defer ticker.Stop()
 		dummyError := fmt.Errorf("dummy Error")
 
 		waitingPandoraEngine.dialRPC = func(endpoint string) (*rpc.Client, error) {
@@ -82,9 +84,6 @@ func TestPandora_Start(t *testing.T) {
 		pandoraEngine, _ := createDummyPandora(t)
 		dummyEndpoint := ipcTestLocation
 		pandoraEngine.endpoint = dummyEndpoint
-		genesisHeader := &types.Header{Number: big.NewInt(0)}
-		genesisBlock := types.NewBlock(genesisHeader, nil, nil, nil, nil)
-		pandoraEngine.setCurrentBlock(genesisBlock)
 		pandoraEngine.Start(nil)
 
 		expectedBlockNumber := int64(1)
@@ -106,7 +105,29 @@ func TestPandora_Start(t *testing.T) {
 	})
 
 	t.Run("should handle submitSignatureData", func(t *testing.T) {
+		pandoraEngine, _ := createDummyPandora(t)
+		dummyEndpoint := ipcTestLocation
+		pandoraEngine.endpoint = dummyEndpoint
+		pandoraEngine.Start(nil)
+		errChannel := make(chan error)
 
+		pandoraEngine.submitShardingInfoCh <- &shardingResult{
+			nonce:   types.BlockNonce{},
+			hash:    common.Hash{},
+			blsSeal: nil,
+			errc:    errChannel,
+		}
+
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		select {
+		case <-ticker.C:
+			assert.Fail(t, "should receive error that work was not submitted")
+		case err := <-errChannel:
+			assert.NotNil(t, err)
+			assert.Equal(t, "invalid submit work request", err.Error())
+		}
 	})
 
 	t.Run("should handle subscriptionErrCh", func(t *testing.T) {
@@ -147,6 +168,10 @@ func createDummyPandora(t *testing.T) (pandoraEngine *Pandora, cancel context.Ca
 	urls := make([]string, 2)
 	dialGrpcFnc := dummyRpcFunc
 	pandoraEngine = New(ctx, cfg, urls, dialGrpcFnc)
+
+	genesisHeader := &types.Header{Number: big.NewInt(0)}
+	genesisBlock := types.NewBlock(genesisHeader, nil, nil, nil, nil)
+	pandoraEngine.setCurrentBlock(genesisBlock)
 
 	return
 }
