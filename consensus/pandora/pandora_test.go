@@ -20,7 +20,7 @@ var (
 )
 
 func Test_New(t *testing.T) {
-	pandoraEngine := createDummyPandora(t)
+	pandoraEngine, _ := createDummyPandora(t)
 	assert.IsType(t, &Pandora{}, pandoraEngine)
 
 	t.Run("should have default settings", func(t *testing.T) {
@@ -34,27 +34,27 @@ func Test_New(t *testing.T) {
 }
 
 func TestPandora_Start(t *testing.T) {
-	pandoraEngine := createDummyPandora(t)
-	dummyEndpoint := "https://some.endpoint"
 	// TODO: in my opinion Start() should return err when failure is present
 	t.Run("should not start with empty endpoint", func(t *testing.T) {
+		pandoraEngine, _ := createDummyPandora(t)
 		pandoraEngine.Start(nil)
 		assert.Equal(t, "", pandoraEngine.endpoint)
 	})
 
 	t.Run("should mark as running with non-empty endpoint", func(t *testing.T) {
+		pandoraEngine, _ := createDummyPandora(t)
+		dummyEndpoint := "https://some.endpoint"
 		pandoraEngine.endpoint = dummyEndpoint
 		pandoraEngine.Start(nil)
-
 		assert.True(t, pandoraEngine.isRunning)
 		assert.Nil(t, pandoraEngine.chain)
 	})
 
-	makeOrchestratorServer(t)
+	_, server, _ := makeOrchestratorServer(t)
+	defer server.Stop()
 
 	t.Run("should wait for connection", func(t *testing.T) {
-		t.Parallel()
-		waitingPandoraEngine := createDummyPandora(t)
+		waitingPandoraEngine, _ := createDummyPandora(t)
 		waitingPandoraEngine.endpoint = ipcTestLocation
 		ticker := time.NewTicker(reConPeriod)
 		dummyError := fmt.Errorf("dummy Error")
@@ -70,17 +70,44 @@ func TestPandora_Start(t *testing.T) {
 		waitingPandoraEngine.dialRPC = dummyRpcFunc
 		t.Log("Waiting for reconnection in Pandora Engine")
 		<-ticker.C
-		_, server, _ := makeOrchestratorServer(t)
-		defer server.Stop()
-		t.Log("Waiting for reconnection in Pandora Engine")
+		t.Log("Waiting for reconnection in Pandora Engine, pointing to orchestrator server")
 		<-ticker.C
 		assert.Equal(t, uint64(0), waitingPandoraEngine.currentEpoch)
 		assert.Nil(t, waitingPandoraEngine.runError)
 	})
+
+	t.Run("should handle seal request", func(t *testing.T) {
+
+	})
+
+	t.Run("should handle sharding info request", func(t *testing.T) {
+
+	})
+
+	t.Run("should handle submitSignatureData", func(t *testing.T) {
+
+	})
+
+	t.Run("should handle subscriptionErrCh", func(t *testing.T) {
+
+	})
+
+	t.Run("should handle done event", func(t *testing.T) {
+		pandoraEngine, cancel := createDummyPandora(t)
+		dummyEndpoint := ipcTestLocation
+		pandoraEngine.endpoint = dummyEndpoint
+		pandoraEngine.Start(nil)
+		assert.True(t, pandoraEngine.isRunning)
+		time.Sleep(time.Millisecond * 100)
+		cancel()
+		time.Sleep(time.Millisecond * 50)
+		assert.False(t, pandoraEngine.isRunning)
+		assert.Nil(t, pandoraEngine.runError)
+	})
 }
 
-func createDummyPandora(t *testing.T) (pandoraEngine *Pandora) {
-	ctx := context.Background()
+func createDummyPandora(t *testing.T) (pandoraEngine *Pandora, cancel context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
 	cfg := &params.PandoraConfig{
 		GenesisStartTime: 0,
 		SlotsPerEpoch:    0,
