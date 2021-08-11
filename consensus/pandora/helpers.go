@@ -190,7 +190,9 @@ func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	log.Debug("In verifyBlsSignature", "header extra data", common.Bytes2Hex(header.Extra), "header block Number", header.Number.Uint64(), "sealHash", sealHash, "sealHash (signature msg) in bytes", sealHash[:], "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
-		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)
+		sealHashffff := hexutil.Encode(sealHash[:])
+		publicKeyBytes := hexutil.Encode(validatorPubKey.Marshal())
+		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify, "asss", sealHashffff, "pub", publicKeyBytes)
 		return errSigFailedToVerify
 	}
 	return nil

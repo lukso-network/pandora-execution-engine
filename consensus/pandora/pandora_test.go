@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	bls_common "github.com/prysmaticlabs/prysm/shared/bls/common"
+	"github.com/prysmaticlabs/prysm/shared/bls/herumi"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"net"
@@ -111,23 +115,95 @@ func TestPandora_Start(t *testing.T) {
 		pandoraEngine.Start(nil)
 		errChannel := make(chan error)
 
-		pandoraEngine.submitShardingInfoCh <- &shardingResult{
-			nonce:   types.BlockNonce{},
-			hash:    common.Hash{},
-			blsSeal: nil,
-			errc:    errChannel,
-		}
+		t.Run("should react to invalid work", func(t *testing.T) {
+			shardingWorkHash := common.Hash{}
+			pandoraEngine.submitShardingInfoCh <- &shardingResult{
+				nonce:   types.BlockNonce{},
+				hash:    shardingWorkHash,
+				blsSeal: nil,
+				errc:    errChannel,
+			}
 
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
 
-		select {
-		case <-ticker.C:
-			assert.Fail(t, "should receive error that work was not submitted")
-		case err := <-errChannel:
-			assert.NotNil(t, err)
-			assert.Equal(t, "invalid submit work request", err.Error())
-		}
+			select {
+			case <-ticker.C:
+				assert.Fail(t, "should receive error that work was not submitted")
+				ticker.Stop()
+			case err := <-errChannel:
+				assert.NotNil(t, err)
+				assert.Equal(t, "invalid submit work request", err.Error())
+				ticker.Stop()
+			}
+		})
+
+		t.Run("should pass valid work", func(t *testing.T) {
+			expectedBlockNumber := int64(1)
+			firstHeader := &types.Header{Number: big.NewInt(expectedBlockNumber)}
+			firstHeaderExtra := &ExtraData{
+				Slot:  1,
+				Epoch: 0,
+				Turn:  1,
+			}
+			firstHeaderExtraBytes, err := rlp.EncodeToBytes(firstHeaderExtra)
+			assert.Nil(t, err)
+			firstHeader.Extra = firstHeaderExtraBytes
+
+			blsSeal := &BlsSignatureBytes{}
+			privKeyHex := "0x3a3cae36df7b66019442f8f38acb080c680780dc8ee2d430cc801903be0b651e"
+			privKey, err := herumi.SecretKeyFromBytes(hexutil.MustDecode(privKeyHex))
+			assert.Nil(t, err)
+
+			publicKeys := [32]bls_common.PublicKey{}
+			publicKeys[1] = privKey.PublicKey()
+
+			pandoraEngine.epochInfos[0] = &EpochInfo{
+				Epoch:            0,
+				ValidatorList:    publicKeys,
+				EpochTimeStart:   0,
+				SlotTimeDuration: DefaultSlotTimeDuration,
+			}
+
+			firstBlock := types.NewBlock(firstHeader, nil, nil, nil, nil)
+
+			// I dont know why but in test I couldnt match sealhash via SealHash() so I do it manually
+			expectedSealHash := hexutil.MustDecode("0x85d2ed6f97f0e8ebfcc7f1badaf6522748b2488a45cc90f56c6c48a7290658f6")
+			shardingWorkHash := common.BytesToHash(expectedSealHash)
+			pandoraEngine.works[shardingWorkHash] = firstBlock
+
+			signature := privKey.Sign(shardingWorkHash.Bytes())
+			copy(blsSeal[:], signature.Marshal())
+			signatureFromBytes, err := herumi.SignatureFromBytes(blsSeal[:])
+			assert.Nil(t, err)
+			assert.NotNil(t, signatureFromBytes)
+
+			signature, err = herumi.SignatureFromBytes(blsSeal[:])
+			assert.Nil(t, err)
+			assert.True(t, signature.Verify(publicKeys[1], expectedSealHash))
+
+			// TODO: add results to pandora engine
+			// pabndoraEngine.results must not be empty to make whole procedure work
+
+			pandoraEngine.submitShardingInfoCh <- &shardingResult{
+				nonce:   types.BlockNonce{},
+				hash:    shardingWorkHash,
+				blsSeal: blsSeal,
+				errc:    errChannel,
+			}
+
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+
+			select {
+			//case <-ticker.C:
+			//	assert.Fail(t, "should receive error that work was not submitted")
+			//	ticker.Stop()
+			case err := <-errChannel:
+				assert.Nil(t, err)
+				ticker.Stop()
+			}
+		})
 	})
 
 	t.Run("should handle subscriptionErrCh", func(t *testing.T) {
