@@ -89,7 +89,17 @@ func TestPandora_Start(t *testing.T) {
 	})
 
 	t.Run("should handle subscriptionErrCh", func(t *testing.T) {
-
+		pandoraEngine, _ := createDummyPandora(t)
+		dummyEndpoint := ipcTestLocation
+		pandoraEngine.endpoint = dummyEndpoint
+		pandoraEngine.Start(nil)
+		time.Sleep(time.Millisecond * 100)
+		dummyErr := fmt.Errorf("dummyErr")
+		pandoraEngine.subscriptionErrCh <- dummyErr
+		time.Sleep(reConPeriod)
+		assert.Equal(t, dummyErr, pandoraEngine.runError)
+		time.Sleep(reConPeriod)
+		assert.NotEqual(t, dummyErr, pandoraEngine.runError)
 	})
 
 	t.Run("should handle done event", func(t *testing.T) {
