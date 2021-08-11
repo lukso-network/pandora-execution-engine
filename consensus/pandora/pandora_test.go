@@ -3,9 +3,11 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
+	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -77,7 +79,26 @@ func TestPandora_Start(t *testing.T) {
 	})
 
 	t.Run("should handle seal request", func(t *testing.T) {
+		pandoraEngine, _ := createDummyPandora(t)
+		dummyEndpoint := ipcTestLocation
+		pandoraEngine.endpoint = dummyEndpoint
+		genesisHeader := &types.Header{Number: big.NewInt(0)}
+		genesisBlock := types.NewBlock(genesisHeader, nil, nil, nil, nil)
+		pandoraEngine.setCurrentBlock(genesisBlock)
+		pandoraEngine.Start(nil)
 
+		expectedBlockNumber := int64(1)
+		firstHeader := &types.Header{Number: big.NewInt(expectedBlockNumber)}
+		firstBlock := types.NewBlock(firstHeader, nil, nil, nil, nil)
+		results := make(chan *types.Block)
+		pandoraEngine.newSealRequestCh <- &sealTask{
+			block:   firstBlock,
+			results: results,
+		}
+
+		time.Sleep(time.Millisecond * 50)
+
+		assert.Equal(t, firstBlock.Number(), pandoraEngine.currentBlock.Number())
 	})
 
 	t.Run("should handle sharding info request", func(t *testing.T) {
