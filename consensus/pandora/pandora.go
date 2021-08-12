@@ -27,7 +27,6 @@ var (
 
 	errInvalidValidatorSize = errors.New("invalid length of validator list")
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
-	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding header available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
@@ -228,7 +227,6 @@ func (p *Pandora) run(done <-chan struct{}) {
 		case sealRequest := <-p.newSealRequestCh:
 			log.Debug("new seal request in pandora engine", "block number", sealRequest.block.Number())
 			// first save it to result channel. so that we can send worker about the info
-			// TODO: IMHO it is not consumed anywhere because it is send-only chan. Debug if it is needed.
 			p.results = sealRequest.results
 			// then simply save the block into current block. We will use it again
 			p.setCurrentBlock(sealRequest.block)

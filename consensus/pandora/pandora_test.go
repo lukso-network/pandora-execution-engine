@@ -3,6 +3,11 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"net"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -12,10 +17,6 @@ import (
 	bls_common "github.com/prysmaticlabs/prysm/shared/bls/common"
 	"github.com/prysmaticlabs/prysm/shared/bls/herumi"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"net"
-	"testing"
-	"time"
 )
 
 var (
