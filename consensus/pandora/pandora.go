@@ -60,7 +60,7 @@ type Pandora struct {
 	namespace            string
 	subscription         *rpc.ClientSubscription
 	subscriptionErrCh    chan error
-	results              chan *types.Block
+	results              chan<- *types.Block
 	works                map[common.Hash]*types.Block
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult

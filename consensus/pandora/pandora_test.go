@@ -105,7 +105,38 @@ func TestPandora_Start(t *testing.T) {
 	})
 
 	t.Run("should handle sharding info request", func(t *testing.T) {
+		pandoraEngine, _ := createDummyPandora(t)
+		dummyEndpoint := ipcTestLocation
+		pandoraEngine.endpoint = dummyEndpoint
+		pandoraEngine.Start(nil)
 
+		t.Run("should return err when there is no sharding work", func(t *testing.T) {
+			pandoraEngine.currentBlock = nil
+			errChannel := make(chan error)
+			pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+				slot:        0,
+				epoch:       0,
+				blockNumber: 0,
+				parentHash:  common.Hash{},
+				errc:        errChannel,
+				res:         nil,
+			}
+
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+
+			select {
+			case <-ticker.C:
+				assert.Fail(t, "should receive error that there was no sharding block")
+				ticker.Stop()
+			case err := <-errChannel:
+				assert.NotNil(t, err)
+				assert.Equal(t, errNoShardingBlock, err)
+				ticker.Stop()
+			}
+		})
+
+		//t.Run("should")
 	})
 
 	t.Run("should handle submitSignatureData", func(t *testing.T) {
@@ -113,10 +144,10 @@ func TestPandora_Start(t *testing.T) {
 		dummyEndpoint := ipcTestLocation
 		pandoraEngine.endpoint = dummyEndpoint
 		pandoraEngine.Start(nil)
-		errChannel := make(chan error)
 
 		t.Run("should react to invalid work", func(t *testing.T) {
 			shardingWorkHash := common.Hash{}
+			errChannel := make(chan error)
 			pandoraEngine.submitShardingInfoCh <- &shardingResult{
 				nonce:   types.BlockNonce{},
 				hash:    shardingWorkHash,
@@ -139,6 +170,7 @@ func TestPandora_Start(t *testing.T) {
 		})
 
 		t.Run("should pass valid work", func(t *testing.T) {
+			errChannel := make(chan error)
 			expectedBlockNumber := int64(1)
 			firstHeader := &types.Header{Number: big.NewInt(expectedBlockNumber)}
 			firstHeaderExtra := &ExtraData{
@@ -171,20 +203,18 @@ func TestPandora_Start(t *testing.T) {
 			expectedSealHash := hexutil.MustDecode("0x85d2ed6f97f0e8ebfcc7f1badaf6522748b2488a45cc90f56c6c48a7290658f6")
 			shardingWorkHash := common.BytesToHash(expectedSealHash)
 			pandoraEngine.works[shardingWorkHash] = firstBlock
-
+			fullResultsChan := make(chan *types.Block)
+			pandoraEngine.results = fullResultsChan
 			signature := privKey.Sign(shardingWorkHash.Bytes())
 			copy(blsSeal[:], signature.Marshal())
 			signatureFromBytes, err := herumi.SignatureFromBytes(blsSeal[:])
+
 			assert.Nil(t, err)
 			assert.NotNil(t, signatureFromBytes)
 
 			signature, err = herumi.SignatureFromBytes(blsSeal[:])
 			assert.Nil(t, err)
 			assert.True(t, signature.Verify(publicKeys[1], expectedSealHash))
-
-			// TODO: add results to pandora engine
-			// pabndoraEngine.results must not be empty to make whole procedure work
-			pandoraEngine.results = make(chan *types.Block)
 
 			pandoraEngine.submitShardingInfoCh <- &shardingResult{
 				nonce:   types.BlockNonce{},
@@ -197,7 +227,7 @@ func TestPandora_Start(t *testing.T) {
 			defer ticker.Stop()
 
 			select {
-			case block := <-pandoraEngine.results:
+			case block := <-fullResultsChan:
 				assert.Equal(t, firstHeader.Number, block.Number())
 			case <-ticker.C:
 				assert.Fail(t, "should receive error that work was not submitted")
