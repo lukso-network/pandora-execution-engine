@@ -41,7 +41,6 @@ func Test_New(t *testing.T) {
 }
 
 func TestPandora_Start(t *testing.T) {
-	// TODO: in my opinion Start() should return err when failure is present
 	t.Run("should not start with empty endpoint", func(t *testing.T) {
 		pandoraEngine, _ := createDummyPandora(t)
 		pandoraEngine.Start(nil)
@@ -191,6 +190,37 @@ func TestPandora_Start(t *testing.T) {
 				err := <-errChannel
 				assert.Equal(t, errInvalidBlockNumber, err)
 			})
+
+		t.Run("should handle sharding info when block is greater than 1", func(t *testing.T) {
+			errChannel := make(chan error)
+			resChannel := make(chan [4]string)
+			header := &types.Header{
+				Number:     big.NewInt(2),
+				ParentHash: common.HexToHash("0x4203bd2ead3d91541fd49fb40cc2a16bce624be5074917d9d28ce6e164860192"),
+			}
+			block := types.NewBlock(header, nil, nil, nil, nil)
+			pandoraEngine.setCurrentBlock(block)
+
+			pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+				slot:        3,
+				epoch:       0,
+				blockNumber: header.Number.Uint64(),
+				parentHash:  header.ParentHash,
+				errc:        errChannel,
+				res:         resChannel,
+			}
+
+			select {
+			case err := <-errChannel:
+				assert.Nil(t, err)
+			case response := <-resChannel:
+				assert.Equal(t, "0xe64f708a495767942054021a27efd25730ba1a2fef2dc6f68503ed8dc36d3951", response[0])
+				assert.Equal(t, "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421", response[1])
+				assert.Equal(t, "0xf901f1a04203bd2ead3d91541fd49fb40cc2a16bce624be5074917d9d28ce6e164860192a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800280808084c3038003a00000000000000000000000000000000000000000000000000000000000000000880000000000000000", response[2])
+				assert.Equal(t, "0x02", response[3])
+				break
+			}
+		})
 
 		t.Run("should return err when there is no sharding work", func(t *testing.T) {
 			pandoraEngine.currentBlock = nil
