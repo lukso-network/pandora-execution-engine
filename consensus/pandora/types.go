@@ -67,7 +67,7 @@ type shardingInfoReq struct {
 // sealTask wraps a seal block with relative result channel
 type sealTask struct {
 	block   *types.Block
-	results chan<- *types.Block
+	results chan *types.Block
 }
 
 func (ei *EpochInfo) copy() *EpochInfo {

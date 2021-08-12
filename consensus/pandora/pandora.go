@@ -60,7 +60,7 @@ type Pandora struct {
 	namespace            string
 	subscription         *rpc.ClientSubscription
 	subscriptionErrCh    chan error
-	results              chan<- *types.Block
+	results              chan *types.Block
 	works                map[common.Hash]*types.Block
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
@@ -228,6 +228,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 		case sealRequest := <-p.newSealRequestCh:
 			log.Debug("new seal request in pandora engine", "block number", sealRequest.block.Number())
 			// first save it to result channel. so that we can send worker about the info
+			// TODO: IMHO it is not consumed anywhere because it is send-only chan. Debug if it is needed.
 			p.results = sealRequest.results
 			// then simply save the block into current block. We will use it again
 			p.setCurrentBlock(sealRequest.block)

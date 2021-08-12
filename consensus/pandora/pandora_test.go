@@ -184,6 +184,7 @@ func TestPandora_Start(t *testing.T) {
 
 			// TODO: add results to pandora engine
 			// pabndoraEngine.results must not be empty to make whole procedure work
+			pandoraEngine.results = make(chan *types.Block)
 
 			pandoraEngine.submitShardingInfoCh <- &shardingResult{
 				nonce:   types.BlockNonce{},
@@ -196,9 +197,11 @@ func TestPandora_Start(t *testing.T) {
 			defer ticker.Stop()
 
 			select {
-			//case <-ticker.C:
-			//	assert.Fail(t, "should receive error that work was not submitted")
-			//	ticker.Stop()
+			case block := <-pandoraEngine.results:
+				assert.Equal(t, firstHeader.Number, block.Number())
+			case <-ticker.C:
+				assert.Fail(t, "should receive error that work was not submitted")
+				ticker.Stop()
 			case err := <-errChannel:
 				assert.Nil(t, err)
 				ticker.Stop()
