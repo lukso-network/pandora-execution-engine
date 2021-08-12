@@ -110,6 +110,88 @@ func TestPandora_Start(t *testing.T) {
 		pandoraEngine.endpoint = dummyEndpoint
 		pandoraEngine.Start(nil)
 
+		t.Run("should handle sharding info for block number less than 2", func(t *testing.T) {
+			errChannel := make(chan error)
+			resChannel := make(chan [4]string)
+			pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+				slot:        0,
+				epoch:       0,
+				blockNumber: 0,
+				parentHash:  common.Hash{},
+				errc:        errChannel,
+				res:         resChannel,
+			}
+
+			select {
+			case err := <-errChannel:
+				assert.Nil(t, err)
+			case response := <-resChannel:
+				assert.Equal(t, "0x2e07d67c7eebfc74fcc5ca07f25d995a3a67c497deaee9d60fb0b26b549a8d3b", response[0])
+				assert.Equal(t, "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421", response[1])
+				assert.Equal(t, "0xf901f1a00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000808080808084c3808080a00000000000000000000000000000000000000000000000000000000000000000880000000000000000", response[2])
+				assert.Equal(t, "0x", response[3])
+				break
+			}
+
+			pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+				slot:        1,
+				epoch:       0,
+				blockNumber: 1,
+				parentHash:  common.Hash{},
+				errc:        errChannel,
+				res:         resChannel,
+			}
+
+			select {
+			case err := <-errChannel:
+				assert.Nil(t, err)
+			case response := <-resChannel:
+				assert.Equal(t, "0x4203bd2ead3d91541fd49fb40cc2a16bce624be5074917d9d28ce6e164860197", response[0])
+				assert.Equal(t, "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421", response[1])
+				assert.Equal(t, "0xf901f1a00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000808080808084c3018001a00000000000000000000000000000000000000000000000000000000000000000880000000000000000", response[2])
+				assert.Equal(t, "0x", response[3])
+				break
+			}
+		})
+
+		t.Run(
+			"should return err when parent hash does not match and block number is greater than 1",
+			func(t *testing.T) {
+				errChannel := make(chan error)
+				resChannel := make(chan [4]string)
+
+				pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+					slot:        3,
+					epoch:       0,
+					blockNumber: 2,
+					parentHash:  common.HexToHash("0x4203bd2ead3d91541fd49fb40cc2a16bce624be5074917d9d28ce6e164860192"),
+					errc:        errChannel,
+					res:         resChannel,
+				}
+
+				err := <-errChannel
+				assert.Equal(t, errInvalidParentHash, err)
+			})
+
+		t.Run(
+			"should return err when block number does not match and block number is greater than 1",
+			func(t *testing.T) {
+				errChannel := make(chan error)
+				resChannel := make(chan [4]string)
+
+				pandoraEngine.fetchShardingInfoCh <- &shardingInfoReq{
+					slot:        3,
+					epoch:       0,
+					blockNumber: 2,
+					parentHash:  common.Hash{},
+					errc:        errChannel,
+					res:         resChannel,
+				}
+
+				err := <-errChannel
+				assert.Equal(t, errInvalidBlockNumber, err)
+			})
+
 		t.Run("should return err when there is no sharding work", func(t *testing.T) {
 			pandoraEngine.currentBlock = nil
 			errChannel := make(chan error)
@@ -135,8 +217,6 @@ func TestPandora_Start(t *testing.T) {
 				ticker.Stop()
 			}
 		})
-
-		//t.Run("should")
 	})
 
 	t.Run("should handle submitSignatureData", func(t *testing.T) {
