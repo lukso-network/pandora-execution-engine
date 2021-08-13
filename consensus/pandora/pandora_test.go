@@ -419,7 +419,6 @@ func makeOrchestratorServer(
 		Public:    true,
 	})
 
-	// TODO: change to inproc?
 	listener, server, err := rpc.StartIPCEndpoint(location, apis)
 	assert.NoError(t, err)
 
