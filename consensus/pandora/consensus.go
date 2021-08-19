@@ -1,6 +1,8 @@
 package pandora
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -9,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
-	"math/big"
 )
 
 var (
