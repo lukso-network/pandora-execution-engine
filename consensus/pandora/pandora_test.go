@@ -301,12 +301,12 @@ func TestPandora_Start(t *testing.T) {
 			publicKeys := [32]bls_common.PublicKey{}
 			publicKeys[1] = privKey.PublicKey()
 
-			pandoraEngine.epochInfos[0] = &EpochInfo{
+			pandoraEngine.epochInfos.Add(uint64(0), &EpochInfo{
 				Epoch:            0,
 				ValidatorList:    publicKeys,
 				EpochTimeStart:   0,
 				SlotTimeDuration: DefaultSlotTimeDuration,
-			}
+			})
 
 			firstBlock := types.NewBlock(firstHeader, nil, nil, nil, nil)
 
