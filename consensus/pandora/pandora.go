@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -27,7 +29,6 @@ var (
 
 	errInvalidValidatorSize = errors.New("invalid length of validator list")
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
-	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding header available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
@@ -69,7 +70,7 @@ type Pandora struct {
 	scope                event.SubscriptionScope
 
 	epochInfosMu sync.RWMutex
-	epochInfos   map[uint64]*EpochInfo
+	epochInfos   *lru.Cache
 }
 
 func New(
@@ -90,6 +91,11 @@ func New(
 	if cfg.SlotTimeDuration == 0 {
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
+	// need to define maximum size. It will take maximum latest 100 epochs
+	epochCache, err := lru.New(1 << 7)
+	if err != nil {
+		log.Error("epoch cache creation failed", "error", err)
+	}
 
 	return &Pandora{
 		ctx:            ctx,
@@ -105,7 +111,7 @@ func New(
 		newSealRequestCh:     make(chan *sealTask),
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
-		epochInfos:           make(map[uint64]*EpochInfo), // need to define maximum size. It will take maximum latest 100 epochs
+		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
 
@@ -125,6 +131,33 @@ func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
 		}
 		p.run(p.ctx.Done())
 	}()
+}
+
+// Close closes the exit channel to notify all backend threads exiting.
+func (p *Pandora) Close() error {
+	if p.cancel != nil {
+		defer p.cancel()
+	}
+	p.scope.Close()
+	return nil
+}
+
+func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{p},
+			Public:    true,
+		},
+	}
+}
+
+// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
+func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
+	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }
 
 // getCurrentBlock get current block
@@ -275,31 +308,4 @@ func (p *Pandora) run(done <-chan struct{}) {
 			return
 		}
 	}
-}
-
-// Close closes the exit channel to notify all backend threads exiting.
-func (p *Pandora) Close() error {
-	if p.cancel != nil {
-		defer p.cancel()
-	}
-	p.scope.Close()
-	return nil
-}
-
-func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// In order to ensure backward compatibility, we exposes ethash RPC APIs
-	// to both eth and ethash namespaces.
-	return []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &API{p},
-			Public:    true,
-		},
-	}
-}
-
-// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
-func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
-	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }

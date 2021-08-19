@@ -1,8 +1,9 @@
 package pandora
 
 import (
-	lru "github.com/hashicorp/golang-lru"
 	"sync"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const inmemoryEpochInfos = 4096
