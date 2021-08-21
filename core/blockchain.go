@@ -1689,8 +1689,10 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 			return err
 		}
 	}
-	if _, err := bc.verifySignAndNotifyOrchestrator(block); err != nil {
-		return err
+	if bc.isPandora() {
+		if _, err := bc.verifySignAndNotifyOrchestrator(block); err != nil {
+			return err
+		}
 	}
 	bc.writeHeadBlock(block)
 	return nil
