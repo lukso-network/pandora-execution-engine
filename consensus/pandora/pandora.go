@@ -48,7 +48,7 @@ type Pandora struct {
 	cancel         context.CancelFunc
 	runError       error
 
-	chain                consensus.ChainHeaderReader
+	chain                consensus.ChainReader
 	config               *params.PandoraConfig // Consensus engine configuration parameters
 	epochInfoCache       *EpochInfoCache
 	currentEpoch         uint64
@@ -116,7 +116,7 @@ func New(
 	}
 }
 
-func (p *Pandora) Start(chain consensus.ChainHeaderReader) {
+func (p *Pandora) Start(chain consensus.ChainReader) {
 	// Exit early if pandora endpoint is not set.
 	if p.endpoint == "" {
 		log.Error("Orchestrator endpoint is empty")
