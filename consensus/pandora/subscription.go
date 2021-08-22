@@ -69,8 +69,9 @@ func (p *Pandora) connectToOrchestrator() error {
 func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 	var curCanonicalEpoch uint64
 	if p.chain != nil {
-		curHeader := p.chain.CurrentHeader()
-		log.Debug("Retrieved current header from local chain", "curHeader", fmt.Sprintf("%+v", curHeader))
+		curBlock := p.chain.CurrentBlock()
+		curHeader := curBlock.Header()
+
 		if curHeader.Number.Uint64() > 0 {
 			extraDataWithSig := new(ExtraDataSealed)
 			err := rlp.DecodeBytes(curHeader.Extra, extraDataWithSig)
@@ -78,6 +79,9 @@ func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 				log.Error("Failed to decode extraData of the canonical head", "err", err)
 				return nil, err
 			}
+
+			log.Debug("Retrieved current header from local chain",
+				"blkNumber", curBlock.Number(), "epoch", extraDataWithSig.Epoch, "slot", extraDataWithSig.Slot)
 
 			if extraDataWithSig.Epoch > 0 {
 				// subscribing from previous epoch for safety reason
