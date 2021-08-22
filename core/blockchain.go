@@ -1616,6 +1616,51 @@ func (bc *BlockChain) TxLookupLimit() uint64 {
 
 var lastWrite uint64
 
+func (bc *BlockChain) verifySignAndNotifyOrchestrator(block *types.Block) (stat WriteStatus, err error) {
+	pandoraEngine, _ := bc.engine.(*pandora.Pandora)
+	log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
+	err = pandoraEngine.VerifyBLSSignature(block.Header())
+	if err != nil {
+		if err != consensus.ErrEpochNotFound {
+			bc.reportBlock(block, nil, err)
+		}
+		return CanonStatTy, err
+	}
+
+	log.Debug("verifySignAndNotifyOrchestrator", "sending header with header hash", block.Header().Hash(), "blockNumber", block.NumberU64())
+	bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
+
+	retryLimit := orchestratorConfirmationRetrievalLimit
+	status := pandora_orcclient.Pending
+	for retryLimit > 0 && status == pandora_orcclient.Pending {
+		// halt and get orchestrator confirmation
+		log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
+		confirmedBlocks := <-bc.blockConfirmationCh
+		for _, confirmedBlock := range confirmedBlocks {
+			if confirmedBlock.Hash == block.Hash() {
+				status = confirmedBlock.Status
+				log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+			}
+			if status != pandora_orcclient.Pending {
+				// if status is invalid or correct then break the loop
+				break
+			}
+		}
+		retryLimit--
+	}
+	log.Debug("deleting from pending container", "header hash", block.Hash())
+	// remove the header from the pending queue
+	bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
+	// if status is pending or invalid then just continue default work
+	if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
+		log.Warn("failed to write block into the chain", "block hash", block.Hash())
+		return CanonStatTy, consensus.ErrInvalidBlock
+	}
+	// if status is approved then write block in canonical chain.
+	log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
+	return NonStatTy, nil
+}
+
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
@@ -1644,6 +1689,11 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 			return err
 		}
 	}
+	if bc.isPandora() {
+		if _, err := bc.verifySignAndNotifyOrchestrator(block); err != nil {
+			return err
+		}
+	}
 	bc.writeHeadBlock(block)
 	return nil
 }
@@ -1665,47 +1715,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
 	if bc.isPandora() {
-		pandoraEngine, _ := bc.engine.(*pandora.Pandora)
-		log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
-		err = pandoraEngine.VerifyBLSSignature(block.Header())
+		stat, err := bc.verifySignAndNotifyOrchestrator(block)
 		if err != nil {
-			if err != consensus.ErrEpochNotFound {
-				bc.reportBlock(block, nil, err)
-			}
-			return CanonStatTy, err
+			return stat, err
 		}
-
-		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
-		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
-
-		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Pending
-		for retryLimit > 0 && status == pandora_orcclient.Pending {
-			// halt and get orchestrator confirmation
-			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-			confirmedBlocks := <-bc.blockConfirmationCh
-			for _, confirmedBlock := range confirmedBlocks {
-				if confirmedBlock.Hash == block.Hash() {
-					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
-				}
-				if status != pandora_orcclient.Pending {
-					// if status is invalid or correct then break the loop
-					break
-				}
-			}
-			retryLimit--
-		}
-		log.Debug("deleting from pending container", "header hash", block.Hash())
-		// remove the header from the pending queue
-		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
-		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
-			log.Warn("failed to write block into the chain", "block hash", block.Hash())
-			return CanonStatTy, consensus.ErrInvalidBlock
-		}
-		// if status is approved then write block in canonical chain.
-		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
 	}
 
 	// Calculate the total difficulty of the block
