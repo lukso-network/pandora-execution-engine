@@ -491,6 +491,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		return fmt.Errorf("unsupported orchestrator client type")
 	}
 
+	defer orcClient.Close()
+
+
 	for {
 		select {
 		case <-ticker.C:
@@ -527,7 +530,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		case <-bc.quit:
 			// Ethereum service is closed. Break the loop
 			//close orc client
-			orcClient.Close()
+			log.Debug("exiting pandora block confirmation fetcher...")
 			return nil
 		}
 	}
@@ -538,7 +541,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
-		if header.Extra == nil {
+		if header == nil || header.Extra == nil {
 			return nil, errors.New("header must have extra data")
 		}
 		pandoraExtraData := pandora.ExtraDataSealed{}
