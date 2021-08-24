@@ -538,6 +538,9 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.BlockHash, error) {
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
+		if header.Extra == nil {
+			return nil, errors.New("header must have extra data")
+		}
 		pandoraExtraData := pandora.ExtraDataSealed{}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
