@@ -141,15 +141,18 @@ func (p *Pandora) SubscribeEpochInfo(
 				log.Debug("Received new epoch info", "epochInfo", fmt.Sprintf("%+v", epochInfo))
 				// dispatch newPendingHeader to handler
 				if err = p.processEpochInfo(epochInfo); err != nil {
-					log.Error("Failed to process epoch info", "err", err)
+					log.Error("Failed to process epoch info", "err", err, "ctx", "pandora-consensus")
 					p.subscriptionErrCh <- err
 					return
 				}
 			case err := <-sub.Err():
 				if err != nil {
-					log.Debug("Got subscription error", "err", err)
+					log.Debug("Got subscription error", "err", err, "ctx", "pandora-consensus")
 					p.subscriptionErrCh <- err
+					return
 				}
+			case <-p.ctx.Done():
+				log.Debug("Received cancelled context, closing existing epoch info subscription", "ctx", "pandora-consensus")
 				return
 			}
 		}
