@@ -452,7 +452,7 @@ func (bc *BlockChain) isPandora() bool {
 // Miner and blockchain both are initialized from the backend. So this is a suitable place
 // to write subscriber. Both Miner and blockchain can subscribe for the event from Ethereum.
 func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	var orcClient *pandora_orcclient.OrcClient
