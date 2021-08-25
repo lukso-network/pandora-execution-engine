@@ -21,8 +21,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/pandora"
-	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -33,6 +31,9 @@ import (
 	"text/tabwriter"
 	"text/template"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"

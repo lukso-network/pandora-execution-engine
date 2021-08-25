@@ -19,13 +19,14 @@ package ethconfig
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"

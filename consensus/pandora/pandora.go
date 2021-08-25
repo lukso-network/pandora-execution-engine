@@ -29,7 +29,6 @@ var (
 
 	errInvalidValidatorSize = errors.New("invalid length of validator list")
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
-	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding header available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
@@ -132,6 +131,33 @@ func (p *Pandora) Start(chain consensus.ChainReader) {
 		}
 		p.run(p.ctx.Done())
 	}()
+}
+
+// Close closes the exit channel to notify all backend threads exiting.
+func (p *Pandora) Close() error {
+	if p.cancel != nil {
+		defer p.cancel()
+	}
+	p.scope.Close()
+	return nil
+}
+
+func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{p},
+			Public:    true,
+		},
+	}
+}
+
+// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
+func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
+	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }
 
 // getCurrentBlock get current block
@@ -282,31 +308,4 @@ func (p *Pandora) run(done <-chan struct{}) {
 			return
 		}
 	}
-}
-
-// Close closes the exit channel to notify all backend threads exiting.
-func (p *Pandora) Close() error {
-	if p.cancel != nil {
-		defer p.cancel()
-	}
-	p.scope.Close()
-	return nil
-}
-
-func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// In order to ensure backward compatibility, we exposes ethash RPC APIs
-	// to both eth and ethash namespaces.
-	return []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &API{p},
-			Public:    true,
-		},
-	}
-}
-
-// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
-func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
-	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }
