@@ -85,6 +85,7 @@ var (
 
 	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
+	notifyFlag         = flag.String("pandora.notify", "", "Comma separated URLs for Pandora engine")
 )
 
 var (
@@ -153,7 +154,9 @@ func main() {
 		log.Crit("Failed to parse genesis block json", "err", err)
 	}
 	// Convert the bootnodes to internal enode representations
-	var enodes []*enode.Node
+	var (
+		enodes []*enode.Node
+	)
 	for _, boot := range strings.Split(*bootFlag, ",") {
 		if url, err := enode.Parse(enode.ValidSchemes, boot); err == nil {
 			enodes = append(enodes, url)
@@ -161,6 +164,7 @@ func main() {
 			log.Error("Failed to parse bootnode URL", "url", boot, "err", err)
 		}
 	}
+
 	// Load up the account key and decrypt its password
 	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
@@ -229,6 +233,13 @@ type wsConn struct {
 
 func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
+	notifyUrls := strings.Split(*notifyFlag, ",")
+	cfg := ethconfig.Defaults
+
+	if len(notifyUrls) > 0 {
+		cfg.Miner.Notify = notifyUrls
+	}
+
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
 		Version: params.VersionWithCommit(gitCommit, gitDate),
@@ -247,7 +258,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	}
 
 	// Assemble the Ethereum light client protocol
-	cfg := ethconfig.Defaults
+
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
