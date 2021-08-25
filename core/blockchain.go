@@ -475,7 +475,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 
 		// first initialize orchestrator client
 		switch parsedUrl.Scheme {
-		case "http", "https":
+		case "http", "https", "ws":
 			orcClient, err = pandora_orcclient.Dial(orcClientObject[1])
 			if err != nil {
 				return err
@@ -497,6 +497,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 			// prepare header requests
 			headers := bc.GetPendingHeaderContainer().ReadAllHeaders()
 			if len(headers) == 0 {
+				log.Debug("no headers to process")
 				// no header found. nothing to prepare request. simply continue
 				continue
 			}

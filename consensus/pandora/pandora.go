@@ -2,6 +2,7 @@ package pandora
 
 import (
 	"context"
+	"math"
 	"sync"
 	"time"
 
@@ -91,8 +92,16 @@ func New(
 	if cfg.SlotTimeDuration == 0 {
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
-	// need to define maximum size. It will take maximum latest 100 epochs
-	epochCache, err := lru.New(1 << 7)
+
+	// Calculate max int based on system
+	maxInt := math.MaxInt32 - 1
+	is64Bit := uint64(^uintptr(0)) == ^uint64(0)
+
+	if is64Bit {
+		maxInt = math.MaxInt64 - 1
+	}
+
+	epochCache, err := lru.New(maxInt)
 	if err != nil {
 		log.Error("epoch cache creation failed", "error", err)
 	}

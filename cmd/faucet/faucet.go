@@ -27,6 +27,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
 	"html/template"
 	"io/ioutil"
 	"math"
@@ -51,7 +52,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -244,6 +244,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		Name:    "geth",
 		Version: params.VersionWithCommit(gitCommit, gitDate),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
+		IPCPath: filepath.Join(os.Getenv("HOME"), ".faucet/geth/geth.ipc"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
 			NoDiscovery:      true,
@@ -258,20 +259,19 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	}
 
 	// Assemble the Ethereum light client protocol
-
-	cfg.SyncMode = downloader.LightSync
+	cfg.SyncMode = downloader.FullSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
 	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
+	backend, err := eth.New(stack, &cfg)
 
-	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
 
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := ethstats.New(stack, lesBackend.ApiBackend, lesBackend.Engine(), stats); err != nil {
+		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), stats); err != nil {
 			return nil, err
 		}
 	}
@@ -569,6 +569,7 @@ func (f *faucet) refresh(head *types.Header) error {
 			return err
 		}
 	}
+	log.Warn("This is head", "head", head)
 	// Retrieve the balance, nonce and gas price from the current head
 	var (
 		balance *big.Int
@@ -618,6 +619,7 @@ func (f *faucet) loop() {
 				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
 				continue
 			}
+			log.Warn("it waaaaaaaawwwwwrks")
 			if err := f.refresh(head); err != nil {
 				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
 				continue

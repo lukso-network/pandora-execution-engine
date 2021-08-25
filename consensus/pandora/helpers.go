@@ -171,5 +171,13 @@ func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
 	//defer p.epochInfosMu.Unlock()
 
 	log.Debug("store new epoch info into map", "epoch", epoch, "epochInfo", fmt.Sprintf("%+v", epochInfo))
-	p.epochInfos.Add(epoch, epochInfo)
+	evicted := p.epochInfos.Add(epoch, epochInfo)
+
+	if evicted {
+		log.Error(
+			"Cache epoch info record was evicted",
+			"epoch", epoch,
+			"epochInfo", fmt.Sprintf("%+v", epochInfo),
+		)
+	}
 }
