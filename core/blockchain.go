@@ -85,7 +85,9 @@ var (
 	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
-	errInsertionInterrupted = errors.New("insertion is interrupted")
+	errInsertionInterrupted       = errors.New("insertion is interrupted")
+	errTooManyOrchestratorRetries = errors.New("too many orchestrator retries")
+	errInvalidOrchestratorStatus  = errors.New("got invalid status from orchestrator")
 )
 
 const (
@@ -1888,6 +1890,28 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				prev.Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
+
+	// Confirmations on orchestrator side might not be there yet, so there must be some clutch before we move forward
+	// this should be synchronous
+	confirmations, err := bc.waitForOrchestratorConfirmations(chain, 20, time.NewTicker(time.Second))
+
+	if nil != err {
+		return 0, err
+	}
+
+	// It was checked before in waitForOrchestratorConfirmations, but double check is IMHO not that bad
+	if len(confirmations) != len(chain) {
+		err = fmt.Errorf("len of confirmations must match len of chain")
+		log.Crit(
+			"Critical error in orchestrator confirmation logic",
+			"confirmations", confirmations,
+			"chain", chain,
+			"err", err,
+		)
+
+		return 0, err
+	}
+
 	// Pre-checks passed, start the full block imports
 	bc.wg.Add(1)
 	bc.chainmu.Lock()
@@ -2209,6 +2233,121 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	stats.ignored += it.remaining()
 
 	return it.index, err
+}
+
+// waitForOrchestratorConfirmations will return error if any element was not confirmed within awaiting period
+func (bc *BlockChain) waitForOrchestratorConfirmations(
+	chain types.Blocks,
+	maxRetries int,
+	ticker *time.Ticker,
+) (
+	statuses map[common.Hash]pandora_orcclient.Status,
+	err error,
+) {
+	defer ticker.Stop()
+	retry := 0
+	queueChain := chain
+
+	for {
+		if retry >= maxRetries {
+			err = errTooManyOrchestratorRetries
+
+			return
+		}
+
+		confirmedBlocks, err := bc.getConfirmationsFromOrchestrator(queueChain)
+
+		if nil != err {
+			return
+		}
+
+		// Reduce to records that are not verified yet
+		pendingLeftovers := map[common.Hash]pandora_orcclient.Status{}
+
+		for blockHash, confirmationStatus := range confirmedBlocks {
+			if pandora_orcclient.Verified == confirmationStatus {
+				statuses[blockHash] = confirmationStatus
+
+				continue
+			}
+
+			if pandora_orcclient.Pending == confirmationStatus {
+				pendingLeftovers[blockHash] = confirmationStatus
+
+				continue
+			}
+
+			err = fmt.Errorf(
+				"%s: hash: %s, confirmationStatus: %s",
+				errInvalidOrchestratorStatus.Error(),
+				blockHash,
+				confirmationStatus,
+			)
+			log.Error(err.Error(), "confirmedBlocks", confirmedBlocks, "chain", chain)
+
+			return
+		}
+
+		// Everything is fine, return statuses
+		if len(pendingLeftovers) < 1 && len(chain) == len(statuses) {
+			return
+		}
+
+		retry++
+
+		log.Debug(
+			"Retrying confirmations fetch from orchestrator",
+			"pendingLeftovers", pendingLeftovers,
+			"retry", retry,
+		)
+
+		<-ticker.C
+	}
+}
+
+func (bc *BlockChain) getConfirmationsFromOrchestrator(chain types.Blocks) (
+	status map[common.Hash]pandora_orcclient.Status,
+	err error,
+) {
+	if !bc.isPandora() {
+		return
+	}
+
+	pendingHeaderContainer := bc.pendingHeaderContainer
+
+	var (
+		headers []*types.Header
+	)
+
+	for _, block := range chain {
+		headers = append(headers, block.Header())
+	}
+
+	log.Debug("getConfirmationsFromOrchestrator", "I try to get confirmation for blocks", headers)
+	pendingHeaderContainer.NotifyHeaders(headers)
+	pendingHeaderContainer.WriteHeaderBatch(headers)
+	status = map[common.Hash]pandora_orcclient.Status{}
+
+	for _, header := range headers {
+		confirmedBlocks := <-bc.blockConfirmationCh
+
+		for _, block := range confirmedBlocks {
+			if header.Hash() != block.Hash {
+				continue
+			}
+
+			log.Debug(
+				"Got block status",
+				"blockHash", block.Hash,
+				"slot", block.Slot,
+				"status", block.Status,
+			)
+
+			status[header.Hash()] = block.Status
+		}
+	}
+
+	return
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor
