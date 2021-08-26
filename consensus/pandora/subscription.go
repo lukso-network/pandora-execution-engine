@@ -189,10 +189,6 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 		epochInfo.ValidatorList[i] = pubKey
 	}
 
-	// store epoch info in in-memeory cache
-	//if err := p.epochInfoCache.put(info.Epoch, epochInfo); err != nil {
-	//	return err
-	//}
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
 
 	return nil

@@ -1668,6 +1668,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
 	if bc.isPandora() {
+		// I leave it here, but in my opinion it should be in `verifyHeader` in pandora, `helpers.go`
 		pandoraEngine, _ := bc.engine.(*pandora.Pandora)
 		log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
 		err = pandoraEngine.VerifyBLSSignature(block.Header())
@@ -1678,35 +1679,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			return CanonStatTy, err
 		}
 
-		log.Debug("writeBlockWithState", "sending header with header hash", block.Header().Hash())
-		bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
-
-		retryLimit := orchestratorConfirmationRetrievalLimit
-		status := pandora_orcclient.Pending
-		for retryLimit > 0 && status == pandora_orcclient.Pending {
-			// halt and get orchestrator confirmation
-			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-			confirmedBlocks := <-bc.blockConfirmationCh
-			for _, confirmedBlock := range confirmedBlocks {
-				if confirmedBlock.Hash == block.Hash() {
-					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
-				}
-				if status != pandora_orcclient.Pending {
-					// if status is invalid or correct then break the loop
-					break
-				}
-			}
-			retryLimit--
-		}
 		log.Debug("deleting from pending container", "header hash", block.Hash())
 		// remove the header from the pending queue
 		bc.GetPendingHeaderContainer().DeleteHeader(block.Header())
-		// if status is pending or invalid then just continue default work
-		if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
-			log.Warn("failed to write block into the chain", "block hash", block.Hash())
-			return CanonStatTy, consensus.ErrInvalidBlock
-		}
 		// if status is approved then write block in canonical chain.
 		log.Debug("block is verified. so continuing existing parts", "block header hash", block.Header().Hash())
 	}
@@ -2247,6 +2222,7 @@ func (bc *BlockChain) waitForOrchestratorConfirmations(
 	defer ticker.Stop()
 	retry := 0
 	queueChain := chain
+	statuses = map[common.Hash]pandora_orcclient.Status{}
 
 	for {
 		if retry >= maxRetries {
@@ -2255,9 +2231,11 @@ func (bc *BlockChain) waitForOrchestratorConfirmations(
 			return
 		}
 
-		confirmedBlocks, err := bc.getConfirmationsFromOrchestrator(queueChain)
+		confirmedBlocks, currentErr := bc.getConfirmationsFromOrchestrator(queueChain)
 
-		if nil != err {
+		if nil != currentErr {
+			err = currentErr
+
 			return
 		}
 
@@ -2306,7 +2284,7 @@ func (bc *BlockChain) waitForOrchestratorConfirmations(
 }
 
 func (bc *BlockChain) getConfirmationsFromOrchestrator(chain types.Blocks) (
-	status map[common.Hash]pandora_orcclient.Status,
+	statuses map[common.Hash]pandora_orcclient.Status,
 	err error,
 ) {
 	if !bc.isPandora() {
@@ -2326,24 +2304,28 @@ func (bc *BlockChain) getConfirmationsFromOrchestrator(chain types.Blocks) (
 	log.Debug("getConfirmationsFromOrchestrator", "I try to get confirmation for blocks", headers)
 	pendingHeaderContainer.NotifyHeaders(headers)
 	pendingHeaderContainer.WriteHeaderBatch(headers)
-	status = map[common.Hash]pandora_orcclient.Status{}
+	statuses = map[common.Hash]pandora_orcclient.Status{}
+	confirmedBlocks := <-bc.blockConfirmationCh
 
-	for _, header := range headers {
-		confirmedBlocks := <-bc.blockConfirmationCh
-
+	for index, header := range headers {
 		for _, block := range confirmedBlocks {
 			if header.Hash() != block.Hash {
 				continue
 			}
 
 			log.Debug(
-				"Got block status",
+				"Got block statuses",
 				"blockHash", block.Hash,
 				"slot", block.Slot,
-				"status", block.Status,
+				"statuses", block.Status,
 			)
 
-			status[header.Hash()] = block.Status
+			statuses[header.Hash()] = block.Status
+
+			if pandora_orcclient.Verified == block.Status {
+				log.Debug("I am deleting pending header", "header", header, "index", index)
+				bc.GetPendingHeaderContainer().DeleteHeader(header)
+			}
 		}
 	}
 

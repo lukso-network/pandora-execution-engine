@@ -169,7 +169,6 @@ func (p *Pandora) getEpochInfo(epoch uint64) *EpochInfo {
 func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
 	//p.epochInfosMu.Lock()
 	//defer p.epochInfosMu.Unlock()
-
 	log.Debug("store new epoch info into map", "epoch", epoch, "epochInfo", fmt.Sprintf("%+v", epochInfo))
 	evicted := p.epochInfos.Add(epoch, epochInfo)
 
@@ -179,5 +178,15 @@ func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
 			"epoch", epoch,
 			"epochInfo", fmt.Sprintf("%+v", epochInfo),
 		)
+	}
+
+	if epoch < 1 {
+		return
+	}
+
+	_, ok := p.epochInfos.Get(epoch - 1)
+
+	if !ok {
+		log.Error("non-continous insert of epoch info", "epoch", epoch)
 	}
 }
