@@ -125,11 +125,6 @@ const (
 	BlockChainVersion uint64 = 8
 )
 
-const (
-	// orchestratorConfirmationRetrievalLimit is the maximum limit of orchestrator client confirmation retrieval
-	orchestratorConfirmationRetrievalLimit = 10
-)
-
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {

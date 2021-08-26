@@ -187,6 +187,6 @@ func (p *Pandora) setEpochInfo(epoch uint64, epochInfo *EpochInfo) {
 	_, ok := p.epochInfos.Get(epoch - 1)
 
 	if !ok {
-		log.Error("non-continous insert of epoch info", "epoch", epoch)
+		log.Error("non-continuous insert of epoch info", "epoch", epoch)
 	}
 }
