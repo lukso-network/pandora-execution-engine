@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -106,9 +105,9 @@ func (p *Pandora) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*ty
 // VerifyUncles implements consensus.Engine, always returning an error for any
 // uncles as this consensus mechanism doesn't permit uncles.
 func (p *Pandora) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	if len(block.Uncles()) > 0 {
-		return errors.New("uncles not allowed")
-	}
+	//if len(block.Uncles()) > 0 {
+	//	return errors.New("uncles not allowed")
+	//}
 	return nil
 }
 

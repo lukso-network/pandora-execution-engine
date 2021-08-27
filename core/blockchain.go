@@ -537,6 +537,12 @@ func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.B
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
 		pandoraExtraData := pandora.ExtraDataSealed{}
+
+		if nil == header {
+			log.Warn("I HARDCODE REQUEST DATA, DELETE IT ASAP!")
+
+			continue
+		}
 		err := rlp.DecodeBytes(header.Extra, &pandoraExtraData)
 		if err != nil {
 			log.Error("found error while decoding pandora extra data", err)
@@ -1668,8 +1674,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
 		err = pandoraEngine.VerifyBLSSignature(block.Header())
 		if err != nil {
+			// TODO: THIS MUST BE RESTORED, ITS ONLY TO CATCH UP WITH HEAD ASAP IN L15
 			if err != consensus.ErrEpochNotFound {
-				bc.reportBlock(block, nil, err)
+				return CanonStatTy, nil
+
+				//bc.reportBlock(block, nil, err)
 			}
 			return CanonStatTy, err
 		}

@@ -612,6 +612,12 @@ func (f *faucet) loop() {
 	// Start a goroutine to update the state from head notifications in the background
 	update := make(chan *types.Header)
 
+	err = f.refresh(nil)
+	if nil != err {
+		log.Error(err.Error())
+		err = nil
+	}
+
 	go func() {
 		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
@@ -620,7 +626,6 @@ func (f *faucet) loop() {
 				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
 				continue
 			}
-			log.Warn("it waaaaaaaawwwwwrks")
 			if err := f.refresh(head); err != nil {
 				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
 				continue
