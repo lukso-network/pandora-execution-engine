@@ -493,7 +493,6 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 
 	defer orcClient.Close()
 
-
 	for {
 		select {
 		case <-ticker.C:
@@ -564,7 +563,7 @@ func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.B
 }
 
 func (bc *BlockChain) SubscribeConfirmedBlockHashFetcher(ch chan<- []*pandora_orcclient.BlockStatus) event.Subscription {
-	return bc.confirmedBlockHashes.Subscribe(ch)
+	return bc.scope.Track(bc.confirmedBlockHashes.Subscribe(ch))
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1639,20 +1638,30 @@ func (bc *BlockChain) verifySignAndNotifyOrchestrator(block *types.Block) (stat 
 	retryLimit := orchestratorConfirmationRetrievalLimit
 	status := pandora_orcclient.Pending
 	for retryLimit > 0 && status == pandora_orcclient.Pending {
-		// halt and get orchestrator confirmation
-		log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-		confirmedBlocks := <-bc.blockConfirmationCh
-		for _, confirmedBlock := range confirmedBlocks {
-			if confirmedBlock.Hash == block.Hash() {
-				status = confirmedBlock.Status
-				log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+		select {
+		case confirmedBlocks := <-bc.blockConfirmationCh:
+			// halt and get orchestrator confirmation
+			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
+			for _, confirmedBlock := range confirmedBlocks {
+				if confirmedBlock.Hash == block.Hash() {
+					status = confirmedBlock.Status
+					log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+				}
+				if status != pandora_orcclient.Pending {
+					// if status is invalid or correct then break the loop
+					break
+				}
 			}
-			if status != pandora_orcclient.Pending {
-				// if status is invalid or correct then break the loop
-				break
-			}
+			retryLimit--
+
+		case <-bc.quit:
+			log.Debug("closing verification loop")
+			return CanonStatTy, errors.New("exiting block confirmation due to exit signal")
+
+		case <-bc.orcClientSubscriber.Err():
+			log.Debug("closing verification loop. subscription closed")
+			return CanonStatTy, errors.New("exiting block confirmation due to closing orcClientSubscriber")
 		}
-		retryLimit--
 	}
 	log.Debug("deleting from pending container", "header hash", block.Hash())
 	// remove the header from the pending queue
