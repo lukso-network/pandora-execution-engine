@@ -215,7 +215,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If pandora engine is requested, set it up
 	if chainConfig.Pandora != nil {
 		log.Debug("Pandora engine is enabled. So setting up pandora engine")
-		if len(notify) < 2 {
+		if len(notify) < 1 {
 			log.Crit("Orchestrator endpoint was empty. Provide orchestrator endpoint in --notify flag")
 		}
 		dialRPCClient := func(endpoint string) (*rpc.Client, error) {
