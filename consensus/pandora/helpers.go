@@ -130,9 +130,7 @@ func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	curEpochInfo := p.getEpochInfo(extractedEpoch)
 	if curEpochInfo == nil {
 		log.Error("Epoch info not found in cache", "slot", extractedSlot, "epoch", extractedEpoch)
-		log.Warn("I HARDCODE THIS CHECK, YOU MUST DELETE THIS HARDCODE")
-		return nil
-		//return consensus.ErrEpochNotFound
+		return consensus.ErrEpochNotFound
 	}
 
 	blsSignatureBytes := extraDataWithBLSSig.BlsSignatureBytes
