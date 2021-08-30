@@ -1,0 +1,12 @@
+# Build Geth in a stock Go builder container
+FROM golang:1.16-stretch as builder
+
+ADD . /go-ethereum
+RUN cd /go-ethereum && go build -o ./faucet ./cmd/faucet
+
+FROM golang:1.16-stretch
+
+WORKDIR /go/src/app
+COPY --from=builder /go-ethereum/faucet /usr/local/bin/
+
+CMD ["faucet"]

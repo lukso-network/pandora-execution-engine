@@ -537,10 +537,10 @@ func preparePanBlockHashRequest(headers []*types.Header) ([]*pandora_orcclient.B
 	var blockHashes []*pandora_orcclient.BlockHash
 	for _, header := range headers {
 		if nil == header {
-			err := fmt.Errorf("header cannot be nil")
-			log.Error("error during preparing PanBlockHashRequest", err)
+			tempErr := fmt.Errorf("header cannot be nil")
+			log.Warn("error during preparing PanBlockHashRequest", tempErr)
 
-			return nil, err
+			continue
 		}
 
 		pandoraExtraData := pandora.ExtraDataSealed{}
