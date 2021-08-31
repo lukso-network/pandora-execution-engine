@@ -1633,15 +1633,15 @@ func (bc *BlockChain) TxLookupLimit() uint64 {
 var lastWrite uint64
 
 func (bc *BlockChain) verifySignAndNotifyOrchestrator(block *types.Block) (stat WriteStatus, err error) {
-	pandoraEngine, _ := bc.engine.(*pandora.Pandora)
-	log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
-	err = pandoraEngine.VerifyBLSSignature(block.Header())
-	if err != nil {
-		if err != consensus.ErrEpochNotFound {
-			bc.reportBlock(block, nil, err)
-		}
-		return CanonStatTy, err
-	}
+	//pandoraEngine, _ := bc.engine.(*pandora.Pandora)
+	//log.Debug("verifying bls signature", "block number", block.NumberU64(), "block hash", block.Hash())
+	//err = pandoraEngine.VerifyBLSSignature(block.Header())
+	//if err != nil {
+	//	if err != consensus.ErrEpochNotFound {
+	//		bc.reportBlock(block, nil, err)
+	//	}
+	//	return CanonStatTy, err
+	//}
 
 	log.Debug("verifySignAndNotifyOrchestrator", "sending header with header hash", block.Header().Hash(), "blockNumber", block.NumberU64())
 	bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
