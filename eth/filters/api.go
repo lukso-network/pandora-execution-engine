@@ -226,6 +226,26 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 	rpcSub := notifier.CreateSubscription()
 	go func() {
+		// sending previous blocks to orchestrator
+		sender := func(windowStart, windowEnd uint64) {
+			for i := windowStart; i <= windowEnd; i++ {
+				temphead, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+				if temphead != nil && err == nil {
+					// if block exists and no error occurred then send it
+					notifier.Notify(rpcSub.ID, temphead)
+				}
+			}
+		}
+		windowStart, windowEnd := uint64(0), uint64(0)
+		header, _ := api.backend.HeaderByHash(ctx, pendingFilter.FromBlockHash)
+		if header != nil {
+			windowStart = header.Number.Uint64()
+		}
+		header, _ = api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if header != nil {
+			windowEnd = header.Number.Uint64()
+		}
+		sender(windowStart, windowEnd)
 		// first send all available pending headers from the pending queue
 		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
 		for _, pendingHeader := range pendingHeaders {
@@ -233,14 +253,38 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 			notifier.Notify(rpcSub.ID, pendingHeader)
 		}
 
+		if len(pendingHeaders) > 0 {
+			penHeaderStart := pendingHeaders[0].Number.Uint64()
+			if windowEnd + 1 < penHeaderStart {
+				// not consecutive. so more blocks are finalized in the mean time. send them
+				windowStart = windowEnd + 1
+				tempHead, _ := api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+				if tempHead != nil {
+					windowEnd = tempHead.Number.Uint64()
+				}
+				sender(windowStart, windowEnd)
+			}
+		}
+
 		// accept PendingHeaderChannelSize concurrent pending headers and send them
 		// If anything goes wrong remove it.
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
+		firstTime := true
 
 		for {
 			select {
 			case h := <-headers:
+				if firstTime {
+					// entered into the running phase. for the first time we will do checking and send previous blocks.
+					firstTime = false
+					if windowEnd + 1 < h.Number.Uint64() {
+						// not consecutive. so send them first
+						windowStart = windowEnd + 1
+						windowEnd = h.Number.Uint64()
+						sender(windowStart, windowEnd)
+					}
+				}
 				notifier.Notify(rpcSub.ID, h)
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", rpcErr)

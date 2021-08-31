@@ -229,6 +229,7 @@ type BlockChain struct {
 	// pandora-orchestrator data passing
 	orcClientSubscriber event.Subscription
 	blockConfirmationCh chan []*pandora_orcclient.BlockStatus
+	confiramtionExitCh chan struct{}
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -269,6 +270,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		vmConfig:               vmConfig,
 		pendingHeaderContainer: headerContainer,
 		blockConfirmationCh:    make(chan []*pandora_orcclient.BlockStatus),
+		confiramtionExitCh: make(chan struct{}),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -495,6 +497,8 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 
 	for {
 		select {
+		case <- bc.confiramtionExitCh:
+			return errors.New("process interrupt happened. so exiting")
 		case <-ticker.C:
 			// prepare header requests
 			headers := bc.GetPendingHeaderContainer().ReadAllHeaders()
@@ -1152,6 +1156,7 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
+	log.Debug("received stop call")
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}
@@ -1220,6 +1225,12 @@ func (bc *BlockChain) Stop() {
 // calling this method.
 func (bc *BlockChain) StopInsert() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
+	select {
+	case <-bc.confiramtionExitCh:
+		// Channel was already closed
+	default:
+		close(bc.confiramtionExitCh)
+	}
 }
 
 // insertStopped returns true after StopInsert has been called.
@@ -1637,31 +1648,45 @@ func (bc *BlockChain) verifySignAndNotifyOrchestrator(block *types.Block) (stat 
 
 	retryLimit := orchestratorConfirmationRetrievalLimit
 	status := pandora_orcclient.Pending
-	for retryLimit > 0 && status == pandora_orcclient.Pending {
-		select {
-		case confirmedBlocks := <-bc.blockConfirmationCh:
-			// halt and get orchestrator confirmation
-			log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-			for _, confirmedBlock := range confirmedBlocks {
-				if confirmedBlock.Hash == block.Hash() {
-					status = confirmedBlock.Status
-					log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for retryLimit > 0 && status == pandora_orcclient.Pending {
+			select {
+			case <- bc.confiramtionExitCh:
+				stat, err = CanonStatTy, errors.New("process interrupt happened. so exiting")
+				return
+			case confirmedBlocks := <-bc.blockConfirmationCh:
+				// halt and get orchestrator confirmation
+				log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
+				for _, confirmedBlock := range confirmedBlocks {
+					if confirmedBlock.Hash == block.Hash() {
+						status = confirmedBlock.Status
+						log.Debug("found confirmation", "confirmed block status", status, "testing block header hash", block.Header().Hash(), "confirmed block hash", confirmedBlock.Hash)
+					}
+					if status != pandora_orcclient.Pending {
+						// if status is invalid or correct then break the loop
+						break
+					}
 				}
-				if status != pandora_orcclient.Pending {
-					// if status is invalid or correct then break the loop
-					break
-				}
+				retryLimit--
+
+			case <-bc.quit:
+				log.Debug("closing verification loop")
+				stat, err = CanonStatTy, errors.New("exiting block confirmation due to exit signal")
+				return
+
+			case <-bc.orcClientSubscriber.Err():
+				log.Debug("closing verification loop. subscription closed")
+				stat, err = CanonStatTy, errors.New("exiting block confirmation due to closing orcClientSubscriber")
+				return
 			}
-			retryLimit--
-
-		case <-bc.quit:
-			log.Debug("closing verification loop")
-			return CanonStatTy, errors.New("exiting block confirmation due to exit signal")
-
-		case <-bc.orcClientSubscriber.Err():
-			log.Debug("closing verification loop. subscription closed")
-			return CanonStatTy, errors.New("exiting block confirmation due to closing orcClientSubscriber")
 		}
+	}()
+	wg.Wait()
+	if err != nil {
+		return stat, err
 	}
 	log.Debug("deleting from pending container", "header hash", block.Hash())
 	// remove the header from the pending queue
@@ -1732,6 +1757,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if bc.isPandora() {
 		stat, err := bc.verifySignAndNotifyOrchestrator(block)
 		if err != nil {
+			log.Error("found error while verify and notifying orchestrator", "error", err)
 			return stat, err
 		}
 	}
@@ -1935,6 +1961,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up
+	defer log.Debug("insertChain is closing..... <<<<<<<<<>>>>>>>>>>>>>")
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
 	}
