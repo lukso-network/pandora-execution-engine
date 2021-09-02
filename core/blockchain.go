@@ -2657,6 +2657,10 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+	if err == consensus.ErrEpochNotFound {
+		log.Debug("Epoch not found and reporting block wont occur")
+		return
+	}
 	rawdb.WriteBadBlock(bc.db, block)
 
 	var receiptString string
