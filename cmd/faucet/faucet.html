@@ -46,7 +46,7 @@
 			<div class="container">
 				<div class="row" style="margin-top: -380px; margin-bottom: 16px;">
 					<div class="col-lg-12">
-						<h3>How does this work?</h3>
+						<h3 class="text-center">How does this work?</h3>
 						<p>This LYXt faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough LYXt to mount long running spam attacks, requests are tied to common 3rd party social network accounts. Anyone having a Twitter or Facebook account may request funds within the permitted limits.</p>
 						<dl class="dl-horizontal">
 							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-twitter" aria-hidden="true" style="font-size: 36px;"></i></dt>
@@ -69,7 +69,7 @@
 				<div class="row">
 					<div class="col-lg-8 col-lg-offset-2">
 						<div class="input-group">
-							<input id="url" name="url" type="text" class="form-control" placeholder="Twitter post URL, containing your LUKSO L15 testnet address"/>
+							<input id="url" name="url" type="text" class="form-control" placeholder="Twitter post URL containing your LUKSO L15 testnet address"/>
 							<span class="input-group-btn">
 								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me LYXt	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
