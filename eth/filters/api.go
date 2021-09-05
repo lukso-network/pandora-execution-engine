@@ -232,11 +232,13 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				temphead, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
 				if temphead != nil && err == nil {
 					// if block exists and no error occurred then send it
+					log.Debug("Notifying to orchestrator", "block number", temphead.Number.Uint64())
 					notifier.Notify(rpcSub.ID, temphead)
 				}
 			}
 		}
-		windowStart, windowEnd := uint64(0), uint64(0)
+		// we are starting from block 1 because block 0 has no pandora extra data info. so sending it will create an error
+		windowStart, windowEnd := uint64(1), uint64(1)
 		header, _ := api.backend.HeaderByHash(ctx, pendingFilter.FromBlockHash)
 		if header != nil {
 			windowStart = header.Number.Uint64()
@@ -245,6 +247,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		if header != nil {
 			windowEnd = header.Number.Uint64()
 		}
+		log.Debug("NewPendingBlockHeaders sending", "start", windowStart, "end", windowEnd)
 		sender(windowStart, windowEnd)
 		// first send all available pending headers from the pending queue
 		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
@@ -255,7 +258,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 
 		if len(pendingHeaders) > 0 {
 			penHeaderStart := pendingHeaders[0].Number.Uint64()
-			if windowEnd + 1 < penHeaderStart {
+			if windowEnd+1 < penHeaderStart {
 				// not consecutive. so more blocks are finalized in the mean time. send them
 				windowStart = windowEnd + 1
 				tempHead, _ := api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -278,7 +281,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				if firstTime {
 					// entered into the running phase. for the first time we will do checking and send previous blocks.
 					firstTime = false
-					if windowEnd + 1 < h.Number.Uint64() {
+					if windowEnd+1 < h.Number.Uint64() {
 						// not consecutive. so send them first
 						windowStart = windowEnd + 1
 						windowEnd = h.Number.Uint64()

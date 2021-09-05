@@ -7,6 +7,7 @@ package pandora_orcclient
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/rpc"
@@ -51,7 +52,7 @@ func (oc *OrcClient) GetConfirmedPanBlockHashes(ctx context.Context, request []*
 	return blockStatus, err
 }
 
-func (oc *OrcClient) SubscribeConfirmationStatusFromOrchestrator(ctx context.Context, request *BlockHash, ch chan []*BlockStatus) *rpc.ClientSubscription {
+func (oc *OrcClient) SubscribeConfirmationStatusFromOrchestrator(ctx context.Context, request *BlockHash, ch chan *BlockStatus) *rpc.ClientSubscription {
 	if ch == nil || request == nil {
 		log.Error("invalid request to SubscribeConfirmationStatusFromOrchestrator")
 		return nil
@@ -61,5 +62,6 @@ func (oc *OrcClient) SubscribeConfirmationStatusFromOrchestrator(ctx context.Con
 		log.Error("rpc client subscription failed in SubscribeConfirmationStatusFromOrchestrator", "error", err)
 		return nil
 	}
+	log.Debug("subscription for confirm status done")
 	return subscribe
 }
