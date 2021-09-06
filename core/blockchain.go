@@ -24,7 +24,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"net/url"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -469,23 +468,12 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 			return errors.New("orchestrator http endpoint not provided")
 		}
 
-		// expecting http / https endpoint address. If not given throw an error
-		parsedUrl, err := url.Parse(orcClientObject[1])
+		var err error
+		orcClient, err = pandora_orcclient.Dial(orcClientObject[0])
 		if err != nil {
 			return err
 		}
 
-		// first initialize orchestrator client
-		switch parsedUrl.Scheme {
-		case "http", "https":
-			orcClient, err = pandora_orcclient.Dial(orcClientObject[1])
-			if err != nil {
-				return err
-			}
-
-		default:
-			return fmt.Errorf("expecting http or https scheme. but provided %s", parsedUrl.Scheme)
-		}
 	case *pandora_orcclient.OrcClient:
 		// for testing purpose we will send in process orchestrator client. we have to use it
 		orcClient = orcClientObject
