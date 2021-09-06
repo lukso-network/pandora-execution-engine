@@ -24,7 +24,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"net/url"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -476,23 +475,12 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 			return errors.New("orchestrator http endpoint not provided")
 		}
 
-		// expecting ws endpoint address. If not given throw an error
-		parsedUrl, err := url.Parse(orcClientObject[0])
+		var err error
+		orcClient, err = pandora_orcclient.Dial(orcClientObject[0])
 		if err != nil {
 			return err
 		}
 
-		// first initialize orchestrator client
-		switch parsedUrl.Scheme {
-		case "ws":
-			orcClient, err = pandora_orcclient.Dial(orcClientObject[1])
-			if err != nil {
-				return err
-			}
-
-		default:
-			return fmt.Errorf("expecting ws scheme. but provided %s", parsedUrl.Scheme)
-		}
 	case *pandora_orcclient.OrcClient:
 		// for testing purpose we will send in process orchestrator client. we have to use it
 		orcClient = orcClientObject
@@ -2635,6 +2623,10 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+	if err == consensus.ErrEpochNotFound {
+		log.Debug("Epoch not found and reporting block wont occur")
+		return
+	}
 	rawdb.WriteBadBlock(bc.db, block)
 
 	var receiptString string
