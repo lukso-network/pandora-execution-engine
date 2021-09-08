@@ -509,8 +509,10 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		case blockStats := <-responseContainer:
 			log.Debug("received response from orchestrator", "blockstats", *blockStats)
 			// simply put the responses into the cache
-			bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
-			bc.confirmedBlockHashes.Send(blockStats)
+			if blockStats != nil {
+				bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
+				bc.confirmedBlockHashes.Send(blockStats)
+			}
 
 		case <-bc.quit:
 			// Ethereum service is closed. Break the loop
@@ -1618,6 +1620,7 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		ticker := time.NewTicker(500 * time.Millisecond)
 		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			select {
 			case <-bc.confiramtionExitCh:
@@ -1638,8 +1641,9 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 					// we've worked with it. So remove it
 					bc.orchestratorConfirmationCache.Remove(block.Hash())
 				}
+			case <- ticker.C:
+				log.Debug("tick!!!! no status received yet from orchestrator", "retryLimit", retryLimit)
 				retryLimit--
-
 			case <-bc.quit:
 				log.Debug("closing verification loop")
 				stat, err = CanonStatTy, errors.New("exiting block confirmation due to exit signal")
