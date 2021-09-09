@@ -1620,7 +1620,7 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(2 * time.Second)
 		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			select {
 			case <-bc.confiramtionExitCh:
