@@ -35,7 +35,7 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	)
 
 	select {
-	case api.pandora.fetchShardingInfoCh <- &shardingInfoReq{errc: errorCh, res: shardingInfoCh, slot: slotNumber, epoch: epoch, blockNumber: blockNumber}:
+	case api.pandora.fetchShardingInfoCh <- &shardingInfoReq{errc: errorCh, res: shardingInfoCh, slot: slotNumber, epoch: epoch, blockNumber: blockNumber, parentHash: parentHash}:
 		log.Debug("sent sharding info request to fetch channel")
 	case <-api.pandora.ctx.Done():
 		return emptyRes, errPandoraStopped
