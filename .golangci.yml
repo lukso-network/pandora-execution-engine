@@ -12,9 +12,9 @@ run:
 linters:
   disable-all: true
   enable:
-    - deadcode
+    # - deadcode
     - goconst
-    - goimports
+    # - goimports
     - gosimple
     - govet
     - ineffassign
@@ -22,7 +22,7 @@ linters:
     # - staticcheck
     - unconvert
     # - unused
-    - varcheck
+    # - varcheck
 
 linters-settings:
   gofmt:

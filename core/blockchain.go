@@ -1931,7 +1931,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up
-	defer log.Debug("insertChain is closing..... <<<<<<<<<>>>>>>>>>>>>>")
+	defer log.Debug("insertChain is closing...")
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
 	}
