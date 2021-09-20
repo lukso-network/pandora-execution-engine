@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -92,7 +94,14 @@ func New(
 		cfg.SlotTimeDuration = DefaultSlotTimeDuration
 	}
 	// need to define maximum size. It will take maximum latest 100 epochs
-	epochCache, err := lru.New(1 << 7)
+	maxInt := math.MaxInt32 - 1
+	is64Bit := uint64(^uintptr(0)) == ^uint64(0)
+
+	if is64Bit {
+		maxInt = math.MaxInt64 - 1
+	}
+
+	epochCache, err := lru.New(maxInt)
 	if err != nil {
 		log.Error("epoch cache creation failed", "error", err)
 	}

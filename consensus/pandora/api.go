@@ -23,7 +23,7 @@ type API struct {
 
 // GetShardingWork returns a work package for external miner.
 func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slotNumber uint64, epoch uint64) ([4]string, error) {
-	log.Trace(">>> GetShardingWork", "parentHash", parentHash, "blockNumber", blockNumber, "slot number", slotNumber, "epoch", epoch)
+	log.Debug(">>> GetShardingWork", "parentHash", parentHash, "blockNumber", blockNumber, "slot number", slotNumber, "epoch", epoch)
 	emptyRes := [4]string{}
 	if api.pandora == nil {
 		return emptyRes, errors.New("pandora engine not supported")
@@ -35,7 +35,7 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	)
 
 	select {
-	case api.pandora.fetchShardingInfoCh <- &shardingInfoReq{errc: errorCh, res: shardingInfoCh, slot: slotNumber, epoch: epoch}:
+	case api.pandora.fetchShardingInfoCh <- &shardingInfoReq{errc: errorCh, res: shardingInfoCh, slot: slotNumber, epoch: epoch, blockNumber: blockNumber, parentHash: parentHash}:
 		log.Debug("sent sharding info request to fetch channel")
 	case <-api.pandora.ctx.Done():
 		return emptyRes, errPandoraStopped
