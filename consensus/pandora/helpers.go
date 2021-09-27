@@ -173,6 +173,7 @@ func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	curEpochInfo := p.getEpochInfo(extractedEpoch)
 	if curEpochInfo == nil {
 		log.Error("Epoch info not found in cache", "slot", extractedSlot, "epoch", extractedEpoch)
+		p.epochRequest <- extractedEpoch
 		return consensus.ErrEpochNotFound
 	}
 
@@ -190,8 +191,8 @@ func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	log.Debug("In verifyBlsSignature", "header extra data", common.Bytes2Hex(header.Extra), "header block Number", header.Number.Uint64(), "sealHash", sealHash, "sealHash (signature msg) in bytes", sealHash[:], "validatorPublicKey", hexutils.BytesToHex(validatorPubKey.Marshal()), "extractedIndex", extractedIndex)
 
 	if !signature.Verify(validatorPubKey, sealHash[:]) {
-		log.Error("Failed to verify bls signature", "err", errSigFailedToVerify)
-		return errSigFailedToVerify
+		log.Error("Failed to verify bls signature", "err", consensus.ErrSigFailedToVerify)
+		return consensus.ErrSigFailedToVerify
 	}
 	return nil
 }

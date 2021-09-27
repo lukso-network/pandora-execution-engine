@@ -3,6 +3,7 @@ package pandora
 import (
 	"context"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -68,7 +69,11 @@ func (p *Pandora) connectToOrchestrator() error {
 
 func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 	var curCanonicalEpoch uint64
-	if p.chain != nil {
+	if p.requestedEpoch > 0 {
+		// for safety we are downloading from one epoch earlier
+		curCanonicalEpoch = p.requestedEpoch - 1
+		p.currentEpoch = curCanonicalEpoch
+	} else if p.chain != nil {
 		curBlock := p.chain.CurrentBlock()
 		curHeader := curBlock.Header()
 
@@ -115,6 +120,7 @@ func (p *Pandora) retryToConnectAndSubscribe(err error) {
 	p.waitForConnection()
 	// Reset run error in the event of a successful connection.
 	p.runError = nil
+	p.requestedEpoch = 0
 }
 
 // subscribePendingHeaders subscribes to pandora client from latest saved slot using given rpc client
@@ -146,11 +152,9 @@ func (p *Pandora) SubscribeEpochInfo(
 					return
 				}
 			case err := <-sub.Err():
-				if err != nil {
-					log.Debug("Got subscription error", "err", err, "ctx", "pandora-consensus")
-					p.subscriptionErrCh <- err
-					return
-				}
+				log.Debug("Got subscription error", "err", err, "ctx", "pandora-consensus")
+				p.subscriptionErrCh <- err
+				return
 			case <-p.ctx.Done():
 				log.Debug("Received cancelled context, closing existing epoch info subscription", "ctx", "pandora-consensus")
 				return
