@@ -41,4 +41,7 @@ var (
 
 	// ErrEpochNotFound for pandora if epoch info not found then it will return an error
 	ErrEpochNotFound = errors.New("Epoch info not found")
+
+	// ErrSigFailedToVerify for pandora if signature not verified
+	ErrSigFailedToVerify    = errors.New("signature did not verify")
 )

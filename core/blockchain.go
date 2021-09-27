@@ -86,6 +86,7 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+	errSubscriptionFailed   = errors.New("rpc subscription error")
 )
 
 const (
@@ -228,8 +229,7 @@ type BlockChain struct {
 	confirmedBlockHashes   event.Feed                     // orchestrator client will pass fetched response using this event.
 
 	// pandora-orchestrator data passing
-	orcClientSubscriber event.Subscription
-	blockConfirmationCh chan *pandora_orcclient.BlockStatus
+	blockConfirmationCh chan struct{}
 	confiramtionExitCh  chan struct{}
 }
 
@@ -278,15 +278,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:                        engine,
 		vmConfig:                      vmConfig,
 		pendingHeaderContainer:        headerContainer,
-		blockConfirmationCh:           make(chan *pandora_orcclient.BlockStatus),
+		blockConfirmationCh:           make(chan struct{}),
 		confiramtionExitCh:            make(chan struct{}),
 		orchestratorConfirmationCache: orchCache,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
-
-	bc.orcClientSubscriber = bc.SubscribeConfirmedBlockHashFetcher(bc.blockConfirmationCh)
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -437,9 +435,24 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.isPandora() {
 		// consensus engine is on pandora mode. Now run the orchestrator go routine
 		go func() {
-			err := bc.pandoraBlockHashConfirmationFetcher()
-			if err != nil {
-				log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
+			ctx := context.Background()
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for i := 0; i < 10; {
+				select {
+				case <-ticker.C:
+					err := bc.pandoraBlockHashConfirmationFetcher(ctx)
+					if err != nil {
+						log.Error("error found while fetching confirmed block hashes from orchestrator", "err", err)
+						if err == errSubscriptionFailed {
+							i++ // retry again
+							continue
+						}
+						break
+					}
+				default:
+					continue
+				}
 			}
 		}()
 	}
@@ -463,7 +476,7 @@ func (bc *BlockChain) isPandora() bool {
 // If it gets any response, it will send that response in the feed.
 // Miner and blockchain both are initialized from the backend. So this is a suitable place
 // to write subscriber. Both Miner and blockchain can subscribe for the event from Ethereum.
-func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
+func (bc *BlockChain) pandoraBlockHashConfirmationFetcher(ctx context.Context) error {
 
 	var orcClient *pandora_orcclient.OrcClient
 
@@ -476,7 +489,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		}
 
 		var err error
-		orcClient, err = pandora_orcclient.Dial(orcClientObject[0])
+		orcClient, err = pandora_orcclient.DialContext(ctx, orcClientObject[0])
 		if err != nil {
 			return err
 		}
@@ -497,7 +510,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 	}
 
 	responseContainer := make(chan *pandora_orcclient.BlockStatus)
-	sub := orcClient.SubscribeConfirmationStatusFromOrchestrator(context.Background(), requestForOrch, responseContainer)
+	sub := orcClient.SubscribeConfirmationStatusFromOrchestrator(ctx, requestForOrch, responseContainer)
 	defer sub.Unsubscribe()
 
 	for {
@@ -505,13 +518,19 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 		case <-bc.confiramtionExitCh:
 			return errors.New("process interrupt happened. so exiting")
 		case err := <-sub.Err():
-			return err
+			log.Error("subscription error", "error", err)
+			return errSubscriptionFailed
 		case blockStats := <-responseContainer:
 			log.Debug("received response from orchestrator", "blockstats", *blockStats)
 			// simply put the responses into the cache
 			if blockStats != nil {
 				bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
-				bc.confirmedBlockHashes.Send(blockStats)
+				select {
+				case bc.blockConfirmationCh <- struct{}{}:
+					log.Debug("sending confirmation to the receiver", "blockStats", *blockStats)
+				default:
+					log.Debug("received new confirmation from orchestrator. but blockConfirmation channel is busy")
+				}
 			}
 
 		case <-bc.quit:
@@ -541,10 +560,6 @@ func preparePanBlockHashRequest(header *types.Header) (*pandora_orcclient.BlockH
 	}
 	log.Debug("preparing request", "block number", header.Number, "slot number", pandoraExtraData.Slot)
 	return &pandora_orcclient.BlockHash{Slot: pandoraExtraData.Slot, Hash: header.Hash()}, nil
-}
-
-func (bc *BlockChain) SubscribeConfirmedBlockHashFetcher(ch chan<- *pandora_orcclient.BlockStatus) event.Subscription {
-	return bc.scope.Track(bc.confirmedBlockHashes.Subscribe(ch))
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1621,6 +1636,18 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 	go func() {
 		defer wg.Done()
 		ticker := time.NewTicker(2 * time.Second)
+
+		checkStatus := func() pandora_orcclient.Status {
+			if stat, found := bc.orchestratorConfirmationCache.Get(block.Hash()); found {
+				status = stat.(pandora_orcclient.Status)
+				log.Debug("found status", "status", status, "blockNumber", block.NumberU64())
+				// we've worked with it. So remove it
+				bc.orchestratorConfirmationCache.Remove(block.Hash())
+				return status
+			}
+			return pandora_orcclient.Pending
+		}
+
 		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			select {
 			case <-bc.confiramtionExitCh:
@@ -1631,27 +1658,27 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 				// so I'm just downloading
 				// halt and get orchestrator confirmation
 				log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-				if stat, found := bc.orchestratorConfirmationCache.Get(block.Hash()); found {
-					status = stat.(pandora_orcclient.Status)
-					log.Debug("found status", "status", status)
-					if status != pandora_orcclient.Pending {
-						// if status is invalid or correct then break the loop
-						break
-					}
-					// we've worked with it. So remove it
-					bc.orchestratorConfirmationCache.Remove(block.Hash())
+				status = checkStatus()
+				log.Debug("check status", "status", status, "blockNumber", block.NumberU64(), "blockHash", block.Hash())
+				// we've worked with it. So remove it
+				if status != pandora_orcclient.Pending {
+					// if status is invalid or correct then break the loop
+					break
 				}
-			case <- ticker.C:
-				log.Debug("tick!!!! no status received yet from orchestrator", "retryLimit", retryLimit)
+			case <-ticker.C:
+				log.Debug("tick!!!")
+				status = checkStatus()
+				log.Debug("check status", "status", status, "blockNumber", block.NumberU64())
+				// we've worked with it. So remove it
+				if status != pandora_orcclient.Pending {
+					// if status is invalid or correct then break the loop
+					break
+				}
+				log.Debug("no status received yet from orchestrator", "retryLimit", retryLimit)
 				retryLimit--
 			case <-bc.quit:
 				log.Debug("closing verification loop")
 				stat, err = CanonStatTy, errors.New("exiting block confirmation due to exit signal")
-				return
-
-			case <-bc.orcClientSubscriber.Err():
-				log.Debug("closing verification loop. subscription closed")
-				stat, err = CanonStatTy, errors.New("exiting block confirmation due to closing orcClientSubscriber")
 				return
 			}
 		}
@@ -2010,13 +2037,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
 		return bc.insertSideChain(block, it)
-	// If epoch info not found then wait for getting the epoch info. Retry again and again. Don't save it into
-	// bad block. Otherwise when service will reconnect and send epoch, due to bad block it won't get downloaded.
-	// Downloader will treat it as bad block and discard it. But We don't know if it is actually a bad block.
-	// Don't process it. only return error.
-	//case errors.Is(err, consensus.ErrEpochNotFound):
-	//	log.Error("epoch not found. Maybe orchestrator is down or pandora cant establish connection with it", "number", block.NumberU64(), "hash", block.Hash())
-	//	return it.index, err
+	// Signature error can happen in two cases.
+	// 1. Malicious activity
+	// 2. Block maybe reverted to an epoch which is invalid now. Because maybe vanguard is updated and also update epoch info
+	// So just discard and redownload. If epoch info is expired then it will be updated soon so after redownload it may be valid
+	case errors.Is(err, consensus.ErrSigFailedToVerify):
+		log.Error("bls signature verification failed", "number", block.NumberU64(), "hash", block.Hash())
+		return it.index, err
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):

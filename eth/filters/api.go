@@ -290,7 +290,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				}
 				notifier.Notify(rpcSub.ID, h)
 			case rpcErr := <-rpcSub.Err():
-				log.Debug("error found in rpc subscription", rpcErr)
+				log.Debug("error found in rpc subscription", "error", rpcErr)
 				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
