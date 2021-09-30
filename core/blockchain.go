@@ -228,8 +228,7 @@ type BlockChain struct {
 	confirmedBlockHashes   event.Feed                     // orchestrator client will pass fetched response using this event.
 
 	// pandora-orchestrator data passing
-	orcClientSubscriber event.Subscription
-	blockConfirmationCh chan *pandora_orcclient.BlockStatus
+	blockConfirmationCh chan struct{}
 	confiramtionExitCh  chan struct{}
 }
 
@@ -278,7 +277,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:                        engine,
 		vmConfig:                      vmConfig,
 		pendingHeaderContainer:        headerContainer,
-		blockConfirmationCh:           make(chan *pandora_orcclient.BlockStatus),
+		blockConfirmationCh:           make(chan struct{}),
 		confiramtionExitCh:            make(chan struct{}),
 		orchestratorConfirmationCache: orchCache,
 	}
@@ -286,7 +285,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
-	bc.orcClientSubscriber = bc.SubscribeConfirmedBlockHashFetcher(bc.blockConfirmationCh)
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -511,7 +509,10 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher() error {
 			// simply put the responses into the cache
 			if blockStats != nil {
 				bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
-				bc.confirmedBlockHashes.Send(blockStats)
+				select {
+				case bc.blockConfirmationCh <- struct{}{}:
+					log.Debug("sending confirmation to the receiver", "blockStats", *blockStats)
+				}
 			}
 
 		case <-bc.quit:
@@ -541,10 +542,6 @@ func preparePanBlockHashRequest(header *types.Header) (*pandora_orcclient.BlockH
 	}
 	log.Debug("preparing request", "block number", header.Number, "slot number", pandoraExtraData.Slot)
 	return &pandora_orcclient.BlockHash{Slot: pandoraExtraData.Slot, Hash: header.Hash()}, nil
-}
-
-func (bc *BlockChain) SubscribeConfirmedBlockHashFetcher(ch chan<- *pandora_orcclient.BlockStatus) event.Subscription {
-	return bc.scope.Track(bc.confirmedBlockHashes.Subscribe(ch))
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1567,6 +1564,18 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 	go func() {
 		defer wg.Done()
 		ticker := time.NewTicker(2 * time.Second)
+
+		checkStatus := func() pandora_orcclient.Status{
+			if stat, found := bc.orchestratorConfirmationCache.Get(block.Hash()); found {
+				status = stat.(pandora_orcclient.Status)
+				log.Debug("found status", "status", status, "blockNumber", block.NumberU64())
+				// we've worked with it. So remove it
+				bc.orchestratorConfirmationCache.Remove(block.Hash())
+				return status
+			}
+			return pandora_orcclient.Pending
+		}
+
 		for retryLimit > 0 && status == pandora_orcclient.Pending {
 			select {
 			case <-bc.confiramtionExitCh:
@@ -1577,27 +1586,27 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 				// so I'm just downloading
 				// halt and get orchestrator confirmation
 				log.Debug("waiting to get block confirmation", "fetching...", retryLimit)
-				if stat, found := bc.orchestratorConfirmationCache.Get(block.Hash()); found {
-					status = stat.(pandora_orcclient.Status)
-					log.Debug("found status", "status", status)
-					if status != pandora_orcclient.Pending {
-						// if status is invalid or correct then break the loop
-						break
-					}
-					// we've worked with it. So remove it
-					bc.orchestratorConfirmationCache.Remove(block.Hash())
+				status = checkStatus()
+				log.Debug("check status", "status", status, "blockNumber", block.NumberU64(), "blockHash", block.Hash())
+				// we've worked with it. So remove it
+				if status != pandora_orcclient.Pending {
+					// if status is invalid or correct then break the loop
+					break
 				}
 			case <- ticker.C:
-				log.Debug("tick!!!! no status received yet from orchestrator", "retryLimit", retryLimit)
+				log.Debug("tick!!!")
+				status = checkStatus()
+				log.Debug("check status", "status", status, "blockNumber", block.NumberU64())
+				// we've worked with it. So remove it
+				if status != pandora_orcclient.Pending {
+					// if status is invalid or correct then break the loop
+					break
+				}
+				log.Debug("no status received yet from orchestrator", "retryLimit", retryLimit)
 				retryLimit--
 			case <-bc.quit:
 				log.Debug("closing verification loop")
 				stat, err = CanonStatTy, errors.New("exiting block confirmation due to exit signal")
-				return
-
-			case <-bc.orcClientSubscriber.Err():
-				log.Debug("closing verification loop. subscription closed")
-				stat, err = CanonStatTy, errors.New("exiting block confirmation due to closing orcClientSubscriber")
 				return
 			}
 		}
