@@ -450,6 +450,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 						}
 						break
 					}
+				default:
+					continue
 				}
 			}
 		}()
@@ -526,6 +528,8 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher(ctx context.Context) e
 				select {
 				case bc.blockConfirmationCh <- struct{}{}:
 					log.Debug("sending confirmation to the receiver", "blockStats", *blockStats)
+				default:
+					log.Debug("received new confirmation from orchestrator. but blockConfirmation channel is busy")
 				}
 			}
 
