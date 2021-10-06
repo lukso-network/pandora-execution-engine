@@ -44,7 +44,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: Release
-          draft: true
+          draft: false
           files: |
             ./build/bin/pandora-*
         env:
