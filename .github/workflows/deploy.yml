@@ -1,0 +1,79 @@
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - 'develop'
+
+jobs:
+  deploy:
+    strategy:
+      matrix:
+        go-version: [ 1.16 ]
+        platform: [ ubuntu-18.04 ]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Delete previous tag and release
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: v0.1.0-develop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create tag
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "refs/tags/v0.1.0-develop",
+              sha: context.sha
+            })
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+        id: go
+
+      - name: Install dependencies
+        run: |
+          go get -v -t -d ./...
+
+      - name: Run build
+        run: |
+          go run ./build/pan_ci.go install --pandora
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          tag_name: v0.1.0-develop
+          target_commitish: ${{ github.sha }}
+          files: |
+            ./build/bin/pandora-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GH_DISPATCH_TOKEN }}
+          repository: lukso-network/network-helm-charts
+          event-type: upgrade_dev
+          client-payload: '{"repository": "PANDORA", "tag": "v0.1.0-develop"}'
