@@ -6,8 +6,7 @@ on:
       - "v*"
 
 jobs:
-
-  build:
+  release:
     strategy:
       matrix:
         go-version: [ 1.16 ]
@@ -35,9 +34,11 @@ jobs:
       - name: Install dependencies
         run: |
           go get -v -t -d ./...
+
       - name: Run build
         run: |
           go run ./build/pan_ci.go install --pandora
+
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
