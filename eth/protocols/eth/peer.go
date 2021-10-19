@@ -21,8 +21,6 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
-
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -350,13 +348,11 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
 func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
-	log.Debug("SendBlockHeaders", "sending block headers to remote", headers)
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket(headers))
 }
 
 // ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
 func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
-	log.Debug("ReplyBlockHeaders", "sending block headers to remote", headers)
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
 		BlockHeadersPacket: headers,
@@ -366,14 +362,12 @@ func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
 // an already RLP encoded format.
 func (p *Peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
-	log.Debug("SendBlockBodiesRLP", "sending block bodies to remote", bodies)
 	return p2p.Send(p.rw, BlockBodiesMsg, bodies) // Not packed into BlockBodiesPacket to avoid RLP decoding
 }
 
 // ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
-	log.Debug("ReplyBlockBodiesRLP", "sending block bodies to remote", bodies)
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
 		RequestId:            id,
 		BlockBodiesRLPPacket: bodies,
@@ -397,13 +391,11 @@ func (p *Peer) ReplyNodeData(id uint64, data [][]byte) error {
 // SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
 func (p *Peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
-	log.Debug("SendReceiptsRLP", "sending block bodies to remote", receipts)
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
 }
 
 // ReplyReceiptsRLP is the eth/66 response to GetReceipts.
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
-	log.Debug("ReplyReceiptsRLP", "sending block bodies to remote", receipts)
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,
 		ReceiptsRLPPacket: receipts,
@@ -421,8 +413,11 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 		Reverse: false,
 	}
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-			RequestId:             rand.Uint64(),
+			RequestId:             id,
 			GetBlockHeadersPacket: &query,
 		})
 	}
@@ -440,8 +435,11 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-			RequestId:             rand.Uint64(),
+			RequestId:             id,
 			GetBlockHeadersPacket: &query,
 		})
 	}
@@ -459,8 +457,11 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
 		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-			RequestId:             rand.Uint64(),
+			RequestId:             id,
 			GetBlockHeadersPacket: &query,
 		})
 	}
@@ -484,8 +485,11 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int,
 func (p *Peer) RequestBodies(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetBlockBodiesMsg, BlockBodiesMsg, id)
 		return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
-			RequestId:            rand.Uint64(),
+			RequestId:            id,
 			GetBlockBodiesPacket: hashes,
 		})
 	}
@@ -497,8 +501,11 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetNodeDataMsg, NodeDataMsg, id)
 		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{
-			RequestId:         rand.Uint64(),
+			RequestId:         id,
 			GetNodeDataPacket: hashes,
 		})
 	}
@@ -509,8 +516,11 @@ func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetReceiptsMsg, ReceiptsMsg, id)
 		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{
-			RequestId:         rand.Uint64(),
+			RequestId:         id,
 			GetReceiptsPacket: hashes,
 		})
 	}
@@ -521,8 +531,11 @@ func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
 	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
 		return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{
-			RequestId:                   rand.Uint64(),
+			RequestId:                   id,
 			GetPooledTransactionsPacket: hashes,
 		})
 	}

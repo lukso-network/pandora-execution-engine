@@ -135,14 +135,15 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 			if path != name {
 				ttl = treeNodeTTL // Max TTL permitted by Cloudflare
 			}
-			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl})
+			record := cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl}
+			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, record)
 		} else if old.Content != val {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
 			old.Content = val
 			err = c.UpdateDNSRecord(context.Background(), c.zoneID, old.ID, old)
 		} else {
-			log.Info(fmt.Sprintf("Skipping %s = %q", path, val))
+			log.Debug(fmt.Sprintf("Skipping %s = %q", path, val))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to publish %s: %v", path, err)

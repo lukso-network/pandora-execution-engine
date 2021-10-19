@@ -31,12 +31,10 @@ var (
 
 	errInvalidValidatorSize = errors.New("invalid length of validator list")
 	errInvalidEpochInfo     = errors.New("invalid epoch info")
-	errEmptyOrchestratorUrl = errors.New("orchestrator url is empty")
 	errNoShardingBlock      = errors.New("no pandora sharding header available yet")
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
 	errOlderBlockTime       = errors.New("timestamp older than parent")
-	errSigFailedToVerify    = errors.New("signature did not verify")
 )
 
 // DialRPCFn dials to the given endpoint
@@ -72,8 +70,10 @@ type Pandora struct {
 	updatedSealHash      event.Feed
 	scope                event.SubscriptionScope
 
-	epochInfosMu sync.RWMutex
-	epochInfos   *lru.Cache
+	epochInfosMu   sync.RWMutex
+	epochInfos     *lru.Cache
+	epochRequest   chan uint64
+	requestedEpoch uint64
 }
 
 func New(
@@ -121,6 +121,7 @@ func New(
 		newSealRequestCh:     make(chan *sealTask),
 		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
+		epochRequest:         make(chan uint64),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
@@ -141,6 +142,33 @@ func (p *Pandora) Start(chain consensus.ChainReader) {
 		}
 		p.run(p.ctx.Done())
 	}()
+}
+
+// Close closes the exit channel to notify all backend threads exiting.
+func (p *Pandora) Close() error {
+	if p.cancel != nil {
+		defer p.cancel()
+	}
+	p.scope.Close()
+	return nil
+}
+
+func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{p},
+			Public:    true,
+		},
+	}
+}
+
+// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
+func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
+	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }
 
 // getCurrentBlock get current block
@@ -221,6 +249,14 @@ func (p *Pandora) run(done <-chan struct{}) {
 			// then simply save the block into current block. We will use it again
 			p.setCurrentBlock(sealRequest.block)
 
+		case expectedEpoch := <-p.epochRequest:
+			log.Debug("new epoch info is requested to download from orchestrator", "expected epoch", expectedEpoch, "already received epoch from", p.currentEpoch)
+			if expectedEpoch < p.currentEpoch {
+				// expected a previous epoch. so we should download them. we can just unsubscribe them and an error will occur which will auto reconnect again
+				p.requestedEpoch = expectedEpoch
+				p.subscription.Unsubscribe()
+			}
+
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			// Get sharding work API is called and we got slot number from vanguard
 			currentBlock := p.getCurrentBlock()
@@ -291,31 +327,4 @@ func (p *Pandora) run(done <-chan struct{}) {
 			return
 		}
 	}
-}
-
-// Close closes the exit channel to notify all backend threads exiting.
-func (p *Pandora) Close() error {
-	if p.cancel != nil {
-		defer p.cancel()
-	}
-	p.scope.Close()
-	return nil
-}
-
-func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// In order to ensure backward compatibility, we exposes ethash RPC APIs
-	// to both eth and ethash namespaces.
-	return []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &API{p},
-			Public:    true,
-		},
-	}
-}
-
-// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
-func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
-	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
 }

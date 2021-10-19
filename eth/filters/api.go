@@ -74,8 +74,8 @@ func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) 
 	return api
 }
 
-// timeoutLoop runs every 5 minutes and deletes filters that have not been recently used.
-// Tt is started when the api is created.
+// timeoutLoop runs at the interval set by 'timeout' and deletes filters
+// that have not been recently used. It is started when the API is created.
 func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 	var toUninstall []*Subscription
 	ticker := time.NewTicker(timeout)
@@ -290,7 +290,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				}
 				notifier.Notify(rpcSub.ID, h)
 			case rpcErr := <-rpcSub.Err():
-				log.Debug("error found in rpc subscription", rpcErr)
+				log.Debug("error found in rpc subscription", "error", rpcErr)
 				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():

@@ -7,6 +7,7 @@ package filters
 
 import (
 	"context"
+	"math/big"
 	"testing"
 	"time"
 
@@ -39,10 +40,13 @@ func TestPendingHeaderSubscription(t *testing.T) {
 		db                  = rawdb.NewMemoryDatabase()
 		backend             = &testBackend{db: db}
 		api                 = NewPublicFilterAPI(backend, false, deadline)
-		genesis             = new(core.Genesis).MustCommit(db)
-		chain, _            = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+		genesis             = new(core.Genesis)
 		pendingHeaderEvents = []core.PendingHeaderEvent{}
 	)
+	genesis.BaseFee = new(big.Int)
+	genDb,_ := genesis.Commit(db)
+	chain, _            := core.GenerateChain(params.TestChainConfig, genDb, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+
 
 	var headers []*types.Header
 
