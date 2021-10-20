@@ -40,7 +40,7 @@ func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
 		headerExtra.Slot = pandoraExtraData.Slot
 		extraData, _ = rlp.EncodeToBytes(headerExtra)
 	}
-	enc := []interface{}{
+	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -54,11 +54,7 @@ func (p *Pandora) SealHash(header *types.Header) (hash common.Hash) {
 		header.GasUsed,
 		header.Time,
 		extraData,
-	}
-	if header.BaseFee != nil {
-		enc = append(enc, header.BaseFee)
-	}
-	rlp.Encode(hasher, enc)
+	})
 	hasher.Sum(hash[:0])
 	return hash
 }
