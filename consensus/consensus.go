@@ -56,6 +56,9 @@ type ChainReader interface {
 
 	// CurrentBlock retrieves the current head block of the canonical chain.
 	CurrentBlock() *types.Block
+
+	// SetHead for reorg purpose. It will set head to the mentioned block number
+	SetHead(head uint64) error
 }
 
 // Engine is an algorithm agnostic consensus engine.
