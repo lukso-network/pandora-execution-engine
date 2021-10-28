@@ -50,7 +50,7 @@ type EpochInfoPayload struct {
 	ValidatorList    [32]string    `json:"validatorList"` // Validators public key list for specific epoch
 	EpochTimeStart   uint64        `json:"epochTimeStart"`
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
-	ReorgInfo        *Reorg        `json:"reorg_info`
+	ReorgInfo        *Reorg        `json:"reorg_info"`
 }
 
 // ExtraData
