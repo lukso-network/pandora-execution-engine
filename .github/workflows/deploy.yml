@@ -3,7 +3,7 @@ name: Build and deploy
 on:
   push:
     branches:
-      - 'develop'
+      - 'v0.3.0-develop'
 
 jobs:
   deploy:
@@ -19,7 +19,7 @@ jobs:
         uses: dev-drprasad/delete-tag-and-release@v0.2.0
         with:
           delete_release: true
-          tag_name: v0.1.0-develop
+          tag_name: v0.3.0-develop
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -31,7 +31,7 @@ jobs:
             github.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: "refs/tags/v0.1.0-develop",
+              ref: "refs/tags/v0.3.0-develop",
               sha: context.sha
             })
 
@@ -63,17 +63,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: false
-          tag_name: v0.1.0-develop
+          tag_name: v0.3.0-develop
           target_commitish: ${{ github.sha }}
           files: |
             ./build/bin/pandora-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.GH_DISPATCH_TOKEN }}
-          repository: lukso-network/network-helm-charts
-          event-type: upgrade_dev
-          client-payload: '{"repository": "PANDORA", "tag": "v0.1.0-develop"}'
