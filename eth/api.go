@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"math/big"
 	"os"
@@ -352,6 +353,122 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		})
 	}
 	return results, nil
+}
+
+func (api *PrivateDebugAPI) SetBlock(block *types.Block) (success bool, err error) {
+	blockChain := api.eth.blockchain
+	blockHash := block.Hash()
+	blockNumber := block.NumberU64()
+	parentBlockNumber := blockNumber - 1
+
+	// Debatable if it should be that way, maybe this check is bad.
+	if blockChain.HasBlock(blockHash, blockNumber) {
+		err = errors.New(fmt.Sprintf(
+			"block already exsits, blockNumber: %d, blockHash: %s",
+			block.NumberU64(),
+			block.Hash().String(),
+		))
+		log.Error(err.Error())
+
+		return
+	}
+
+	parentHash := block.ParentHash()
+
+	// If parent is not present do nothing
+	if !blockChain.HasBlock(parentHash, parentBlockNumber) {
+		err = errors.New(fmt.Sprintf(
+			"parent hash does not exist for specified block, blockNumber: %d, blockHash: %s",
+			block.NumberU64(),
+			block.Hash().String(),
+		))
+		log.Error(err.Error())
+
+		return
+	}
+
+	if blockChain.HasBlockAndState(blockHash, blockNumber) {
+		err = blockChain.FastSyncCommitHead(block.Hash())
+		success = nil == err
+
+		return
+	}
+
+	currentBlock := blockChain.CurrentBlock()
+	currentBlockNumber := currentBlock.NumberU64()
+	isTooFar := blockNumber > currentBlockNumber && blockNumber != currentBlockNumber+1
+
+	if isTooFar {
+		err = fmt.Errorf(
+			"block is too far, accepting only +1. CurrentBlock: %d, InsertingBlockAttempt: %d",
+			currentBlockNumber,
+			blockNumber,
+		)
+
+		log.Error(err.Error())
+
+		return
+	}
+
+	parentBlock := blockChain.GetBlock(parentHash, parentBlockNumber)
+
+	if nil == parentBlock {
+		err = fmt.Errorf(
+			"parent block not found. ParentHash: %s, ParentBlockNumber: %d",
+			parentHash.String(),
+			parentBlockNumber,
+		)
+		log.Error(err.Error())
+
+		return
+	}
+
+	parentBlockHash := parentBlock.Hash()
+	isContinuousInsert := parentBlock.Hash() == parentHash
+
+	if !isContinuousInsert {
+		err = fmt.Errorf(
+			"parent hash mismatch. ParentHash: %s, ParentHashFromBC: %s",
+			parentHash.String(),
+			parentBlockHash,
+		)
+		log.Error(err.Error())
+
+		return
+	}
+
+	// All good, lets try to set to parent and insert on top of parent
+	err = blockChain.SetHead(parentBlockNumber)
+
+	if nil != err {
+		log.Error("could not set head", "err", err.Error())
+
+		return
+	}
+
+	chainBlocks := make([]*types.Block, 1)
+	headerBlocks := make([]*types.Header, 1)
+	headerBlocks[0] = block.Header()
+	headerIndex, err := blockChain.InsertHeaderChain(headerBlocks, 0)
+
+	if nil != err {
+		log.Error("error in insert headerChain", "index", headerIndex, "err", err)
+
+		return
+	}
+
+	chainBlocks[0] = block
+	blockIndex, err := blockChain.InsertChain(chainBlocks)
+
+	if nil != err {
+		log.Error("error in insert chain", "index", blockIndex, "err", err)
+
+		return
+	}
+
+	success = true
+
+	return
 }
 
 // AccountRangeMaxResults is the maximum number of results to be returned per call
