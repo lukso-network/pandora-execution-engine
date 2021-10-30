@@ -118,10 +118,10 @@ func New(
 
 		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
-		newSealRequestCh:     make(chan *sealTask),
-		subscriptionErrCh:    make(chan error),
+		newSealRequestCh:     make(chan *sealTask, 1),
+		subscriptionErrCh:    make(chan error, 1),
 		works:                make(map[common.Hash]*types.Block),
-		epochRequest:         make(chan uint64),
+		epochRequest:         make(chan uint64, 1),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
@@ -180,8 +180,8 @@ func (p *Pandora) getCurrentBlock() *types.Block {
 
 func (p *Pandora) setCurrentBlock(block *types.Block) {
 	p.currentBlockMu.Lock()
+	defer p.currentBlockMu.Unlock()
 	p.currentBlock = block
-	p.currentBlockMu.Unlock()
 }
 
 func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) [4]string {
