@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	errPandoraStopped         = errors.New("pandora stopped")
-	errShardingHeaderNotFound = errors.New("new pandora sharding header not found")
+	errPandoraStopped = errors.New("pandora stopped")
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -40,8 +39,6 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 		log.Debug("sent sharding info request to fetch channel")
 	case <-api.pandora.ctx.Done():
 		return emptyRes, errPandoraStopped
-	default:
-		return emptyRes, errShardingHeaderNotFound
 	}
 	select {
 	case shardingInfo := <-shardingInfoCh:
@@ -49,8 +46,6 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 		return shardingInfo, nil
 	case err := <-errorCh:
 		return emptyRes, err
-	default:
-		return emptyRes, errShardingHeaderNotFound
 	}
 }
 
