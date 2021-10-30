@@ -433,6 +433,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// check if we are running pandora engine. If so, only then call the go routine
 	if bc.isPandora() {
+		// TODO(Atif): Remove this ResumeL15ProdTestnet method after successfully l15 prod testnet resume
+		bc.ResumeL15ProdTestnet()
+
 		// consensus engine is on pandora mode. Now run the orchestrator go routine
 		go func() {
 			ctx := context.Background()
@@ -2808,4 +2811,23 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 // SubscribePendingHeaderEvent registers a subscription of *types.Header
 func (bc *BlockChain) SubscribePendingHeaderEvent(ch chan<- PendingHeaderEvent) event.Subscription {
 	return bc.scope.Track(bc.pendingHeaderContainer.pndHeaderFeed.Subscribe(ch))
+}
+
+// TODO(Atif): will remove this function after resuming l15 production testnet
+func (bc *BlockChain) ResumeL15ProdTestnet() {
+	resetBlockNumber := uint64(4727)
+	l15ProdValidBlock4728 := common.HexToHash("0xd5aa89dff5365a87d6ed489a58c4e9d570e90bce327c2d51449f9e9e2917f588")
+	b := bc.GetBlock(l15ProdValidBlock4728, 4828)
+	if b != nil {
+		// Setting head to "0xfccd8d44c6554f390556e7a6d48670fa13147dade6824993725bdb27868f7e01"
+		if err := bc.SetHead(resetBlockNumber); err != nil {
+			log.Warn("Failed to resume l15 prod testnet. Could not reset head at block height %v", resetBlockNumber)
+		}
+		index, err := bc.InsertChain([]*types.Block{b})
+		if err != nil {
+			log.Warn("Failed to resume l15 prod testnet, could not insert chain the side chain block with "+
+				"hash: %v and index %v", l15ProdValidBlock4728, index)
+		}
+		log.Info("Successfully resume l15 prod testnet. Current head %v with hash %v", 4728, l15ProdValidBlock4728)
+	}
 }
