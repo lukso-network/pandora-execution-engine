@@ -119,7 +119,7 @@ func New(
 		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
 		newSealRequestCh:     make(chan *sealTask),
-		subscriptionErrCh:    make(chan error),
+		subscriptionErrCh:    make(chan error, 1),
 		works:                make(map[common.Hash]*types.Block),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
@@ -293,12 +293,6 @@ func (p *Pandora) run(done <-chan struct{}) {
 					submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
 					"curBlockNum", p.getCurrentBlock().NumberU64(), "err", err.Error())
 				submitSignatureData.errc <- err
-				// If we get any epochNotFoundErr in submitWork method, then re-subscribe to orchestrator from expected epoch
-				if errors.Is(err, consensus.ErrEpochNotFound) {
-					log.Debug("Retrying epoch info subscription", "requestedEpoch", p.requestedEpoch)
-					p.subscription.Unsubscribe()
-					p.retryToConnectAndSubscribe(err)
-				}
 			}
 
 		case <-ticker.C:
