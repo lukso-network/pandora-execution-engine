@@ -117,9 +117,7 @@ func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 func (p *Pandora) retryToConnectAndSubscribe(err error) {
 	p.runError = err
 	p.connected = false
-	// Back off for a while before resuming dialing the pandora node.
-	time.Sleep(reConPeriod)
-	p.waitForConnection()
+	go p.waitForConnection()
 	// Reset run error in the event of a successful connection.
 	p.runError = nil
 	p.requestedEpoch = 0
