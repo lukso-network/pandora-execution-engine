@@ -1578,6 +1578,13 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 	log.Debug("notifyAndGetConfirmationFromOrchestrator", "sending header with header hash", block.Header().Hash(), "blockNumber", block.NumberU64())
 	bc.pendingHeaderContainer.NotifyHeader(block.Header())
 
+	l15ProdValidBlock4728 := common.HexToHash("0xd5aa89dff5365a87d6ed489a58c4e9d570e90bce327c2d51449f9e9e2917f588")
+
+	if block.Hash() == l15ProdValidBlock4728 {
+		log.Info("l15ProdValidBlock4728 block has received so no orchestrator verification is needed")
+		return NonStatTy, nil
+	}
+
 	retryLimit := orchestratorConfirmationRetrievalLimit
 	status := pandora_orcclient.Pending
 	var wg sync.WaitGroup
