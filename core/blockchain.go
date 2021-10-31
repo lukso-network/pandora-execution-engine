@@ -2818,7 +2818,7 @@ func (bc *BlockChain) ResumeL15ProdTestnet() {
 	resetBlockNumber := uint64(4727)
 	newHead := uint64(4828)
 	l15ProdValidBlock4728 := common.HexToHash("0xd5aa89dff5365a87d6ed489a58c4e9d570e90bce327c2d51449f9e9e2917f588")
-	b := bc.GetBlock(l15ProdValidBlock4728, newHead)
+	b := bc.GetBlockByHash(l15ProdValidBlock4728)
 	if b != nil {
 		// Setting head to "0xfccd8d44c6554f390556e7a6d48670fa13147dade6824993725bdb27868f7e01"
 		if err := bc.SetHead(resetBlockNumber); err != nil {
