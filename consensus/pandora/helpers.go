@@ -116,6 +116,13 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 
 func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
 	// decode the extraData byte
+
+	l15ProdValidBlock4728 := common.HexToHash("0xd5aa89dff5365a87d6ed489a58c4e9d570e90bce327c2d51449f9e9e2917f588")
+	if header.Hash() == l15ProdValidBlock4728 {
+		log.Info("l15ProdValidBlock4728 is received no need bls sign verification")
+		return nil
+	}
+
 	extraDataWithBLSSig := new(ExtraDataSealed)
 	if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
 		log.Error("Failed to decode extraData with signature", "err", err)
