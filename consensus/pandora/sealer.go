@@ -69,7 +69,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 		log.Warn("Invalid bls signature submitted from validator",
 			"sealHash", sealHash, "elapsed", common.PrettyDuration(time.Since(start)),
 			"err", err, "slot", pandoraExtraData.Slot, "blockNumber", header.Number)
-		return false, errInvalidBlsSignature
+		return false, err
 	}
 
 	// Make sure the result channel is assigned.

@@ -294,7 +294,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 					"curBlockNum", p.getCurrentBlock().NumberU64(), "err", err.Error())
 				submitSignatureData.errc <- err
 				// If we get any epochNotFoundErr in submitWork method, then re-subscribe to orchestrator from expected epoch
-				if errors.Is(err, errInvalidBlsSignature) {
+				if errors.Is(err, consensus.ErrEpochNotFound) {
 					log.Debug("Retrying epoch info subscription", "requestedEpoch", p.requestedEpoch)
 					p.subscription.Unsubscribe()
 					p.retryToConnectAndSubscribe(err)
