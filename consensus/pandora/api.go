@@ -23,7 +23,7 @@ type API struct {
 
 // GetShardingWork returns a work package for external miner.
 func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slotNumber uint64, epoch uint64) ([4]string, error) {
-	log.Debug(">>> GetShardingWork", "parentHash", parentHash, "blockNumber", blockNumber, "slot number", slotNumber, "epoch", epoch)
+	log.Debug("api: GetShardingWork", "parentHash", parentHash, "blockNumber", blockNumber, "slot number", slotNumber, "epoch", epoch)
 	emptyRes := [4]string{}
 	if api.pandora == nil {
 		return emptyRes, errors.New("pandora engine not supported")
@@ -39,8 +39,6 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 		log.Debug("sent sharding info request to fetch channel")
 	case <-api.pandora.ctx.Done():
 		return emptyRes, errPandoraStopped
-	default:
-		return emptyRes, errors.New("nothing found")
 	}
 	select {
 	case shardingInfo := <-shardingInfoCh:
@@ -48,8 +46,6 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 		return shardingInfo, nil
 	case err := <-errorCh:
 		return emptyRes, err
-	default:
-		return emptyRes, errors.New("nothing found")
 	}
 }
 
@@ -58,7 +54,7 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 // Note either an invalid solution, a stale work a non-existent work will return false.
 // This submit work contains BLS storing feature.
 func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSignatureString string) bool {
-	log.Trace(">>>>> SubmitworkBLS", "nonce", nonce, "hash", hash, "hexSignatureString", hexSignatureString)
+	log.Trace("api: SubmitWorkBLS", "nonce", nonce, "hash", hash, "hexSignatureString", hexSignatureString)
 	if api.pandora == nil {
 		return false
 	}

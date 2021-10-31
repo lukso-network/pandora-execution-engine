@@ -1,6 +1,7 @@
 package pandora
 
 import (
+	"github.com/pkg/errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,11 +23,11 @@ func (pan *Pandora) Seal(chain consensus.ChainHeaderReader, block *types.Block, 
 	return nil
 }
 
-func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, blsSignatureBytes *BlsSignatureBytes) bool {
+func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, blsSignatureBytes *BlsSignatureBytes) (bool, error) {
 	currentBlock := pan.getCurrentBlock()
 	if currentBlock == nil {
 		log.Error("No block found while submitting work", "sealhash", sealHash)
-		return false
+		return false, errors.New("Current sharding block not found")
 	}
 
 	// Make sure the work submitted is present
@@ -34,7 +35,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	if block == nil {
 		log.Warn("Work submitted but none pending", "sealHash", sealHash,
 			"blockNumber", currentBlock.NumberU64())
-		return false
+		return false, errors.New("Work submitted but none pending")
 	}
 	// Verify the correctness of submitted result.
 	header := block.Header()
@@ -43,7 +44,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	if nil != err {
 		log.Error("error while forming signature from bytes", "err", err,
 			"methodName", "Seal", "blockNumber", header.Number)
-		return false
+		return false, errors.New("Invalid signature bytes")
 	}
 
 	pandoraExtraData := new(ExtraData)
@@ -51,7 +52,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	if nil != err {
 		log.Error("rlp decode failed while converting pandora Extra data", "error", err,
 			"blockNumber", header.Number)
-		return false
+		return false, errors.New("RLP decode failed")
 	}
 
 	extraDataWithSignature.FromExtraDataAndSignature(*pandoraExtraData, blsSignature)
@@ -59,7 +60,7 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 	if nil != err {
 		log.Error("Invalid extraData in header", "sealHash", sealHash, "err", err,
 			"slot", pandoraExtraData.Slot, "blockNumber", header.Number)
-		return false
+		return false, errors.New("Invalid extraData in header")
 	}
 
 	start := time.Now()
@@ -68,13 +69,13 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 		log.Warn("Invalid bls signature submitted from validator",
 			"sealHash", sealHash, "elapsed", common.PrettyDuration(time.Since(start)),
 			"err", err, "slot", pandoraExtraData.Slot, "blockNumber", header.Number)
-		return false
+		return false, err
 	}
 
 	// Make sure the result channel is assigned.
 	if pan.results == nil {
 		log.Error("Pandora result channel is empty, submitted mining result is rejected")
-		return false
+		return false, errors.New("Pandora result channel is empty, submitted mining result is rejected")
 	}
 	log.Debug("Verified correct sharding info", "sealHash", sealHash,
 		"elapsed", common.PrettyDuration(time.Since(start)), "slot", pandoraExtraData.Slot, "blockNumber", header.Number)
@@ -88,14 +89,14 @@ func (pan *Pandora) submitWork(nonce types.BlockNonce, sealHash common.Hash, bls
 		case pan.results <- solution:
 			log.Debug("Sharding block submitted is acceptable", "number", solution.NumberU64(),
 				"sealHash", sealHash, "hash", solution.Hash(), "slot", pandoraExtraData.Slot)
-			return true
+			return true, nil
 		default:
 			log.Warn("Sealing result is not read by worker", "mode", "remote", "sealHash", sealHash)
-			return false
+			return false, errors.New("Sealing result is not read by worker")
 		}
 	}
 	// The submitted block is too old to accept, drop it.
 	log.Warn("Sharding block submitted is too old", "number", solution.NumberU64(),
 		"sealHash", sealHash, "hash", solution.Hash(), "slot", pandoraExtraData.Slot)
-	return false
+	return false, errors.New("Sharding block submitted is too old")
 }

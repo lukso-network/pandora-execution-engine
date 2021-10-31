@@ -35,6 +35,7 @@ var (
 	errInvalidParentHash    = errors.New("invalid parent hash")
 	errInvalidBlockNumber   = errors.New("invalid block number")
 	errOlderBlockTime       = errors.New("timestamp older than parent")
+	errInvalidBlsSignature  = errors.New("Invalid bls signature submitted from validator")
 )
 
 // DialRPCFn dials to the given endpoint
@@ -72,7 +73,6 @@ type Pandora struct {
 
 	epochInfosMu   sync.RWMutex
 	epochInfos     *lru.Cache
-	epochRequest   chan uint64
 	requestedEpoch uint64
 }
 
@@ -118,10 +118,9 @@ func New(
 
 		fetchShardingInfoCh:  make(chan *shardingInfoReq),
 		submitShardingInfoCh: make(chan *shardingResult),
-		newSealRequestCh:     make(chan *sealTask, 1),
-		subscriptionErrCh:    make(chan error, 1),
+		newSealRequestCh:     make(chan *sealTask),
+		subscriptionErrCh:    make(chan error),
 		works:                make(map[common.Hash]*types.Block),
-		epochRequest:         make(chan uint64, 1),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
 	}
 }
@@ -249,14 +248,6 @@ func (p *Pandora) run(done <-chan struct{}) {
 			// then simply save the block into current block. We will use it again
 			p.setCurrentBlock(sealRequest.block)
 
-		case expectedEpoch := <-p.epochRequest:
-			log.Debug("new epoch info is requested to download from orchestrator", "expected epoch", expectedEpoch, "already received epoch from", p.currentEpoch)
-			if expectedEpoch < p.currentEpoch {
-				// expected a previous epoch. so we should download them. we can just unsubscribe them and an error will occur which will auto reconnect again
-				p.requestedEpoch = expectedEpoch
-				p.subscription.Unsubscribe()
-			}
-
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			// Get sharding work API is called and we got slot number from vanguard
 			currentBlock := p.getCurrentBlock()
@@ -293,13 +284,21 @@ func (p *Pandora) run(done <-chan struct{}) {
 			}
 
 		case submitSignatureData := <-p.submitShardingInfoCh:
-			if p.submitWork(submitSignatureData.nonce, submitSignatureData.hash, submitSignatureData.blsSeal) {
+			status, err := p.submitWork(submitSignatureData.nonce, submitSignatureData.hash, submitSignatureData.blsSeal)
+			if status && err == nil {
 				log.Debug("submitWork is successful", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash)
 				submitSignatureData.errc <- nil
 			} else {
-				log.Debug("submitWork is failed", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
-					"current block number", p.getCurrentBlock().NumberU64())
-				submitSignatureData.errc <- errors.New("invalid submit work request")
+				log.Warn("submitWork is failed", "nonce", submitSignatureData.nonce, "hash",
+					submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
+					"curBlockNum", p.getCurrentBlock().NumberU64(), "err", err.Error())
+				submitSignatureData.errc <- err
+				// If we get any epochNotFoundErr in submitWork method, then re-subscribe to orchestrator from expected epoch
+				if errors.Is(err, consensus.ErrEpochNotFound) {
+					log.Debug("Retrying epoch info subscription", "requestedEpoch", p.requestedEpoch)
+					p.subscription.Unsubscribe()
+					p.retryToConnectAndSubscribe(err)
+				}
 			}
 
 		case <-ticker.C:
@@ -319,7 +318,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 			// TODO- We need a fall-back support to connect with other orchestrator node for verifying incoming blocks when own orchestrator is down
 			// Try to check the connection and retry to establish the connection
 			p.retryToConnectAndSubscribe(err)
-			continue
+
 		case <-done:
 			p.isRunning = false
 			p.runError = nil
