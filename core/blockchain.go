@@ -2829,6 +2829,6 @@ func (bc *BlockChain) ResumeL15ProdTestnet() {
 			log.Warn("Failed to resume l15 prod testnet, could not insert chain the side chain block with "+
 				"hash: %v and index %v", l15ProdValidBlock4728, index)
 		}
-		log.Info("Successfully resume l15 prod testnet. Current head %v with hash %v", newHead, l15ProdValidBlock4728)
+		log.Info("Successfully resume l15 prod testnet. Current head %v with hash %v","head", newHead, "blockHash", l15ProdValidBlock4728)
 	}
 }
