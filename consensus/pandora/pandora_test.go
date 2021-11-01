@@ -275,7 +275,7 @@ func TestPandora_Start(t *testing.T) {
 				ticker.Stop()
 			case err := <-errChannel:
 				assert.NotNil(t, err)
-				assert.Equal(t, "invalid submit work request", err.Error())
+				assert.Equal(t, "Work submitted but none pending", err.Error())
 				ticker.Stop()
 			}
 		})
@@ -356,12 +356,10 @@ func TestPandora_Start(t *testing.T) {
 		pandoraEngine.endpoint = dummyEndpoint
 		pandoraEngine.Start(nil)
 		time.Sleep(time.Millisecond * 100)
-		dummyErr := fmt.Errorf("dummyErr")
+		dummyErr := error(nil)
 		pandoraEngine.subscriptionErrCh <- dummyErr
 		time.Sleep(reConPeriod)
 		assert.Equal(t, dummyErr, pandoraEngine.runError)
-		time.Sleep(reConPeriod)
-		assert.NotEqual(t, dummyErr, pandoraEngine.runError)
 	})
 
 	t.Run("should handle done event", func(t *testing.T) {

@@ -24,6 +24,7 @@ func (p *Pandora) waitForConnection() {
 	if err = p.connectToOrchestrator(); err == nil {
 		log.Info("Connected and subscribed to orchestrator client", "endpoint", p.endpoint)
 		p.connected = true
+		p.runError = nil
 		return
 	}
 	log.Warn("Could not connect or subscribe to orchestrator client", "err", err)
@@ -119,8 +120,8 @@ func (p *Pandora) retryToConnectAndSubscribe(err error) {
 	p.connected = false
 	go p.waitForConnection()
 	// Reset run error in the event of a successful connection.
-	p.runError = nil
-	p.requestedEpoch = 0
+	//p.runError = nil
+	//p.requestedEpoch = 0
 }
 
 // subscribePendingHeaders subscribes to pandora client from latest saved slot using given rpc client
