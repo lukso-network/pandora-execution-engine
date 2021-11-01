@@ -201,25 +201,25 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
 
-	if info.ReorgInfo != nil {
-		log.Info("reorg event received")
-		// reorg info is present so reorg is triggered in vanguard side
-		parentHash := common.BytesToHash(info.ReorgInfo.PanParentHash)
-		parentBlock := p.chain.GetHeaderByHash(parentHash)
-		if parentBlock != nil {
-			// it is an invalid behaviour. Pandora doesn't have the block that should be present
-			parentBlockNumber := parentBlock.Number.Uint64()
-			err := p.chain.SetHead(parentBlockNumber)
-			if err != nil {
-				log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
-				return err
-			}
-		} else {
-			// requested block is not present. Maybe the node is in previous block and received this Epoch.
-			// but we can just move on.
-			log.Info("failed to find block for reorg", "requested hash", parentHash)
+	if nil == info.ReorgInfo {
+		return nil
+	}
+	log.Info("reorg event received")
+	// reorg info is present so reorg is triggered in vanguard side
+	parentHash := common.BytesToHash(info.ReorgInfo.PanParentHash)
+	parentBlock := p.chain.GetHeaderByHash(parentHash)
+	if parentBlock != nil {
+		// it is an invalid behaviour. Pandora doesn't have the block that should be present
+		parentBlockNumber := parentBlock.Number.Uint64()
+		err := p.chain.SetHead(parentBlockNumber)
+		if err != nil {
+			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
+			return err
 		}
 	}
+	// requested block is not present. Maybe the node is in previous block and received this Epoch.
+	// but we can just move on.
+	log.Info("failed to find block for reorg", "requested hash", parentHash)
 
 	return nil
 }

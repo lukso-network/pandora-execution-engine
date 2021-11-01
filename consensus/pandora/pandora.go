@@ -289,7 +289,7 @@ func (p *Pandora) run(done <-chan struct{}) {
 				log.Debug("submitWork is successful", "nonce", submitSignatureData.nonce, "hash", submitSignatureData.hash)
 				submitSignatureData.errc <- nil
 			} else {
-				log.Warn("submitWork is failed", "nonce", submitSignatureData.nonce, "hash",
+				log.Warn("submitWork has failed", "nonce", submitSignatureData.nonce, "hash",
 					submitSignatureData.hash, "signature", submitSignatureData.blsSeal,
 					"curBlockNum", p.getCurrentBlock().NumberU64(), "err", err.Error())
 				submitSignatureData.errc <- err
