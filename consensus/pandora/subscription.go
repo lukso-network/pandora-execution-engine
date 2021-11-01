@@ -218,9 +218,5 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 			return err
 		}
 	}
-	// requested block is not present. Maybe the node is in previous block and received this Epoch.
-	// but we can just move on.
-	log.Info("failed to find block for reorg", "requested hash", parentHash)
-
 	return nil
 }
