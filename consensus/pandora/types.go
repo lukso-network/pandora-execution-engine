@@ -39,11 +39,18 @@ type EpochInfo struct {
 	SlotTimeDuration time.Duration
 }
 
+// Reorg holds reorg related information. Based on this info orchestrator can revert pandora blocks
+type Reorg struct {
+	VanParentHash []byte `json:"van_parent_hash"`
+	PanParentHash []byte `json:"pan_parent_hash"`
+}
+
 type EpochInfoPayload struct {
 	Epoch            uint64        `json:"epoch"`         // Epoch number
 	ValidatorList    [32]string    `json:"validatorList"` // Validators public key list for specific epoch
 	EpochTimeStart   uint64        `json:"epochTimeStart"`
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+	ReorgInfo        *Reorg        `json:"reorg_info"`
 }
 
 // ExtraData

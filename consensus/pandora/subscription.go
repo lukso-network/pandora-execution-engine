@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -22,6 +24,7 @@ func (p *Pandora) waitForConnection() {
 	if err = p.connectToOrchestrator(); err == nil {
 		log.Info("Connected and subscribed to orchestrator client", "endpoint", p.endpoint)
 		p.connected = true
+		p.runError = nil
 		return
 	}
 	log.Warn("Could not connect or subscribe to orchestrator client", "err", err)
@@ -115,12 +118,10 @@ func (p *Pandora) subscribe() (*rpc.ClientSubscription, error) {
 func (p *Pandora) retryToConnectAndSubscribe(err error) {
 	p.runError = err
 	p.connected = false
-	// Back off for a while before resuming dialing the pandora node.
-	time.Sleep(reConPeriod)
-	p.waitForConnection()
+	go p.waitForConnection()
 	// Reset run error in the event of a successful connection.
-	p.runError = nil
-	p.requestedEpoch = 0
+	//p.runError = nil
+	//p.requestedEpoch = 0
 }
 
 // subscribePendingHeaders subscribes to pandora client from latest saved slot using given rpc client
@@ -199,11 +200,27 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 		epochInfo.ValidatorList[i] = pubKey
 	}
 
-	// store epoch info in in-memeory cache
-	//if err := p.epochInfoCache.put(info.Epoch, epochInfo); err != nil {
-	//	return err
-	//}
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
+
+	if nil == info.ReorgInfo {
+		return nil
+	}
+	log.Info("reorg event received")
+	// reorg info is present so reorg is triggered in vanguard side
+	parentHash := common.BytesToHash(info.ReorgInfo.PanParentHash)
+	parentBlock := p.chain.GetHeaderByHash(parentHash)
+	if parentBlock != nil {
+		// it is an invalid behaviour. Pandora doesn't have the block that should be present
+		parentBlockNumber := parentBlock.Number.Uint64()
+		err := p.chain.SetHead(parentBlockNumber)
+		if err != nil {
+			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
+			return err
+		}
+	}
+	// requested block is not present. Maybe the node is in previous block and received this Epoch.
+	// but we can just move on.
+	log.Info("failed to find block for reorg", "requested hash", parentHash)
 
 	return nil
 }
