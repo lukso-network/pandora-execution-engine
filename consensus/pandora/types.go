@@ -12,6 +12,10 @@ const signatureSize = 96
 
 type BlsSignatureBytes [signatureSize]byte
 
+type TransactionPool interface {
+	AddLocal(tx *types.Transaction) error
+}
+
 // mineResult wraps the pow solution parameters for the specified block.
 type shardingResult struct {
 	nonce   types.BlockNonce

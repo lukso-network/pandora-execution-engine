@@ -3,6 +3,8 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -212,9 +214,44 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	if parentBlock != nil {
 		// it is an invalid behaviour. Pandora doesn't have the block that should be present
 		parentBlockNumber := parentBlock.Number.Uint64()
+		if err := p.revertTxs(parentBlockNumber + 1); err != nil {
+			log.Error("failed to revert transactions while reorg", "error", err)
+			return err
+		}
 		err := p.chain.SetHead(parentBlockNumber)
 		if err != nil {
 			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Pandora) revertTxs(fromBlock uint64) error {
+	if p.txPool == nil {
+		return fmt.Errorf("transaction pool is not set")
+	}
+	var deletedTxns types.Transactions
+	currentBlock := p.chain.CurrentBlock()
+	for currentBlock != nil && currentBlock.Number().Uint64() >= fromBlock {
+		deletedTxns = append(deletedTxns, currentBlock.Transactions()...)
+
+		currentBlock = p.chain.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64() - 1)
+	}
+
+	indexesBatch := p.chainDB.NewBatch()
+	for _, tx := range deletedTxns {
+		rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
+	}
+
+	if err := indexesBatch.Write(); err != nil {
+		log.Crit("Failed to delete useless indexes while reorg", "err", err)
+	}
+
+	// now add these transactions into the pool again
+	for _, tx := range deletedTxns {
+		err := p.txPool.AddLocal(tx)
+		if err != nil {
 			return err
 		}
 	}
