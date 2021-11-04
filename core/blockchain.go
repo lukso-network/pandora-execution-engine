@@ -1698,11 +1698,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
 	if bc.isPandora() {
-		stat, err := bc.notifyAndGetConfirmationFromOrchestrator(block)
-		if err != nil {
-			log.Error("found error while verify and notifying orchestrator", "error", err)
-			return stat, err
-		}
+		//stat, err := bc.notifyAndGetConfirmationFromOrchestrator(block)
+		//if err != nil {
+		//	log.Error("found error while verify and notifying orchestrator", "error", err)
+		//	return stat, err
+		//}
 	}
 
 	// Calculate the total difficulty of the block

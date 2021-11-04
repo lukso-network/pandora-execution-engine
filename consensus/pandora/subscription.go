@@ -214,12 +214,7 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	if parentBlock != nil {
 		// it is an invalid behaviour. Pandora doesn't have the block that should be present
 		parentBlockNumber := parentBlock.Number.Uint64()
-		if err := p.revertTxs(parentBlockNumber + 1); err != nil {
-			log.Error("failed to revert transactions while reorg", "error", err)
-			return err
-		}
-		err := p.chain.SetHead(parentBlockNumber)
-		if err != nil {
+		if err := p.RevertBlockAndTxs(parentBlockNumber); err != nil {
 			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
 			return err
 		}
@@ -227,9 +222,9 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	return nil
 }
 
-func (p *Pandora) revertTxs(fromBlock uint64) error {
+func (p *Pandora) deletedTxs(fromBlock uint64) (types.Transactions, error) {
 	if p.txPool == nil {
-		return fmt.Errorf("transaction pool is not set")
+		return nil, fmt.Errorf("transaction pool is not set")
 	}
 	var deletedTxns types.Transactions
 	currentBlock := p.chain.CurrentBlock()
@@ -237,6 +232,10 @@ func (p *Pandora) revertTxs(fromBlock uint64) error {
 		deletedTxns = append(deletedTxns, currentBlock.Transactions()...)
 
 		currentBlock = p.chain.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64() - 1)
+	}
+
+	for i, j := 0, len(deletedTxns)-1; i < j; i, j = i+1, j-1 {
+		deletedTxns[i], deletedTxns[j] = deletedTxns[j], deletedTxns[i]
 	}
 
 	indexesBatch := p.chainDB.NewBatch()
@@ -247,12 +246,29 @@ func (p *Pandora) revertTxs(fromBlock uint64) error {
 	if err := indexesBatch.Write(); err != nil {
 		log.Crit("Failed to delete useless indexes while reorg", "err", err)
 	}
+	return deletedTxns, nil
+}
+
+
+func (p *Pandora) RevertBlockAndTxs(fromBlock uint64) error {
+
+	deletedTxns , err := p.deletedTxs(fromBlock + 1)
+	if err != nil {
+		return err
+	}
+	err = p.chain.SetHead(fromBlock)
+	if err != nil {
+		return err
+	}
 
 	// now add these transactions into the pool again
 	for _, tx := range deletedTxns {
-		err := p.txPool.AddLocal(tx)
-		if err != nil {
-			return err
+		if !p.txPool.Has(tx.Hash()) {
+			// if transaction is not present in the pool and we are deleting the block then do push it into the pool
+			err := p.txPool.AddLocal(tx)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
 	"math/big"
 	"net"
 	"testing"
@@ -404,6 +405,17 @@ func (orchestratorApi *OrchestratorApi) MinimalConsensusInfo(
 	return
 }
 
+func (orc *OrchestratorApi) SteamConfirmedPanBlockHashes(
+	ctx context.Context,
+	request *pandora_orcclient.BlockHash,
+) (*rpc.Subscription, error){
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+	return rpcSub, nil
+}
 func makeOrchestratorServer(
 	t *testing.T,
 ) (listener net.Listener, server *rpc.Server, location string) {

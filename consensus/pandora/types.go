@@ -14,6 +14,7 @@ type BlsSignatureBytes [signatureSize]byte
 
 type TransactionPool interface {
 	AddLocal(tx *types.Transaction) error
+	Has(hash common.Hash) bool
 }
 
 // mineResult wraps the pow solution parameters for the specified block.

@@ -107,9 +107,9 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 	}
 
 	//verify bls signature
-	if err := p.VerifyBLSSignature(header); err != nil {
-		return err
-	}
+	//if err := p.VerifyBLSSignature(header); err != nil {
+	//	return err
+	//}
 
 	return nil
 }

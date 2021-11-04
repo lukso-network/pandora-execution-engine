@@ -17,6 +17,13 @@
 package core
 
 import (
+	"context"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/stretchr/testify/require"
+	"math/big"
 	"runtime"
 	"testing"
 	"time"
@@ -27,6 +34,49 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+func TestRevertTxs(t *testing.T) {
+	var (
+		dummyRpcFunc = pandora.DialRPCFn(func(endpoint string) (rpcClient *rpc.Client, err error) {
+			return rpc.Dial(endpoint)
+		})
+		cfg = &params.PandoraConfig{
+			GenesisStartTime: 0,
+			SlotsPerEpoch:    0,
+			SlotTimeDuration: 0,
+		}
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(100000000000000000)
+		urls = []string{"https://some.endpoint"}
+		dialGrpcFnc = dummyRpcFunc
+		db = rawdb.NewMemoryDatabase()
+		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc, rawdb.NewMemoryDatabase())
+		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Alloc: GenesisAlloc{address: {Balance:funds}}}).MustCommit(db)
+		chain, _ = NewBlockChain(db, nil, params.TestChainConfig, pandoraEngine, vm.Config{}, nil, nil)
+		pool = NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, chain)
+	)
+	pandoraEngine.SetTransactionPool(pool)
+	pandoraEngine.Start(chain)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, pandoraEngine, db, 100, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.BigToAddress(big.NewInt(int64(i))), big.NewInt(1000), params.TxGas, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		//if !pool.Has(tx.Hash()) {
+		//	err := pool.AddLocal(tx)
+		//	t.Log(tx.Nonce(), pool.Get(tx.Hash()))
+		//	require.NoError(t, err)
+		//}
+	})
+	_ , err := chain.InsertChain(blocks)
+	require.NoError(t, err, "insert chain failed")
+	require.Equal(t, chain.CurrentBlock(), blocks[len(blocks) - 1])
+	t.Log(pool.Get(blocks[5].Transactions()[0].Hash()))
+
+	err = pandoraEngine.RevertBlockAndTxs(51)
+	require.NoError(t, err)
+}
+
 
 // Tests that simple header verification works, for both good and bad blocks.
 func TestHeaderVerification(t *testing.T) {
