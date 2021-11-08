@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/pandora_orcclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 	"math/big"
@@ -37,6 +38,7 @@ import (
 
 func TestRevertTxs(t *testing.T) {
 	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 		dummyRpcFunc = pandora.DialRPCFn(func(endpoint string) (rpcClient *rpc.Client, err error) {
 			return rpc.Dial(endpoint)
 		})
@@ -53,28 +55,42 @@ func TestRevertTxs(t *testing.T) {
 		db = rawdb.NewMemoryDatabase()
 		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc, rawdb.NewMemoryDatabase())
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Alloc: GenesisAlloc{address: {Balance:funds}}}).MustCommit(db)
-		chain, _ = NewBlockChain(db, nil, params.TestChainConfig, pandoraEngine, vm.Config{}, nil, nil)
-		pool = NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, chain)
+		chain, _ = NewBlockChain(db, &CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.TestChainConfig, pandoraEngine, vm.Config{}, nil, nil)
 	)
+	txconfig := DefaultTxPoolConfig
+	txconfig.Journal = "" // Don't litter the disk with test journals
+	pool := NewTxPool(txconfig, params.TestChainConfig, chain)
+
 	pandoraEngine.SetTransactionPool(pool)
 	pandoraEngine.Start(chain)
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, pandoraEngine, db, 100, func(i int, b *BlockGen) {
+	defer pandoraEngine.Close()
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, pandoraEngine, db, 10, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.BigToAddress(big.NewInt(int64(i))), big.NewInt(1000), params.TxGas, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+		signer := types.LatestSigner(params.TestChainConfig)
+		tx, _ := types.SignNewTx(key, signer, &types.AccessListTx{
+			ChainID:  params.TestChainConfig.ChainID,
+			Nonce:    b.TxNonce(address),
+			To:       &aa,
+			Gas:      30000,
+			GasPrice: b.header.BaseFee,
+			AccessList: types.AccessList{{
+				Address:     aa,
+				StorageKeys: []common.Hash{{0}},
+			}},
+		})
 		b.AddTx(tx)
-		//if !pool.Has(tx.Hash()) {
-		//	err := pool.AddLocal(tx)
-		//	t.Log(tx.Nonce(), pool.Get(tx.Hash()))
-		//	require.NoError(t, err)
-		//}
+		if !pool.Has(tx.Hash()) {
+			err := pool.AddLocal(tx)
+			require.NoError(t, err)
+		}
 	})
 	_ , err := chain.InsertChain(blocks)
 	require.NoError(t, err, "insert chain failed")
 	require.Equal(t, chain.CurrentBlock(), blocks[len(blocks) - 1])
-	t.Log(pool.Get(blocks[5].Transactions()[0].Hash()))
 
-	err = pandoraEngine.RevertBlockAndTxs(51)
-	require.NoError(t, err)
+	err = pandoraEngine.RevertBlockAndTxs(5)
+	//require.NoError(t, err)
+	require.Equal(t, chain.CurrentBlock().NumberU64(), blocks[4].NumberU64())
 }
 
 
