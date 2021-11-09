@@ -1,0 +1,50 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        go-version: [ 1.16 ]
+        platform: [ ubuntu-18.04, macos-11, windows-latest ]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+        id: go
+
+      - name: Install dependencies
+        run: |
+          go get -v -t -d ./...
+
+      - name: Run build
+        run: |
+          go run ./build/pan_ci.go install --pandora
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release
+          draft: false
+          files: |
+            ./build/bin/pandora-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

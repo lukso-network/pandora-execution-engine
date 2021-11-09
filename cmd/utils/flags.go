@@ -18,6 +18,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io"
@@ -32,6 +33,9 @@ import (
 	"text/tabwriter"
 	"text/template"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -1863,6 +1867,15 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	var engine consensus.Engine
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
+	} else if config.Pandora != nil {
+		dialRPCClient := func(endpoint string) (*rpc.Client, error) {
+			rpcClient, err := rpc.Dial(endpoint)
+			if err != nil {
+				return nil, err
+			}
+			return rpcClient, nil
+		}
+		engine = pandora.New(context.Background(), config.Pandora, []string{}, dialRPCClient)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {

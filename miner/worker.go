@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/consensus/pandora"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -38,8 +40,6 @@ import (
 )
 
 const (
-	// resultQueueSize is the size of channel listening to sealing result.
-	resultQueueSize = 10
 
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
@@ -186,6 +186,10 @@ type worker struct {
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+
+	// if pandora is running then seal hash will be changed. track if is changed
+	updateTracker    chan pandora.SealHashUpdate
+	updateTrackerSub event.Subscription
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -206,17 +210,23 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
 		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
+		resultCh:           make(chan *types.Block), // TODO: ADD PANDORA CONDITION
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		updateTracker:      make(chan pandora.SealHashUpdate),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+
+	if pandoraEngine, pandoraRunning := worker.isPandora(); pandoraRunning {
+		// pandora is running so subscribe with event
+		worker.updateTrackerSub = pandoraEngine.SubscribeToUpdateSealHashEvent(worker.updateTracker)
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -235,6 +245,15 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		worker.startCh <- struct{}{}
 	}
 	return worker
+}
+
+// check if pandora is running. If so retrieve the engine
+func (w *worker) isPandora() (*pandora.Pandora, bool) {
+	// For pandora engine, it needs blockchain header reader
+	if pandoraEngine, ok := w.engine.(*pandora.Pandora); ok {
+		return pandoraEngine, ok
+	}
+	return nil, false
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
@@ -378,6 +397,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
 			if t.block.NumberU64()+staleThreshold <= number {
+				log.Debug("worker.go removing task from pending map", "sealHash", h)
 				delete(w.pendingTasks, h)
 			}
 		}
@@ -449,6 +469,12 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	defer func() {
+		if _, running := w.isPandora(); running {
+			// pandora is running so close subscription
+			w.updateTrackerSub.Unsubscribe()
+		}
+	}()
 
 	for {
 		select {
@@ -579,6 +605,7 @@ func (w *worker) taskLoop() {
 				continue
 			}
 			w.pendingMu.Lock()
+			log.Debug("worker.go putting task into pending task map", "sealHash", sealHash)
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
@@ -597,6 +624,20 @@ func (w *worker) taskLoop() {
 func (w *worker) resultLoop() {
 	for {
 		select {
+		case updatedInfo := <-w.updateTracker:
+			log.Debug("worker.go pandora engine send updated sealHash to worker.go", "prevSealHash", updatedInfo.PreviousHash, "newSealHash", updatedInfo.UpdatedHash)
+			w.pendingMu.Lock()
+			prevTask, exist := w.pendingTasks[updatedInfo.PreviousHash]
+			if exist {
+				log.Debug("worker.go task found with previousSealHash")
+				delete(w.pendingTasks, updatedInfo.PreviousHash)
+				w.pendingTasks[updatedInfo.UpdatedHash] = prevTask
+				log.Debug("worker.go task found with newSealHash")
+			} else {
+				log.Debug("worker.go task not found", "sealHash", updatedInfo.PreviousHash)
+			}
+			w.pendingMu.Unlock()
+
 		case block := <-w.resultCh:
 			// Short circuit when receiving empty result.
 			if block == nil {

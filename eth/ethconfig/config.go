@@ -18,12 +18,15 @@
 package ethconfig
 
 import (
+	"context"
 	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -37,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -207,6 +211,21 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
+	}
+	// If pandora engine is requested, set it up
+	if chainConfig.Pandora != nil {
+		log.Debug("Pandora engine is enabled. So setting up pandora engine")
+		if len(notify) < 1 {
+			log.Crit("Orchestrator endpoint was empty. Provide orchestrator endpoint in --notify flag")
+		}
+		dialRPCClient := func(endpoint string) (*rpc.Client, error) {
+			rpcClient, err := rpc.Dial(endpoint)
+			if err != nil {
+				return nil, err
+			}
+			return rpcClient, nil
+		}
+		return pandora.New(context.Background(), chainConfig.Pandora, notify, dialRPCClient)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -208,6 +210,98 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	}()
 
 	return headerSub.ID
+}
+
+// PandoraPendingHeaderFilter is responsible for passing parameter to NewPendingBlockHeaders function
+type PandoraPendingHeaderFilter struct {
+	FromBlockHash common.Hash `json:"fromBlockHash"`
+}
+
+// NewPendingBlockHeaders send a notification each time a new header block is added to the pending queue
+func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingFilter PandoraPendingHeaderFilter) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+	go func() {
+		// sending previous blocks to orchestrator
+		sender := func(windowStart, windowEnd uint64) {
+			for i := windowStart; i <= windowEnd; i++ {
+				temphead, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+				if temphead != nil && err == nil {
+					// if block exists and no error occurred then send it
+					log.Debug("Notifying to orchestrator", "block number", temphead.Number.Uint64())
+					notifier.Notify(rpcSub.ID, temphead)
+				}
+			}
+		}
+		// we are starting from block 1 because block 0 has no pandora extra data info. so sending it will create an error
+		windowStart, windowEnd := uint64(1), uint64(1)
+		header, _ := api.backend.HeaderByHash(ctx, pendingFilter.FromBlockHash)
+		if header != nil {
+			windowStart = header.Number.Uint64()
+		}
+		header, _ = api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if header != nil {
+			windowEnd = header.Number.Uint64()
+		}
+		log.Debug("NewPendingBlockHeaders sending", "start", windowStart, "end", windowEnd)
+		sender(windowStart, windowEnd)
+		// first send all available pending headers from the pending queue
+		pendingHeaders := api.backend.GetPendingHeadsSince(ctx, pendingFilter.FromBlockHash)
+		for _, pendingHeader := range pendingHeaders {
+			log.Debug("pending headers are sending first", "from", pendingFilter.FromBlockHash, "header hash", pendingHeader.Hash())
+			notifier.Notify(rpcSub.ID, pendingHeader)
+		}
+
+		if len(pendingHeaders) > 0 {
+			penHeaderStart := pendingHeaders[0].Number.Uint64()
+			if windowEnd+1 < penHeaderStart {
+				// not consecutive. so more blocks are finalized in the mean time. send them
+				windowStart = windowEnd + 1
+				tempHead, _ := api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+				if tempHead != nil {
+					windowEnd = tempHead.Number.Uint64()
+				}
+				sender(windowStart, windowEnd)
+			}
+		}
+
+		// accept PendingHeaderChannelSize concurrent pending headers and send them
+		// If anything goes wrong remove it.
+		headers := make(chan *types.Header)
+		headersSub := api.events.SubscribePendingHeads(headers)
+		firstTime := true
+
+		for {
+			select {
+			case h := <-headers:
+				if firstTime {
+					// entered into the running phase. for the first time we will do checking and send previous blocks.
+					firstTime = false
+					if windowEnd+1 < h.Number.Uint64() {
+						// not consecutive. so send them first
+						windowStart = windowEnd + 1
+						windowEnd = h.Number.Uint64()
+						sender(windowStart, windowEnd)
+					}
+				}
+				notifier.Notify(rpcSub.ID, h)
+			case rpcErr := <-rpcSub.Err():
+				log.Debug("error found in rpc subscription", "error", rpcErr)
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
+			}
+		}
+
+	}()
+
+	return rpcSub, nil
 }
 
 // NewHeads send a notification each time a new (header) block is appended to the chain.

@@ -53,6 +53,12 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetBlock(hash common.Hash, number uint64) *types.Block
+
+	// CurrentBlock retrieves the current head block of the canonical chain.
+	CurrentBlock() *types.Block
+
+	// SetHead for reorg purpose. It will set head to the mentioned block number
+	SetHead(head uint64) error
 }
 
 // Engine is an algorithm agnostic consensus engine.
