@@ -43,6 +43,7 @@ type EpochInfo struct {
 type Reorg struct {
 	VanParentHash []byte `json:"van_parent_hash"`
 	PanParentHash []byte `json:"pan_parent_hash"`
+	NewSlot       uint64 `json:"new_slot"`
 }
 
 type EpochInfoPayload struct {
