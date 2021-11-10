@@ -60,7 +60,7 @@ type ChainReader interface {
 	// GetBlockByHash retrieves a block from the database by hash
 	GetBlockByHash(hash common.Hash) *types.Block
 
-	Reorg(oldBlock, newBlock *types.Block) error
+	RevertPandora(oldBlock, newBlock *types.Block) error
 }
 
 // Engine is an algorithm agnostic consensus engine.

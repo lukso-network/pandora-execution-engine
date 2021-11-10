@@ -315,4 +315,4 @@ func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Hea
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
 func (cr *fakeChainReader) CurrentBlock() *types.Block                              { return nil }
 func (bc *fakeChainReader) GetBlockByHash(hash common.Hash) *types.Block            { return nil }
-func (bc *fakeChainReader) Reorg(oldBlock, newBlock *types.Block) error             { return nil }
+func (bc *fakeChainReader) RevertPandora(oldBlock, newBlock *types.Block) error     { return nil }

@@ -227,5 +227,5 @@ func (p *Pandora) RevertBlockAndTxs(newBlock *types.Block) error {
 	if newBlock == nil || oldBlock == nil {
 		return errors.New("invalid block pointer. revert not possible")
 	}
-	return p.chain.Reorg(oldBlock, newBlock)
+	return p.chain.RevertPandora(oldBlock, newBlock)
 }

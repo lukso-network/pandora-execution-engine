@@ -2347,7 +2347,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	return 0, nil
 }
 
-func (bc *BlockChain) Reorg(oldBlock, newBlock *types.Block) error {
+func (bc *BlockChain) RevertPandora(oldBlock, newBlock *types.Block) error {
 	var (
 		oldChain    types.Blocks
 		commonBlock *types.Block
