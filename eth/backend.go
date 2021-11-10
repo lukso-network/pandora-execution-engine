@@ -212,13 +212,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
-	panEngine, isPandora := eth.engine.(*pandora.Pandora)
-	if isPandora {
-		// so it's a pandora engine. now set the transaction pool in pandora engine. so that we can revert back
-		// our transactions when reorg happens
-		panEngine.SetTransactionPool(eth.txPool)
-	}
-
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	checkpoint := config.Checkpoint

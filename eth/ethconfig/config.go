@@ -225,7 +225,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			}
 			return rpcClient, nil
 		}
-		return pandora.New(context.Background(), chainConfig.Pandora, notify, dialRPCClient, db)
+		return pandora.New(context.Background(), chainConfig.Pandora, notify, dialRPCClient)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

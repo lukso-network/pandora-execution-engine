@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethdb"
-
 	"github.com/ethereum/go-ethereum/common/math"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -72,8 +70,7 @@ type Pandora struct {
 	newSealRequestCh     chan *sealTask
 	updatedSealHash      event.Feed
 	scope                event.SubscriptionScope
-	txPool               TransactionPool // used when we do setHead. it saves deleted transactions back to the pool
-	chainDB              ethdb.Database
+	skipBLSValidation    bool // This is only for test purpose so that we can insert blocks easily without needing help from orchestrator
 
 	epochInfosMu   sync.RWMutex
 	epochInfos     *lru.Cache
@@ -85,7 +82,6 @@ func New(
 	cfg *params.PandoraConfig,
 	urls []string,
 	dialRPCFn DialRPCFn,
-	db ethdb.Database,
 ) *Pandora {
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -127,16 +123,12 @@ func New(
 		subscriptionErrCh:    make(chan error, 1),
 		works:                make(map[common.Hash]*types.Block),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
-		chainDB:              db,
 	}
 }
 
-// SetTransactionPool sets transaction pool from the backend to the engine.
-// However it is not a right place to do so. But we can change letter when we are in a phase to make our codes beautiful
-// for implementing feature we are doing this right now
-// Temporarily
-func (p *Pandora) SetTransactionPool(txPool TransactionPool) {
-	p.txPool = txPool
+//EnableTestMode enables test mode for pandora engine so that least possible checks are happened
+func (p *Pandora) EnableTestMode () {
+	p.skipBLSValidation = true
 }
 
 func (p *Pandora) Start(chain consensus.ChainReader) {

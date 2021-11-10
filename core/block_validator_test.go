@@ -53,15 +53,13 @@ func TestRevertTxs(t *testing.T) {
 		urls = []string{"https://some.endpoint"}
 		dialGrpcFnc = dummyRpcFunc
 		db = rawdb.NewMemoryDatabase()
-		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc, rawdb.NewMemoryDatabase())
+		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc)
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Alloc: GenesisAlloc{address: {Balance:funds}}}).MustCommit(db)
 		chain, _ = NewBlockChain(db, &CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.TestChainConfig, pandoraEngine, vm.Config{}, nil, nil)
 	)
 	txconfig := DefaultTxPoolConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
-	pool := NewTxPool(txconfig, params.TestChainConfig, chain)
-
-	pandoraEngine.SetTransactionPool(pool)
+	pandoraEngine.EnableTestMode()
 	pandoraEngine.Start(chain)
 	defer pandoraEngine.Close()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, pandoraEngine, db, 10, func(i int, b *BlockGen) {
@@ -79,18 +77,20 @@ func TestRevertTxs(t *testing.T) {
 			}},
 		})
 		b.AddTx(tx)
-		if !pool.Has(tx.Hash()) {
-			err := pool.AddLocal(tx)
-			require.NoError(t, err)
-		}
 	})
-	_ , err := chain.InsertChain(blocks)
+	_ , err := chain.InsertChain(blocks[:5])
+	require.NoError(t, err, "insert chain failed")
+	require.Equal(t, chain.CurrentBlock(), blocks[4])
+
+	t.Log(chain.CurrentFastBlock().NumberU64())
+	err = pandoraEngine.RevertBlockAndTxs(blocks[2])
+	require.NoError(t, err)
+	require.Equal(t, chain.CurrentBlock().NumberU64(), blocks[2].NumberU64())
+	t.Log(chain.GetBlockByHash(blocks[3].Hash()).Transactions())
+
+	_ , err = chain.InsertChain(blocks[5:])
 	require.NoError(t, err, "insert chain failed")
 	require.Equal(t, chain.CurrentBlock(), blocks[len(blocks) - 1])
-
-	err = pandoraEngine.RevertBlockAndTxs(5)
-	//require.NoError(t, err)
-	require.Equal(t, chain.CurrentBlock().NumberU64(), blocks[4].NumberU64())
 }
 
 
