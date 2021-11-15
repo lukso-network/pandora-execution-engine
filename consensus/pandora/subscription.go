@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
+
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -202,6 +204,8 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	}
 
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
+
+	rawdb.WriteLatestFinalizedSlotNumber(p.chainDb, info.FinalizedSlot)
 
 	if nil == info.ReorgInfo {
 		return nil

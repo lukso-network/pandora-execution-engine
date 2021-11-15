@@ -152,7 +152,7 @@ func (p *Pandora) Start(chain consensus.ChainReader) {
 		finalizedBlock :=  p.findBlockBySlotNumber(*finalizedSlotNumber)
 		err := p.RevertBlockAndTxs(finalizedBlock)
 		if err != nil {
-			log.Crit("unable to revert pandora database to finalized slot", "finalized slot number", *finalizedSlotNumber)
+			log.Error("unable to revert pandora database to finalized slot", "finalized slot number", *finalizedSlotNumber)
 		}
 	}
 
