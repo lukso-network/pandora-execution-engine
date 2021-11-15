@@ -53,7 +53,7 @@ func TestRevertTxs(t *testing.T) {
 		urls = []string{"https://some.endpoint"}
 		dialGrpcFnc = dummyRpcFunc
 		db = rawdb.NewMemoryDatabase()
-		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc)
+		pandoraEngine = pandora.New(context.Background(), cfg, urls, dialGrpcFnc, db)
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Alloc: GenesisAlloc{address: {Balance:funds}}}).MustCommit(db)
 		chain, _ = NewBlockChain(db, &CacheConfig{OrcClientEndpoint: pandora_orcclient.DialInProcRPCClient()}, params.TestChainConfig, pandoraEngine, vm.Config{}, nil, nil)
 	)

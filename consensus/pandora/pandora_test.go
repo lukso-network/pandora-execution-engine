@@ -3,6 +3,7 @@ package pandora
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/pandora_orcclient"
 	"math/big"
 	"net"
@@ -386,7 +387,7 @@ func createDummyPandora(t *testing.T) (pandoraEngine *Pandora, cancel context.Ca
 	}
 	urls := make([]string, 2)
 	dialGrpcFnc := dummyRpcFunc
-	pandoraEngine = New(ctx, cfg, urls, dialGrpcFnc)
+	pandoraEngine = New(ctx, cfg, urls, dialGrpcFnc, rawdb.NewMemoryDatabase())
 
 	genesisHeader := &types.Header{Number: big.NewInt(0)}
 	genesisBlock := types.NewBlock(genesisHeader, nil, nil, nil, nil)

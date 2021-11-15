@@ -57,6 +57,7 @@ type EpochInfoPayload struct {
 	EpochTimeStart   uint64        `json:"epochTimeStart"`
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
 	ReorgInfo        *Reorg        `json:"reorg_info"`
+	FinalizedSlot    uint64        `json:"finalizedSlot"`
 }
 
 // ExtraData

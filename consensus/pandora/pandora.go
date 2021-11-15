@@ -2,6 +2,8 @@ package pandora
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"sync"
 	"time"
 
@@ -75,6 +77,8 @@ type Pandora struct {
 	epochInfosMu   sync.RWMutex
 	epochInfos     *lru.Cache
 	requestedEpoch uint64
+
+	chainDb ethdb.Database
 }
 
 func New(
@@ -82,6 +86,7 @@ func New(
 	cfg *params.PandoraConfig,
 	urls []string,
 	dialRPCFn DialRPCFn,
+	chainDb ethdb.Database,
 ) *Pandora {
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -123,6 +128,7 @@ func New(
 		subscriptionErrCh:    make(chan error, 1),
 		works:                make(map[common.Hash]*types.Block),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
+		chainDb: chainDb,
 	}
 }
 
@@ -139,6 +145,17 @@ func (p *Pandora) Start(chain consensus.ChainReader) {
 	}
 	p.isRunning = true
 	p.chain = chain
+
+	// at engine start up move chain to the finalized slot number
+	finalizedSlotNumber := rawdb.ReadLatestFinalizedSlotNumber(p.chainDb)
+	if finalizedSlotNumber != nil {
+		finalizedBlock :=  p.findBlockBySlotNumber(*finalizedSlotNumber)
+		err := p.RevertBlockAndTxs(finalizedBlock)
+		if err != nil {
+			log.Crit("unable to revert pandora database to finalized slot", "finalized slot number", *finalizedSlotNumber)
+		}
+	}
+
 	go func() {
 		p.waitForConnection()
 		if p.ctx.Err() != nil {
