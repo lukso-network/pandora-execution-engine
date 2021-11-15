@@ -114,6 +114,24 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 	return numbers, hashes
 }
 
+// ReadLatestFinalizedSlotNumber reads latest finalized slot number from db
+func ReadLatestFinalizedSlotNumber(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(latestFinalizedSlotKey)
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteLatestFinalizedSlotNumber stores latest finalized slot number
+func WriteLatestFinalizedSlotNumber(db ethdb.KeyValueWriter, number uint64) {
+	enc := encodeBlockNumber(number)
+	if err := db.Put(latestFinalizedSlotKey, enc); err != nil {
+		log.Crit("Failed to store hash to number mapping", "err", err)
+	}
+}
+
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
