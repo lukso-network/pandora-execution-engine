@@ -115,6 +115,10 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 }
 
 func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
+	if p.skipBLSValidation {
+		// it's running on test mode. no need to do anything. just skip
+		return nil
+	}
 	// decode the extraData byte
 	extraDataWithBLSSig := new(ExtraDataSealed)
 	if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {

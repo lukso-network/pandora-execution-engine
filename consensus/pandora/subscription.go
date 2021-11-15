@@ -2,9 +2,12 @@ package pandora
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
@@ -202,25 +205,42 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
 
+	rawdb.WriteLatestFinalizedSlotNumber(p.chainDb, info.FinalizedSlot)
+
 	if nil == info.ReorgInfo {
 		return nil
 	}
 	log.Info("reorg event received")
 	// reorg info is present so reorg is triggered in vanguard side
-	parentHash := common.BytesToHash(info.ReorgInfo.PanParentHash)
-	parentBlock := p.chain.GetHeaderByHash(parentHash)
+	parentBlock := p.findBlockBySlotNumber(info.FinalizedSlot)
 	if parentBlock != nil {
 		// it is an invalid behaviour. Pandora doesn't have the block that should be present
-		parentBlockNumber := parentBlock.Number.Uint64()
-		err := p.chain.SetHead(parentBlockNumber)
-		if err != nil {
-			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlockNumber, "block hash", parentHash, "error", err)
+		if err := p.RevertBlockAndTxs(parentBlock); err != nil {
+			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlock.Number().Uint64(), "block hash", parentBlock.Hash(), "error", err)
 			return err
 		}
 	}
-	// requested block is not present. Maybe the node is in previous block and received this Epoch.
-	// but we can just move on.
-	log.Info("failed to find block for reorg", "requested hash", parentHash)
-
 	return nil
+}
+
+func (p *Pandora) findBlockBySlotNumber(slot uint64) *types.Block {
+	extraDataWithBLSSig := new(ExtraDataSealed)
+	for header := p.chain.CurrentBlock().Header(); header != nil && header.Number.Uint64() > 0; header = p.chain.GetHeaderByNumber(header.Number.Uint64() - 1) {
+		if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
+			log.Error("Failed to decode extraData with signature", "err", err)
+			return nil
+		}
+		if extraDataWithBLSSig.Slot == slot {
+			return p.chain.GetBlockByHash(header.Hash())
+		}
+	}
+	return nil
+}
+
+func (p *Pandora) RevertBlockAndTxs(newBlock *types.Block) error {
+	oldBlock := p.chain.CurrentBlock()
+	if newBlock == nil || oldBlock == nil {
+		return errors.New("invalid block pointer. revert not possible")
+	}
+	return p.chain.RevertPandora(oldBlock, newBlock)
 }

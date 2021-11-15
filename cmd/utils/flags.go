@@ -1875,7 +1875,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 			}
 			return rpcClient, nil
 		}
-		engine = pandora.New(context.Background(), config.Pandora, []string{}, dialRPCClient)
+		engine = pandora.New(context.Background(), config.Pandora, []string{}, dialRPCClient, chainDb)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {

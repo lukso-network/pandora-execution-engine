@@ -33,6 +33,9 @@ var (
 	// headHeaderKey tracks the latest known header's hash.
 	headHeaderKey = []byte("LastHeader")
 
+	// latestFinalizedSlotKey tracks the latest finalized slot number
+	latestFinalizedSlotKey = []byte("FinalizedSlot")
+
 	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
