@@ -218,14 +218,14 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	}
 	log.Debug("finalized slot number to revert", "slot number", *finalizedSlotNumber)
 	parentBlock := p.findBlockBySlotNumber(*finalizedSlotNumber)
-	extraDataWithBLSSig := new(ExtraDataSealed)
-	rlp.DecodeBytes(parentBlock.Extra(), extraDataWithBLSSig)
-	log.Debug("new block to reset", "blockNumber", parentBlock.NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
 
+	extraDataWithBLSSig := new(ExtraDataSealed)
 	rlp.DecodeBytes(p.chain.CurrentBlock().Extra(), extraDataWithBLSSig)
 	log.Debug("current head before reversal", "blockNumber", p.chain.CurrentBlock().NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
 
 	if parentBlock != nil {
+		rlp.DecodeBytes(parentBlock.Extra(), extraDataWithBLSSig)
+		log.Debug("new block to reset", "blockNumber", parentBlock.NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
 		// it is an invalid behaviour. Pandora doesn't have the block that should be present
 		if err := p.RevertBlockAndTxs(parentBlock); err != nil {
 			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlock.Number().Uint64(), "block hash", parentBlock.Hash(), "error", err)
