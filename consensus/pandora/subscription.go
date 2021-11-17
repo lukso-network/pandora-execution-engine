@@ -205,20 +205,36 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 
 	p.setEpochInfo(epochInfo.Epoch, epochInfo)
 
-	rawdb.WriteLatestFinalizedSlotNumber(p.chainDb, info.FinalizedSlot)
-
 	if nil == info.ReorgInfo {
 		return nil
 	}
 	log.Info("reorg event received")
 	// reorg info is present so reorg is triggered in vanguard side
-	parentBlock := p.findBlockBySlotNumber(info.FinalizedSlot)
+	finalizedSlotNumber := rawdb.ReadLatestFinalizedSlotNumber(p.chainDb)
+	if finalizedSlotNumber == nil {
+		// no finalized slot number found so don't revert anything
+		log.Debug("finalized slot not found (maybe fresh start or db corruption happened)")
+		return nil
+	}
+	log.Debug("finalized slot number to revert", "slot number", *finalizedSlotNumber)
+	parentBlock := p.findBlockBySlotNumber(*finalizedSlotNumber)
+
+	extraDataWithBLSSig := new(ExtraDataSealed)
+	rlp.DecodeBytes(p.chain.CurrentBlock().Extra(), extraDataWithBLSSig)
+	log.Debug("current head before reversal", "blockNumber", p.chain.CurrentBlock().NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
+
 	if parentBlock != nil {
+		rlp.DecodeBytes(parentBlock.Extra(), extraDataWithBLSSig)
+		log.Debug("new block to reset", "blockNumber", parentBlock.NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
 		// it is an invalid behaviour. Pandora doesn't have the block that should be present
 		if err := p.RevertBlockAndTxs(parentBlock); err != nil {
 			log.Error("failed to revert to the mentioned block in reorg", "block number", parentBlock.Number().Uint64(), "block hash", parentBlock.Hash(), "error", err)
-			return err
+			return nil
 		}
+
+		rlp.DecodeBytes(p.chain.CurrentBlock().Extra(), extraDataWithBLSSig)
+		log.Debug("current head after reversal", "blockNumber", p.chain.CurrentBlock().NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
+
 	}
 	return nil
 }

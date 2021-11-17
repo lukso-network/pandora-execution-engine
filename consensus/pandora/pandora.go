@@ -2,10 +2,11 @@ package pandora
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 
 	"github.com/ethereum/go-ethereum/common/math"
 
@@ -128,12 +129,12 @@ func New(
 		subscriptionErrCh:    make(chan error, 1),
 		works:                make(map[common.Hash]*types.Block),
 		epochInfos:           epochCache, // need to define maximum size. It will take maximum latest 100 epochs
-		chainDb: chainDb,
+		chainDb:              chainDb,
 	}
 }
 
 //EnableTestMode enables test mode for pandora engine so that least possible checks are happened
-func (p *Pandora) EnableTestMode () {
+func (p *Pandora) EnableTestMode() {
 	p.skipBLSValidation = true
 }
 
@@ -148,8 +149,9 @@ func (p *Pandora) Start(chain consensus.ChainReader) {
 
 	// at engine start up move chain to the finalized slot number
 	finalizedSlotNumber := rawdb.ReadLatestFinalizedSlotNumber(p.chainDb)
+	log.Debug("at start the finalized slot number", "slot number", finalizedSlotNumber)
 	if finalizedSlotNumber != nil {
-		finalizedBlock :=  p.findBlockBySlotNumber(*finalizedSlotNumber)
+		finalizedBlock := p.findBlockBySlotNumber(*finalizedSlotNumber)
 		err := p.RevertBlockAndTxs(finalizedBlock)
 		if err != nil {
 			log.Error("unable to revert pandora database to finalized slot", "finalized slot number", *finalizedSlotNumber)
