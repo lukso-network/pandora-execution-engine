@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/core/types"
 
@@ -210,14 +210,8 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 	}
 	log.Info("reorg event received")
 	// reorg info is present so reorg is triggered in vanguard side
-	finalizedSlotNumber := rawdb.ReadLatestFinalizedSlotNumber(p.chainDb)
-	if finalizedSlotNumber == nil {
-		// no finalized slot number found so don't revert anything
-		log.Debug("finalized slot not found (maybe fresh start or db corruption happened)")
-		return nil
-	}
-	log.Debug("finalized slot number to revert", "slot number", *finalizedSlotNumber)
-	parentBlock := p.findBlockBySlotNumber(*finalizedSlotNumber)
+	parentHash := common.BytesToHash(info.ReorgInfo.PanParentHash)
+	parentBlock := p.chain.GetBlockByHash(parentHash)
 
 	extraDataWithBLSSig := new(ExtraDataSealed)
 	rlp.DecodeBytes(p.chain.CurrentBlock().Extra(), extraDataWithBLSSig)
@@ -235,20 +229,6 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 		rlp.DecodeBytes(p.chain.CurrentBlock().Extra(), extraDataWithBLSSig)
 		log.Debug("current head after reversal", "blockNumber", p.chain.CurrentBlock().NumberU64(), "Slot number", extraDataWithBLSSig.Slot)
 
-	}
-	return nil
-}
-
-func (p *Pandora) findBlockBySlotNumber(slot uint64) *types.Block {
-	extraDataWithBLSSig := new(ExtraDataSealed)
-	for header := p.chain.CurrentBlock().Header(); header != nil && header.Number.Uint64() > 0; header = p.chain.GetHeaderByNumber(header.Number.Uint64() - 1) {
-		if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
-			log.Error("Failed to decode extraData with signature", "err", err)
-			return nil
-		}
-		if extraDataWithBLSSig.Slot == slot {
-			return p.chain.GetBlockByHash(header.Hash())
-		}
 	}
 	return nil
 }

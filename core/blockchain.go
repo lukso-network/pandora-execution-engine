@@ -351,6 +351,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
+	if bc.isPandora() {
+		latestFinalizedSlot := rawdb.ReadLatestFinalizedSlotNumber(bc.db)
+		if lastFinalizedSlot != nil {
+			finalizedBlock := bc.findBlockBySlotNumber(*latestFinalizedSlot)
+			log.Info("chain is reverting to latest finalized slot", "lastFinalizedSlotNumber", lastFinalizedSlot, "blockNumber", finalizedBlock.NumberU64())
+			if err := bc.SetHead(finalizedBlock.NumberU64()); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 		var (
@@ -466,6 +476,21 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	return bc, nil
+}
+
+// findBlockBySlotNumber search block by slot number
+func (bc *BlockChain) findBlockBySlotNumber(slot uint64) *types.Block {
+	extraDataWithBLSSig := new(pandora.ExtraDataSealed)
+	for header := bc.CurrentBlock().Header(); header != nil && header.Number.Uint64() > 0; header = bc.GetHeaderByNumber(header.Number.Uint64() - 1) {
+		if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
+			log.Error("Failed to decode extraData with signature", "err", err)
+			return nil
+		}
+		if extraDataWithBLSSig.Slot == slot {
+			return bc.GetBlockByHash(header.Hash())
+		}
+	}
+	return nil
 }
 
 // GetVMConfig returns the block chain VM config.
