@@ -231,6 +231,8 @@ type BlockChain struct {
 	// pandora-orchestrator data passing
 	blockConfirmationCh chan struct{}
 	confiramtionExitCh  chan struct{}
+
+	currentFinalizedSlot uint64
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -285,6 +287,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+
+	lastFinalizedSlot := rawdb.ReadLatestFinalizedSlotNumber(db)
+	if lastFinalizedSlot != nil {
+		log.Debug("last finalized slot (blockchain.go)", "slot number", lastFinalizedSlot)
+		bc.currentFinalizedSlot = *lastFinalizedSlot
+	}
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -523,6 +531,10 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher(ctx context.Context) e
 		case blockStats := <-responseContainer:
 			log.Debug("received response from orchestrator", "blockstats", *blockStats)
 			// simply put the responses into the cache
+			if bc.currentFinalizedSlot < blockStats.FinalizedSlot {
+				log.Debug("new finalized slot received. Updating database", "FinalizedSlot", blockStats.FinalizedSlot, "currentFinalizedSlot", bc.currentFinalizedSlot)
+				rawdb.WriteLatestFinalizedSlotNumber(bc.db, blockStats.FinalizedSlot)
+			}
 			if blockStats != nil {
 				bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
 				select {

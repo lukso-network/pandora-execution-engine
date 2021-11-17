@@ -18,5 +18,6 @@ type BlockHash struct {
 
 type BlockStatus struct {
 	BlockHash
-	Status Status
+	Status        Status
+	FinalizedSlot uint64
 }
