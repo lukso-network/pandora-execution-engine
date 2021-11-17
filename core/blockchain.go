@@ -534,6 +534,7 @@ func (bc *BlockChain) pandoraBlockHashConfirmationFetcher(ctx context.Context) e
 			if bc.currentFinalizedSlot < blockStats.FinalizedSlot {
 				log.Debug("new finalized slot received. Updating database", "FinalizedSlot", blockStats.FinalizedSlot, "currentFinalizedSlot", bc.currentFinalizedSlot)
 				rawdb.WriteLatestFinalizedSlotNumber(bc.db, blockStats.FinalizedSlot)
+				bc.currentFinalizedSlot = blockStats.FinalizedSlot
 			}
 			if blockStats != nil {
 				bc.orchestratorConfirmationCache.Add(blockStats.Hash, blockStats.Status)
