@@ -355,7 +355,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		latestFinalizedSlot := rawdb.ReadLatestFinalizedSlotNumber(bc.db)
 		if lastFinalizedSlot != nil {
 			finalizedBlock := bc.findBlockBySlotNumber(*latestFinalizedSlot)
-			log.Info("chain is reverting to latest finalized slot", "lastFinalizedSlotNumber", lastFinalizedSlot, "blockNumber", finalizedBlock.NumberU64())
+			log.Info("chain is reverting to latest finalized slot", "lastFinalizedSlotNumber", *lastFinalizedSlot, "blockNumber", finalizedBlock.NumberU64())
 			if err := bc.SetHead(finalizedBlock.NumberU64()); err != nil {
 				return nil, err
 			}
