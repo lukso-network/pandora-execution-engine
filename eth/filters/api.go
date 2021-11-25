@@ -228,12 +228,15 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 	go func() {
 		// sending previous blocks to orchestrator
 		sender := func(windowStart, windowEnd uint64) {
+			log.Debug("sending header to orchestrator", "windowStart", windowStart, "windowEnd", windowEnd)
 			for i := windowStart; i <= windowEnd; i++ {
-				temphead, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+				temphead, err := api.backend.BlockByNumber(ctx, rpc.BlockNumber(i))
 				if temphead != nil && err == nil {
 					// if block exists and no error occurred then send it
-					log.Debug("Notifying to orchestrator", "block number", temphead.Number.Uint64())
-					notifier.Notify(rpcSub.ID, temphead)
+					log.Debug("Notifying to orchestrator", "block number", temphead.NumberU64())
+					notifier.Notify(rpcSub.ID, temphead.Header())
+				} else {
+					log.Debug("sending failed", "consideredBlockNumber", i, "tempHead", temphead, "err", err)
 				}
 			}
 		}
@@ -273,22 +276,20 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		// If anything goes wrong remove it.
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
-		firstTime := true
 
 		for {
 			select {
 			case h := <-headers:
-				if firstTime {
-					// entered into the running phase. for the first time we will do checking and send previous blocks.
-					firstTime = false
-					if windowEnd+1 < h.Number.Uint64() {
-						// not consecutive. so send them first
-						windowStart = windowEnd + 1
-						windowEnd = h.Number.Uint64()
-						sender(windowStart, windowEnd)
-					}
+				if h != nil && windowEnd + 1 < h.Number.Uint64() {
+					windowStart = windowEnd + 1
+					windowEnd = h.Number.Uint64() - 1
+					log.Debug("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", windowEnd)
+					sender(windowStart, windowEnd)
 				}
 				notifier.Notify(rpcSub.ID, h)
+				if h != nil {
+					windowEnd = h.Number.Uint64()
+				}
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", "error", rpcErr)
 				headersSub.Unsubscribe()
