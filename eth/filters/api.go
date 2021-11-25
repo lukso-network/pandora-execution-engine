@@ -240,6 +240,21 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				}
 			}
 		}
+		sendByHash := func(start uint64, blockHash common.Hash) {
+			log.Info("sending header to orchestrator", "start", start, "blockHash", blockHash)
+			var headerArray []*types.Header
+			for header, _ := api.backend.HeaderByHash(ctx, blockHash); header != nil; header, _ = api.backend.HeaderByHash(ctx, header.ParentHash) {
+				headerArray = append(headerArray, header)
+				if header.Number.Uint64() == start {
+					break
+				}
+			}
+			log.Debug("sendByHash found headers of length", "len", len(headerArray))
+			for i := len(headerArray) - 1; i >= 0; i-- {
+				log.Debug("Notifying to orchestrator", "block number", headerArray[i].Number.Uint64())
+				notifier.Notify(rpcSub.ID, headerArray[i])
+			}
+		}
 		// we are starting from block 1 because block 0 has no pandora extra data info. so sending it will create an error
 		windowStart, windowEnd := uint64(1), uint64(1)
 		header, _ := api.backend.HeaderByHash(ctx, pendingFilter.FromBlockHash)
@@ -280,11 +295,11 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		for {
 			select {
 			case h := <-headers:
-				if h != nil && windowEnd + 1 < h.Number.Uint64() {
+				if h != nil && windowEnd+1 < h.Number.Uint64() {
 					windowStart = windowEnd + 1
 					windowEnd = h.Number.Uint64() - 1
 					log.Debug("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", windowEnd)
-					sender(windowStart, windowEnd)
+					sendByHash(windowStart, h.ParentHash)
 				}
 				notifier.Notify(rpcSub.ID, h)
 				if h != nil {
