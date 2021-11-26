@@ -228,13 +228,31 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 	go func() {
 		// sending previous blocks to orchestrator
 		sender := func(windowStart, windowEnd uint64) {
+			log.Debug("sending header to orchestrator", "windowStart", windowStart, "windowEnd", windowEnd)
 			for i := windowStart; i <= windowEnd; i++ {
-				temphead, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+				temphead, err := api.backend.BlockByNumber(ctx, rpc.BlockNumber(i))
 				if temphead != nil && err == nil {
 					// if block exists and no error occurred then send it
-					log.Debug("Notifying to orchestrator", "block number", temphead.Number.Uint64())
-					notifier.Notify(rpcSub.ID, temphead)
+					log.Debug("Notifying to orchestrator", "block number", temphead.NumberU64())
+					notifier.Notify(rpcSub.ID, temphead.Header())
+				} else {
+					log.Debug("sending failed", "consideredBlockNumber", i, "tempHead", temphead, "err", err)
 				}
+			}
+		}
+		sendByHash := func(start uint64, blockHash common.Hash) {
+			log.Info("sending header to orchestrator", "start", start, "blockHash", blockHash)
+			var headerArray []*types.Header
+			for header, _ := api.backend.HeaderByHash(ctx, blockHash); header != nil; header, _ = api.backend.HeaderByHash(ctx, header.ParentHash) {
+				headerArray = append(headerArray, header)
+				if header.Number.Uint64() == start {
+					break
+				}
+			}
+			log.Debug("sendByHash found headers of length", "len", len(headerArray))
+			for i := len(headerArray) - 1; i >= 0; i-- {
+				log.Debug("Notifying to orchestrator", "block number", headerArray[i].Number.Uint64())
+				notifier.Notify(rpcSub.ID, headerArray[i])
 			}
 		}
 		// we are starting from block 1 because block 0 has no pandora extra data info. so sending it will create an error
@@ -273,22 +291,20 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		// If anything goes wrong remove it.
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
-		firstTime := true
 
 		for {
 			select {
 			case h := <-headers:
-				if firstTime {
-					// entered into the running phase. for the first time we will do checking and send previous blocks.
-					firstTime = false
-					if windowEnd+1 < h.Number.Uint64() {
-						// not consecutive. so send them first
-						windowStart = windowEnd + 1
-						windowEnd = h.Number.Uint64()
-						sender(windowStart, windowEnd)
-					}
+				if h != nil && windowEnd+1 < h.Number.Uint64() {
+					windowStart = windowEnd + 1
+					windowEnd = h.Number.Uint64() - 1
+					log.Debug("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", windowEnd)
+					sendByHash(windowStart, h.ParentHash)
 				}
 				notifier.Notify(rpcSub.ID, h)
+				if h != nil {
+					windowEnd = h.Number.Uint64()
+				}
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", "error", rpcErr)
 				headersSub.Unsubscribe()
