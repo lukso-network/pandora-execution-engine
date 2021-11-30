@@ -287,7 +287,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				}
 				windowEnd = h.Number.Uint64()
 				notifier.Notify(rpcSub.ID, h)
-				log.Info("Successfully notify the orchestrator", "header", *h, "windowEnd", windowEnd)
+				log.Info("Successfully notify the orchestrator", "blockNumber", h.Number, "windowEnd", windowEnd)
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", "error", rpcErr)
 				headersSub.Unsubscribe()
