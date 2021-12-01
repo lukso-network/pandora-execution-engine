@@ -18,12 +18,13 @@ package eth
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -415,12 +416,12 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
 
-	if h.chain.IsPandora() {
-		h.wg.Add(1)
-		h.revertNewHeadCh = make(chan *types.Header)
-		h.revertNewHeadSub = h.txpool.SubscribeTxRevertDoneEvent(h.revertNewHeadCh)
-		go h.txRevertPandoraLoop()
-	}
+	//if h.chain.IsPandora() {
+	//	h.wg.Add(1)
+	//	h.revertNewHeadCh = make(chan *types.Header)
+	//	h.revertNewHeadSub = h.txpool.SubscribeTxRevertDoneEvent(h.revertNewHeadCh)
+	//	go h.txRevertPandoraLoop()
+	//}
 
 	// broadcast mined blocks
 	h.wg.Add(1)
@@ -434,8 +435,8 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()           // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe()    // quits blockBroadcastLoop
+	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
+	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 	if h.chain.IsPandora() {
 		h.revertNewHeadSub.Unsubscribe() // quites txRevertPandoraLoop
 	}
