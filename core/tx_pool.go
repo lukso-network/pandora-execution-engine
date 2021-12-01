@@ -1141,16 +1141,16 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
 	defer close(done)
-	defer func() {
-		if val := pool.isRevertTriggered.Load(); val != nil {
-			isReverted := val.(TxPoolRevertStatus)
-			if isReverted && reset != nil && reset.newHead != nil {
-				pool.revertDoneFeed.Send(reset.newHead)
-				log.Info("pandora tx revert done and already notified", "newHeadNumber", reset.newHead.Number.Uint64())
-				pool.isRevertTriggered.Store(TxPoolRevertStatus(false))
-			}
-		}
-	}()
+	//defer func() {
+	//	if val := pool.isRevertTriggered.Load(); val != nil {
+	//		isReverted := val.(TxPoolRevertStatus)
+	//		if isReverted && reset != nil && reset.newHead != nil {
+	//			pool.revertDoneFeed.Send(reset.newHead)
+	//			log.Info("pandora tx revert done and already notified", "newHeadNumber", reset.newHead.Number.Uint64())
+	//			pool.isRevertTriggered.Store(TxPoolRevertStatus(false))
+	//		}
+	//	}
+	//}()
 
 	var promoteAddrs []common.Address
 	if dirtyAccounts != nil && reset == nil {
