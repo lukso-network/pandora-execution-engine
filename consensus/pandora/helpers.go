@@ -76,10 +76,10 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 	if header.Time <= parent.Time {
 		return errOlderBlockTime
 	}
-	//if !isAscendingSlot(parent, header) {
-	//	log.Error("slot numbers are not in ascending order", "prev head blockNumber", parent.Number.Uint64(), "current header blockNumber", header.Number.Uint64())
-	//	return consensus.ErrInvalidSlotSequence
-	//}
+	if !isAscendingSlot(parent, header) {
+		log.Error("slot numbers are not in ascending order", "prev head blockNumber", parent.Number.Uint64(), "current header blockNumber", header.Number.Uint64())
+		return consensus.ErrInvalidSlotSequence
+	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := p.CalcDifficulty(chain, header.Time, parent)
 	if expected.Cmp(header.Difficulty) != 0 {
@@ -120,6 +120,7 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 
 func isAscendingSlot(parentHeader, currentHeader *types.Header) bool {
 	// decode the extraData byte
+	log.Debug("in isAscendingSlot")
 	getSlotNumber := func(header *types.Header) (uint64, error) {
 		extraDataWithBLSSig := new(ExtraDataSealed)
 		if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
