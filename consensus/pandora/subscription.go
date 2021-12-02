@@ -242,5 +242,5 @@ func (p *Pandora) RevertBlockAndTxs(newBlock *types.Block) error {
 		return errors.New("eventHandler is not initiated yet in pandora engine. Reorg failed")
 	}
 	p.SetReorgProgressing()
-	return nil //p.pandoraChainRevert.RevertPandora(oldBlock, newBlock)
+	return p.pandoraChainRevert.RevertPandora(oldBlock, newBlock)
 }
