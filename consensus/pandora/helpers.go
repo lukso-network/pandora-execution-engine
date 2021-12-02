@@ -120,29 +120,28 @@ func (p *Pandora) verifyHeader(chain consensus.ChainHeaderReader, header, parent
 
 func isAscendingSlot(parentHeader, currentHeader *types.Header) bool {
 	// decode the extraData byte
-	//log.Debug("in isAscendingSlot")
-	//getSlotNumber := func(header *types.Header) (uint64, error) {
-	//	extraDataWithBLSSig := new(ExtraDataSealed)
-	//	if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
-	//		log.Error("Failed to decode extraData with signature", "err", err)
-	//		return 0, err
-	//	}
-	//	return extraDataWithBLSSig.Slot, nil
-	//}
-	//
-	//parentHeaderSlotNumber, err := getSlotNumber(parentHeader)
-	//if err != nil {
-	//	return false
-	//}
-	//
-	//currentHeaderSlotNumber, err := getSlotNumber(currentHeader)
-	//if err != nil {
-	//	return false
-	//}
-	//
-	//log.Debug("isAscendingSlot", "parentSlotNumber", parentHeaderSlotNumber, "currentSlotNumber", currentHeaderSlotNumber)
-	//return parentHeaderSlotNumber < currentHeaderSlotNumber
-	return true
+	log.Debug("in isAscendingSlot")
+	getSlotNumber := func(header *types.Header) (uint64, error) {
+		extraDataWithBLSSig := new(ExtraDataSealed)
+		if err := rlp.DecodeBytes(header.Extra, extraDataWithBLSSig); err != nil {
+			log.Error("Failed to decode extraData with signature", "err", err)
+			return 0, err
+		}
+		return extraDataWithBLSSig.Slot, nil
+	}
+
+	parentHeaderSlotNumber, err := getSlotNumber(parentHeader)
+	if err != nil {
+		return false
+	}
+
+	currentHeaderSlotNumber, err := getSlotNumber(currentHeader)
+	if err != nil {
+		return false
+	}
+
+	log.Debug("isAscendingSlot", "parentSlotNumber", parentHeaderSlotNumber, "currentSlotNumber", currentHeaderSlotNumber)
+	return parentHeaderSlotNumber < currentHeaderSlotNumber
 }
 
 func (p *Pandora) VerifyBLSSignature(header *types.Header) error {
