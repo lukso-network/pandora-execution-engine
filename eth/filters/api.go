@@ -240,39 +240,20 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 				}
 			}
 		}
-		sendByHash := func(start uint64, blockHash common.Hash) {
-			log.Info("sending header to orchestrator", "start", start, "blockHash", blockHash)
-			var headerArray []*types.Header
-			for header, _ := api.backend.HeaderByHash(ctx, blockHash); header != nil; header, _ = api.backend.HeaderByHash(ctx, header.ParentHash) {
-				headerArray = append(headerArray, header)
-				if header.Number.Uint64() <= start {
-					break
-				}
-			}
-			log.Info("sendByHash found headers of length", "len", len(headerArray))
-			for i := len(headerArray) - 1; i >= 0; i-- {
-				log.Info("Notifying to orchestrator", "block number", headerArray[i].Number.Uint64())
-				notifier.Notify(rpcSub.ID, headerArray[i])
-			}
-		}
 		// we are starting from block 1 because block 0 has no pandora extra data info. so sending it will create an error
 		windowStart, windowEnd := uint64(1), uint64(1)
 		header, _ := api.backend.HeaderByHash(ctx, pendingFilter.FromBlockHash)
 		if header != nil {
 			windowStart = header.Number.Uint64()
 		}
-		header, _ = api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-		if header != nil {
-			windowEnd = header.Number.Uint64()
-		}
-		log.Info("NewPendingBlockHeaders sending", "start", windowStart, "end", windowEnd)
-		sender(windowStart, windowEnd)
+		log.Info("NewPendingBlockHeaders sending", "start", windowStart)
 
 		// accept PendingHeaderChannelSize concurrent pending headers and send them
 		// If anything goes wrong remove it.
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
 
+		firstTime := true
 		for {
 			select {
 			case h := <-headers:
@@ -280,13 +261,21 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 					log.Info("header is nil so orchestrator can't be notified")
 					continue
 				}
+				if firstTime {
+					firstTime = false
+					if h.Number.Uint64() > 0 {
+						sender(windowStart, h.Number.Uint64()-1)
+						windowEnd = h.Number.Uint64() - 1
+					}
+				}
 				if windowEnd+1 < h.Number.Uint64() {
 					windowStart = windowEnd + 1
 					log.Info("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", h.Number.Uint64()-1)
-					sendByHash(windowStart, h.ParentHash)
+					sender(windowStart, h.Number.Uint64()-1)
+					windowEnd = h.Number.Uint64() - 1
 				}
-				windowEnd = h.Number.Uint64()
 				notifier.Notify(rpcSub.ID, h)
+				windowEnd = h.Number.Uint64()
 				log.Info("Successfully notify the orchestrator", "blockNum", h.Number.Uint64(), "windowEnd", windowEnd)
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", "error", rpcErr)
