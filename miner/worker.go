@@ -190,6 +190,9 @@ type worker struct {
 	// if pandora is running then seal hash will be changed. track if is changed
 	updateTracker    chan pandora.SealHashUpdate
 	updateTrackerSub event.Subscription
+
+	pandoraHeadShiftCh  chan struct{}
+	pandoraHeadShiftSub event.Subscription
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -216,6 +219,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 		updateTracker:      make(chan pandora.SealHashUpdate),
+		pandoraHeadShiftCh: make(chan struct{}),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -226,6 +230,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	if pandoraEngine, pandoraRunning := worker.isPandora(); pandoraRunning {
 		// pandora is running so subscribe with event
 		worker.updateTrackerSub = pandoraEngine.SubscribeToUpdateSealHashEvent(worker.updateTracker)
+		worker.pandoraHeadShiftSub = pandoraEngine.SubscribePandoraChainHeadShiftedEvent(worker.pandoraHeadShiftCh)
 	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -411,6 +416,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
+		case <-w.pandoraHeadShiftCh:
+			log.Info("worker.go pandora shift head happened")
+			clearPending(w.chain.CurrentBlock().NumberU64())
+			timestamp = time.Now().Unix()
+			commit(false, commitInterruptNewHead)
+
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
@@ -473,6 +484,7 @@ func (w *worker) mainLoop() {
 		if _, running := w.isPandora(); running {
 			// pandora is running so close subscription
 			w.updateTrackerSub.Unsubscribe()
+			w.pandoraHeadShiftSub.Unsubscribe()
 		}
 	}()
 

@@ -272,7 +272,6 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 					windowStart = windowEnd + 1
 					log.Info("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", h.Number.Uint64()-1)
 					sender(windowStart, h.Number.Uint64()-1)
-					windowEnd = h.Number.Uint64() - 1
 				}
 				notifier.Notify(rpcSub.ID, h)
 				windowEnd = h.Number.Uint64()

@@ -80,6 +80,8 @@ type Pandora struct {
 
 	pandoraChainRevert consensus.ChainHandler
 	isReorgProgressing atomic.Value
+
+	pandoraChainHeadShifted event.Feed
 }
 
 func New(
@@ -136,7 +138,7 @@ func (p *Pandora) EnableTestMode() {
 	p.skipBLSValidation = true
 }
 
-func (p *Pandora) SetReorgProgressing () {
+func (p *Pandora) SetReorgProgressing() {
 	p.isReorgProgressing.Store(ReorgProgressionStatus(true))
 }
 
@@ -148,9 +150,10 @@ func (p *Pandora) IsReorgProgressing() ReorgProgressionStatus {
 	return false
 }
 
-func (p *Pandora) ResetReorgProgressing () {
+func (p *Pandora) ResetReorgProgressing() {
 	log.Debug("resetting reorg process")
 	p.isReorgProgressing.Store(ReorgProgressionStatus(false))
+	p.pandoraChainHeadShifted.Send(struct{}{})
 }
 
 func (p *Pandora) SetChainHandler(handler consensus.ChainHandler) {
@@ -201,6 +204,10 @@ func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 // SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
 func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
 	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
+}
+
+func (p *Pandora) SubscribePandoraChainHeadShiftedEvent(ch chan<- struct{}) event.Subscription {
+	return p.scope.Track(p.pandoraChainHeadShifted.Subscribe(ch))
 }
 
 // getCurrentBlock get current block
