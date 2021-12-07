@@ -73,7 +73,7 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 }
 
 // GetPendingHeadsSince is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
-func (b *LesApiBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
+func (b *LesApiBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
 	return nil
 }
 

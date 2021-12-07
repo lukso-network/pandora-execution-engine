@@ -1613,7 +1613,7 @@ var lastWrite uint64
 func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Block) (stat WriteStatus, err error) {
 
 	log.Debug("notifyAndGetConfirmationFromOrchestrator", "sending header with header hash", block.Header().Hash(), "blockNumber", block.NumberU64())
-	bc.pendingHeaderContainer.NotifyHeader(block.Header())
+	bc.pendingHeaderContainer.WriteAndNotifyHeader(block.Header())
 
 	retryLimit := orchestratorConfirmationRetrievalLimit
 	status := pandora_orcclient.Pending
@@ -1674,6 +1674,7 @@ func (bc *BlockChain) notifyAndGetConfirmationFromOrchestrator(block *types.Bloc
 		return stat, err
 	}
 	log.Debug("deleting from pending container", "header hash", block.Hash())
+	bc.pendingHeaderContainer.DeleteHeader(block.Header())
 	// if status is pending or invalid then just continue default work
 	if status == pandora_orcclient.Pending || status == pandora_orcclient.Invalid || status == pandora_orcclient.Skipped {
 		log.Warn("failed to write block into the chain", "block hash", block.Hash())
@@ -2799,8 +2800,8 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 }
 
 // GetTempHeadersSince returns in-memory saved temporary headers so that orchestrator can validate it
-func (bc *BlockChain) GetTempHeadersSince(from common.Hash) []*types.Header {
-	return bc.pendingHeaderContainer.ReadHeaderSince(from)
+func (bc *BlockChain) GetTempHeadersSince() []*types.Header {
+	return bc.pendingHeaderContainer.ReadAllHeaders()
 }
 
 // GetPendingHeaderContainer exposes pending header container to the miner. So that newly mined block can be added
