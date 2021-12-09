@@ -72,7 +72,7 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(number))
 }
 
-// GetPendingHeadsSince is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
+// GetAllPendingHeads is called due to bad design of interface. Don't implement it here. It's only for dummy purpose
 func (b *LesApiBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
 	return nil
 }

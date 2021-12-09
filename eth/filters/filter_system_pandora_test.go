@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
+// GetAllPendingHeads implements testBackend only for dummy purpose. So that existing code can run without an issue
 func (b *testBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
 	return nil
 }
