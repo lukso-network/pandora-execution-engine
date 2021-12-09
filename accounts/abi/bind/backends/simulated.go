@@ -817,8 +817,8 @@ func (b *filterBackend) SubscribePendingHeaderEvent(ch chan<- core.PendingHeader
 	return nullSubscription()
 }
 
-// GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
-func (b *filterBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
+// GetAllPendingHeads implements testBackend only for dummy purpose. So that existing code can run without an issue
+func (b *filterBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
 	return nil
 }
 

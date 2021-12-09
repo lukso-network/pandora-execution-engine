@@ -27,7 +27,7 @@ func TestInsertHeaderChainWithPendingHeaders(t *testing.T) {
 		t.Fatalf("insert header chain failed due to %v", err)
 	}
 
-	tempHeaders := blockchain.GetTempHeadersSince(headers[0].Hash())
+	tempHeaders := blockchain.GetTempHeadersSince()
 	for index, tHeader := range tempHeaders {
 		if tHeader.Hash() != headers[index].Hash() {
 			// dumped and received temporary headers are not equal then raise an error

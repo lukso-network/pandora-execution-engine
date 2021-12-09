@@ -192,8 +192,8 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return logs, nil
 }
 
-func (b *EthAPIBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
-	return b.eth.blockchain.GetTempHeadersSince(from)
+func (b *EthAPIBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
+	return b.eth.blockchain.GetTempHeadersSince()
 }
 
 func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {

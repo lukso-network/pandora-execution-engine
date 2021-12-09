@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -20,8 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// GetPendingHeadsSince implements testBackend only for dummy purpose. So that existing code can run without an issue
-func (b *testBackend) GetPendingHeadsSince(ctx context.Context, from common.Hash) []*types.Header {
+// GetAllPendingHeads implements testBackend only for dummy purpose. So that existing code can run without an issue
+func (b *testBackend) GetAllPendingHeads(ctx context.Context) []*types.Header {
 	return nil
 }
 

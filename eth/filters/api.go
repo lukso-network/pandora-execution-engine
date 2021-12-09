@@ -246,14 +246,24 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 		if header != nil {
 			windowStart = header.Number.Uint64()
 		}
-		log.Info("NewPendingBlockHeaders sending", "start", windowStart)
+		header, _ = api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if header != nil {
+			windowEnd = header.Number.Uint64()
+		}
+		log.Info("NewPendingBlockHeaders sending", "start", windowStart, "end", windowEnd)
+		sender(windowStart, windowEnd)
+		// first send all available pending headers from the pending queue
+		pendingHeaders := api.backend.GetAllPendingHeads(ctx)
+		for _, pendingHeader := range pendingHeaders {
+			log.Debug("pending headers are sending first", "block number", pendingHeader.Number.Uint64(), "header hash", pendingHeader.Hash())
+			notifier.Notify(rpcSub.ID, pendingHeader)
+		}
 
 		// accept PendingHeaderChannelSize concurrent pending headers and send them
 		// If anything goes wrong remove it.
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribePendingHeads(headers)
 
-		firstTime := true
 		for {
 			select {
 			case h := <-headers:
@@ -261,21 +271,7 @@ func (api *PublicFilterAPI) NewPendingBlockHeaders(ctx context.Context, pendingF
 					log.Info("header is nil so orchestrator can't be notified")
 					continue
 				}
-				if firstTime {
-					firstTime = false
-					if h.Number.Uint64() > 0 {
-						sender(windowStart, h.Number.Uint64()-1)
-						windowEnd = h.Number.Uint64() - 1
-					}
-				}
-				if windowEnd+1 < h.Number.Uint64() {
-					windowStart = windowEnd + 1
-					log.Info("previous block information are not sent. so resending", "windowStart", windowStart, "windowEnd", h.Number.Uint64()-1)
-					sender(windowStart, h.Number.Uint64()-1)
-					windowEnd = h.Number.Uint64() - 1
-				}
 				notifier.Notify(rpcSub.ID, h)
-				windowEnd = h.Number.Uint64()
 				log.Info("Successfully notify the orchestrator", "blockNum", h.Number.Uint64(), "windowEnd", windowEnd)
 			case rpcErr := <-rpcSub.Err():
 				log.Debug("error found in rpc subscription", "error", rpcErr)
