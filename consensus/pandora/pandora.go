@@ -251,12 +251,13 @@ func (p *Pandora) run(done <-chan struct{}) {
 
 		case expectedEpoch := <-p.epochRequest:
 			log.Debug("new epoch info is requested to download from orchestrator", "expected epoch", expectedEpoch, "already received epoch from", p.currentEpoch)
-			if expectedEpoch < p.currentEpoch {
-				// expected a previous epoch. so we should download them. we can just unsubscribe them and an error will occur which will auto reconnect again
-				p.requestedEpoch = expectedEpoch
-				p.subscription.Unsubscribe()
-			}
+			p.requestedEpoch = expectedEpoch
+			p.subscription.Unsubscribe()
+			err := p.connectToOrchestrator()
 
+			if nil != err {
+				p.subscriptionErrCh <- err
+			}
 		case shardingInfoReq := <-p.fetchShardingInfoCh:
 			// Get sharding work API is called and we got slot number from vanguard
 			currentBlock := p.getCurrentBlock()
