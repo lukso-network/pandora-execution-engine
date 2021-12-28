@@ -188,8 +188,7 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 
 	// if pandora is running then seal hash will be changed. track if is changed
-	updateTracker    chan pandora.SealHashUpdate
-	updateTrackerSub event.Subscription
+	updateTracker chan pandora.SealHashUpdate
 
 	pandoraHeadShiftCh  chan struct{}
 	pandoraHeadShiftSub event.Subscription
@@ -228,8 +227,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
 	if pandoraEngine, pandoraRunning := worker.isPandora(); pandoraRunning {
+		pandoraEngine.SetUpdateInfoChannel(worker.updateTracker)
 		// pandora is running so subscribe with event
-		worker.updateTrackerSub = pandoraEngine.SubscribeToUpdateSealHashEvent(worker.updateTracker)
 		worker.pandoraHeadShiftSub = pandoraEngine.SubscribePandoraChainHeadShiftedEvent(worker.pandoraHeadShiftCh)
 	}
 
@@ -483,7 +482,6 @@ func (w *worker) mainLoop() {
 	defer func() {
 		if _, running := w.isPandora(); running {
 			// pandora is running so close subscription
-			w.updateTrackerSub.Unsubscribe()
 			w.pandoraHeadShiftSub.Unsubscribe()
 		}
 	}()

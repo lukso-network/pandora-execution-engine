@@ -70,6 +70,7 @@ type Pandora struct {
 	fetchShardingInfoCh  chan *shardingInfoReq // Channel used for remote sealer to fetch mining work
 	submitShardingInfoCh chan *shardingResult
 	newSealRequestCh     chan *sealTask
+	updateInfoCh         chan<- SealHashUpdate
 	updatedSealHash      event.Feed
 	scope                event.SubscriptionScope
 	skipBLSValidation    bool // This is only for test purpose so that we can insert blocks easily without needing help from orchestrator
@@ -201,9 +202,9 @@ func (p *Pandora) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	}
 }
 
-// SubscribeToUpdateSealHashEvent when sealHash updates it will notify worker.go
-func (p *Pandora) SubscribeToUpdateSealHashEvent(ch chan<- SealHashUpdate) event.Subscription {
-	return p.scope.Track(p.updatedSealHash.Subscribe(ch))
+// SetUpdateInfoChannel when sealHash updates it will notify worker.go
+func (p *Pandora) SetUpdateInfoChannel(ch chan<- SealHashUpdate) {
+	p.updateInfoCh = ch
 }
 
 func (p *Pandora) SubscribePandoraChainHeadShiftedEvent(ch chan<- struct{}) event.Subscription {
@@ -223,7 +224,7 @@ func (p *Pandora) setCurrentBlock(block *types.Block) {
 	p.currentBlock = block
 }
 
-func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) [4]string {
+func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64, epoch uint64) ([4]string, error) {
 	currentHeader := currentBlock.Header()
 	previousSealHash := p.SealHash(currentHeader)
 	// modify the header with slot, epoch and turn
@@ -254,7 +255,12 @@ func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64
 
 	hash := p.SealHash(updatedBlock.Header())
 	// seal hash is updated and worker.go is holding previous seal hash. notify worker.go to update it
-	p.updatedSealHash.Send(SealHashUpdate{UpdatedHash: hash, PreviousHash: previousSealHash})
+	select {
+	case p.updateInfoCh <- SealHashUpdate{UpdatedHash: hash, PreviousHash: previousSealHash}:
+		log.Debug("send update info to worker.go from pandora.go")
+	default:
+		return [4]string{}, errors.New("could not send update information to worker.go")
+	}
 
 	var retVal [4]string
 	retVal[0] = hash.Hex()
@@ -264,7 +270,7 @@ func (p *Pandora) updateBlockHeader(currentBlock *types.Block, slotNumber uint64
 
 	p.works[hash] = updatedBlock
 
-	return retVal
+	return retVal, nil
 }
 
 // run subscribes to all the services for the ETH1.0 chain.
@@ -320,7 +326,12 @@ func (p *Pandora) run(done <-chan struct{}) {
 				}
 				// now modify the current block header and generate seal hash
 				log.Debug("for GetShardingWork updating block header extra data", "slot", shardingInfoReq.slot, "epoch", shardingInfoReq.epoch)
-				shardingInfoReq.res <- p.updateBlockHeader(cpBlock, shardingInfoReq.slot, shardingInfoReq.epoch)
+				work, err := p.updateBlockHeader(cpBlock, shardingInfoReq.slot, shardingInfoReq.epoch)
+				if err != nil {
+					shardingInfoReq.errc <- err
+					continue
+				}
+				shardingInfoReq.res <- work
 			}
 
 		case submitSignatureData := <-p.submitShardingInfoCh:
